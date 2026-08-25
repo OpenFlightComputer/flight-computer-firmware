@@ -1,0 +1,36 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "host-development",
+      "displayName": "Host development foundation",
+      "description": "Configures the Milestone 0.1 repository skeleton without an STM32 firmware target.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/host-development",
+      "cacheVariables": {
+        "BUILD_TESTING": true,
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "host-development",
+      "configurePreset": "host-development"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "host-development",
+      "configurePreset": "host-development",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

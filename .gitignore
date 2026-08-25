@@ -1,0 +1,22 @@
+# CMake and generated build artifacts
+/build/
+/out/
+CMakeUserPresets.json
+compile_commands.json
+*.bin
+*.elf
+*.hex
+*.map
+*.lst
+*.o
+*.a
+
+# Editor and operating-system state
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local Codex state
+.codex/
