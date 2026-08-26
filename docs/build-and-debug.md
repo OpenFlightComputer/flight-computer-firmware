@@ -14,6 +14,35 @@
 
 The exact compiler check initially matches the proven manufacturing-test build. A future milestone may widen this to a tested compatibility range, but silent toolchain drift is not accepted now.
 
+## VS Code code navigation
+
+The repository configures the clangd language server against the Debug
+firmware compilation database. This gives Go to Definition, Find All
+References, symbol search, completion, and diagnostics the same target defines,
+include paths, and Cortex-M4 compiler flags used by the real firmware build.
+
+Install the recommended clangd and CMake Tools extensions when VS Code prompts.
+On macOS, the workspace uses the clangd supplied by the Apple Command Line
+Tools. The overlapping STM32 clangd extension is disabled for this workspace
+so two language servers do not compete over C files.
+
+After cloning or deleting `build/`, run the default build task once:
+
+```text
+Terminal -> Run Build Task...
+Firmware: Build Debug
+```
+
+The task configures the `firmware-debug` CMake preset before building, which
+regenerates `build/firmware-debug/compile_commands.json`. clangd watches that
+database and builds its index in the background. Run `clangd: Restart language
+server` from the Command Palette after changing toolchains or if an already
+open VS Code window does not immediately reload the new workspace settings.
+
+With the index ready, use Command-click or F12 on a symbol such as
+`mcu_timebase_initialize`, Shift-F12 for references, and Command-T for symbols
+in the current workspace.
+
 ## Dependency setup
 
 Initialize the pinned STM32CubeF4 repository and only the two nested dependencies used by this image:

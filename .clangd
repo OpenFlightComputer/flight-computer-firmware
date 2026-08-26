@@ -1,0 +1,5 @@
+CompileFlags:
+  CompilationDatabase: build/firmware-debug
+
+Index:
+  Background: Build
