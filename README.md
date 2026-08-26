@@ -1,6 +1,6 @@
 # OpenFlightComputer Flight Firmware
 
-This repository will contain the independent operational flight-control firmware for [OpenFlightComputer](https://github.com/OpenFlightComputer). The first target is the STM32F405RGT6 on Flight Computer V1.
+This repository contains the independent operational flight-control firmware for [OpenFlightComputer](https://github.com/OpenFlightComputer). The first target is the STM32F405RGT6 on Flight Computer V1.
 
 The project is intentionally separate from the custom board design and its manufacturing-test system. The hardware repository remains authoritative for physical routing; the tester repository provides verified bring-up knowledge and reusable low-level references. Flight firmware will define its own application, scheduling, state, fault, logging, and flight-control architecture.
 
@@ -43,16 +43,27 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 ## Current status
 
-Phase 0, Milestone 0.1 establishes documentation, repository boundaries, and CMake scaffolding only. There is no STM32 target, bootable image, scheduler, motor control, receiver decoding, or sensor processing yet.
+Phase 0, Milestone 0.2 provides the first bootable STM32F405 image. It initializes the HAL, configures the board's 16 MHz HSE and PLL for a 168 MHz system clock, verifies the resulting core frequency, exposes debugger-visible boot state, and enters a minimal loop.
 
-The current host preset verifies that the repository skeleton configures cleanly:
+Initialize the pinned STM32CubeF4 dependency and its two required nested dependencies:
 
 ```bash
-cmake --preset host-development
-cmake --build --preset host-development
-ctest --preset host-development
+git submodule update --init firmware/third_party/STM32CubeF4
+git -C firmware/third_party/STM32CubeF4 submodule update --init \
+  Drivers/CMSIS/Device/ST/STM32F4xx \
+  Drivers/STM32F4xx_HAL_Driver
 ```
 
-Milestone 0.2 will add the STM32CubeF4/STM32F405 cross-build, linker/startup foundation, and smallest boot path after owner approval.
+Build either firmware profile:
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/architecture.md](docs/architecture.md) for initial responsibility rules, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.
+```bash
+cmake --preset firmware-debug
+cmake --build --preset firmware-debug
+
+cmake --preset firmware-release
+cmake --build --preset firmware-release
+```
+
+Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. There is no scheduler, motor control, receiver decoding, sensor processing, USB application protocol, or operational flight behavior yet.
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.

@@ -12,7 +12,7 @@ The authenticated organization inventory inspected on 2026-08-25 contained:
 | [`project-documentation`](https://github.com/OpenFlightComputer/project-documentation) | Public | `main` | System-level documentation |
 | [`flight-computer-hardware`](https://github.com/OpenFlightComputer/flight-computer-hardware) | Private | `main` | Hardware design |
 
-No `flight-computer-firmware` organization repository existed at inspection time. The Milestone 0.1 work therefore creates a local Git repository and defers remote creation until visibility and licensing are reviewed.
+No `flight-computer-firmware` organization repository existed at inspection time. Milestone 0.1 subsequently created it as a public repository at <https://github.com/OpenFlightComputer/flight-computer-firmware>.
 
 ## Authoritative Flight Computer V1 hardware
 
@@ -45,15 +45,15 @@ The detailed MCU net map and hardware observations already captured in `flight-c
 
 | Concern | Proven source | Reuse intent |
 | --- | --- | --- |
-| CMake source graph | `firmware/manufacturing_test/CMakeLists.txt` | Adapt build conventions, strict warnings, artifacts, and pinned dependency checks |
-| Arm GCC discovery and Cortex-M4 flags | `firmware/manufacturing_test/cmake/arm-none-eabi-gcc.cmake` | Adapt in Milestone 0.2 |
-| Debug/Release presets | `firmware/manufacturing_test/CMakePresets.json` | Adapt for the flight-firmware repository |
-| Flash/RAM layout | `firmware/manufacturing_test/board_support/flightcomputer_v1/STM32F405RGTX_FLASH.ld` | Reuse only after Milestone 0.2 comparison with the MCU and board |
-| Startup source | Pinned STM32CubeF4 `startup_stm32f405xx.s` selected by CMake | Reuse the verified device startup basis |
-| HAL configuration | `firmware/manufacturing_test/board_support/flightcomputer_v1/stm32f4xx_hal_conf.h` | Start from required modules, then reduce or extend per flight milestones |
-| Interrupt foundation | `firmware/manufacturing_test/board_support/flightcomputer_v1/stm32f4xx_it.c` | Reuse core fault/SysTick knowledge; do not copy component-specific DMA behavior |
-| System clock | `firmware/manufacturing_test/board_support/flightcomputer_v1/system_clock.c` | Reuse the verified 16 MHz HSE/PLL parameters |
-| Minimal boot sequence | `firmware/manufacturing_test/application/main.c` | Reuse ordering knowledge, not tester lifecycle architecture |
+| CMake source graph | `firmware/manufacturing_test/CMakeLists.txt` | Adapted build conventions, strict warnings, artifacts, and pinned dependency checks |
+| Arm GCC discovery and Cortex-M4 flags | `firmware/manufacturing_test/cmake/arm-none-eabi-gcc.cmake` | Reused unchanged in Milestone 0.2 |
+| Debug/Release presets | `firmware/manufacturing_test/CMakePresets.json` | Adapted for repository-root firmware and host workflows |
+| Flash/RAM layout | `firmware/manufacturing_test/board_support/flightcomputer_v1/STM32F405RGTX_FLASH.ld` | Reused with a zero-byte requested heap and without tester metadata |
+| Startup source | Pinned STM32CubeF4 `startup_stm32f405xx.s` selected by CMake | Reused from the identical vendor pin |
+| HAL configuration | `firmware/manufacturing_test/board_support/flightcomputer_v1/stm32f4xx_hal_conf.h` | Reduced to modules required by the minimal boot image |
+| Interrupt foundation | `firmware/manufacturing_test/board_support/flightcomputer_v1/stm32f4xx_it.c` | Reused core handlers; component-specific DMA and USB handlers excluded |
+| System clock | `firmware/manufacturing_test/board_support/flightcomputer_v1/system_clock.c` | Reused unchanged |
+| Minimal boot sequence | `firmware/manufacturing_test/application/main.c` | Reused initialization order with a flight-specific debug status only |
 
 The proven clock tree is 16 MHz HSE divided by 16, multiplied by 336, and divided by 2 for 168 MHz SYSCLK. AHB is 168 MHz, APB1 is 42 MHz, APB2 is 84 MHz, and PLLQ 7 supplies the required 48 MHz USB clock. Clock failure is deliberately observable rather than hidden behind an HSI fallback.
 

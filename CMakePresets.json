@@ -16,12 +16,49 @@
         "BUILD_TESTING": true,
         "CMAKE_BUILD_TYPE": "Debug"
       }
+    },
+    {
+      "name": "firmware-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi-gcc.cmake",
+      "cacheVariables": {
+        "BUILD_TESTING": false,
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "OPENFLIGHTCOMPUTER_BUILD_FIRMWARE": true
+      }
+    },
+    {
+      "name": "firmware-debug",
+      "inherits": "firmware-base",
+      "displayName": "STM32F405 firmware — Debug",
+      "binaryDir": "${sourceDir}/build/firmware-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "firmware-release",
+      "inherits": "firmware-base",
+      "displayName": "STM32F405 firmware — Release",
+      "binaryDir": "${sourceDir}/build/firmware-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "host-development",
       "configurePreset": "host-development"
+    },
+    {
+      "name": "firmware-debug",
+      "configurePreset": "firmware-debug"
+    },
+    {
+      "name": "firmware-release",
+      "configurePreset": "firmware-release"
     }
   ],
   "testPresets": [

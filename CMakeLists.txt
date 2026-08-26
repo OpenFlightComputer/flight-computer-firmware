@@ -3,14 +3,22 @@ cmake_minimum_required(VERSION 3.25)
 project(
     openflightcomputer_firmware
     VERSION 0.1.0
-    LANGUAGES C
+    LANGUAGES C ASM
 )
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-add_subdirectory(firmware)
+option(
+    OPENFLIGHTCOMPUTER_BUILD_FIRMWARE
+    "Build the STM32F405 Flight Computer V1 firmware image"
+    ${CMAKE_CROSSCOMPILING}
+)
+
+if(OPENFLIGHTCOMPUTER_BUILD_FIRMWARE)
+    add_subdirectory(firmware)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

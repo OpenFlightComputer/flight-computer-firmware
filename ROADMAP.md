@@ -4,9 +4,9 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 
 ## Phase 0 — Firmware foundation
 
-1. Repository initialization.
-2. STM32F405 build and boot foundation.
-3. Board and MCU hardware-layer skeleton.
+1. Repository initialization — complete.
+2. STM32F405 build and boot foundation — complete; physical-board verification remains recorded.
+3. Board and MCU hardware-layer skeleton — next after approval.
 4. Monotonic microsecond timebase.
 5. Task abstraction.
 6. Cooperative scheduler.
