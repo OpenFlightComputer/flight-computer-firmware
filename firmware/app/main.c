@@ -1,5 +1,7 @@
 #include "boot_status.h"
 #include "board.h"
+#include "fault.h"
+#include "fault_catalog.h"
 #include "scheduler.h"
 #include "system_state.h"
 #include "task.h"
@@ -15,10 +17,12 @@ volatile uint32_t firmware_fast_task_executions;
 volatile uint32_t firmware_medium_task_executions;
 volatile uint32_t firmware_slow_task_executions;
 volatile uint32_t firmware_system_state_last_result;
+volatile uint32_t firmware_fault_last_result = UINT32_MAX;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
 system_state_machine_t firmware_system_state_machine;
+fault_system_t firmware_fault_system;
 
 static void diagnostic_fast_task(void *context)
 {
@@ -59,12 +63,27 @@ static const task_definition_t diagnostic_task_definitions[] = {
     },
 };
 
-static void stop_with_status(boot_status_t status)
+static void stop_with_fault(boot_status_t status,
+                            fault_id_t fault_id,
+                            bool context_valid,
+                            uint32_t context)
 {
-    firmware_system_state_last_result =
-        (uint32_t)system_state_machine_handle_event(
-            &firmware_system_state_machine,
-            SYSTEM_STATE_EVENT_FAULT_DETECTED);
+    firmware_fault_last_result =
+        (uint32_t)fault_system_report(&firmware_fault_system,
+                                      fault_id,
+                                      context_valid,
+                                      context);
+
+    if (firmware_system_state_machine.current == SYSTEM_STATE_FAULT) {
+        firmware_system_state_last_result =
+            (uint32_t)SYSTEM_STATE_TRANSITION_OK;
+    } else {
+        firmware_system_state_last_result =
+            (uint32_t)system_state_machine_handle_event(
+                &firmware_system_state_machine,
+                SYSTEM_STATE_EVENT_FAULT_DETECTED);
+    }
+
     firmware_boot_status = status;
     board_halt();
 }
@@ -97,7 +116,25 @@ static boot_status_t boot_status_for_board_error(board_init_result_t result)
     return BOOT_STATUS_MCU_INITIALIZATION_ERROR;
 }
 
-static bool register_diagnostic_tasks(void)
+static fault_id_t fault_id_for_board_error(board_init_result_t result)
+{
+    switch (result) {
+    case BOARD_INIT_MCU_ERROR:
+        return FAULT_ID_MCU_INITIALIZATION;
+    case BOARD_INIT_CLOCK_CONFIGURATION_ERROR:
+        return FAULT_ID_CLOCK_CONFIGURATION;
+    case BOARD_INIT_CLOCK_FREQUENCY_ERROR:
+        return FAULT_ID_CLOCK_FREQUENCY;
+    case BOARD_INIT_TIMEBASE_CONFIGURATION_ERROR:
+        return FAULT_ID_TIMEBASE_CONFIGURATION;
+    case BOARD_INIT_OK:
+        break;
+    }
+
+    return FAULT_ID_MCU_INITIALIZATION;
+}
+
+static task_registration_result_t register_diagnostic_tasks(void)
 {
     size_t index;
 
@@ -107,46 +144,86 @@ static bool register_diagnostic_tasks(void)
          index < (sizeof(diagnostic_task_definitions) /
                   sizeof(diagnostic_task_definitions[0]));
          index++) {
-        if (task_registry_register(&firmware_task_registry,
-                                   &diagnostic_task_definitions[index]) !=
-            TASK_REGISTRATION_OK) {
-            return false;
+        const task_registration_result_t result =
+            task_registry_register(&firmware_task_registry,
+                                   &diagnostic_task_definitions[index]);
+
+        if (result != TASK_REGISTRATION_OK) {
+            return result;
         }
     }
 
-    return true;
+    return TASK_REGISTRATION_OK;
 }
 
 int main(void)
 {
+    const fault_definition_t *fault_definitions;
+    size_t fault_definition_count;
     board_init_result_t board_result;
+    task_registration_result_t task_registration_result;
+    scheduler_init_result_t scheduler_init_result;
 
     system_state_machine_initialize(&firmware_system_state_machine);
+    fault_definitions = firmware_fault_catalog(&fault_definition_count);
+    if (fault_system_initialize(&firmware_fault_system,
+                                &firmware_system_state_machine,
+                                fault_definitions,
+                                fault_definition_count) != FAULT_INIT_OK) {
+        stop_with_fault(BOOT_STATUS_FAULT_SYSTEM_INITIALIZATION_ERROR,
+                        FAULT_ID_INVALID,
+                        false,
+                        0U);
+    }
     if (!transition_system_state(
             SYSTEM_STATE_EVENT_INITIALIZATION_STARTED)) {
-        stop_with_status(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR);
+        stop_with_fault(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR,
+                        FAULT_ID_STATE_MACHINE_TRANSITION,
+                        true,
+                        (uint32_t)SYSTEM_STATE_EVENT_INITIALIZATION_STARTED);
     }
 
     firmware_boot_status = BOOT_STATUS_BOARD_INITIALIZATION_STARTED;
     board_result = board_initialize();
 
     if (board_result != BOARD_INIT_OK) {
-        stop_with_status(boot_status_for_board_error(board_result));
+        stop_with_fault(boot_status_for_board_error(board_result),
+                        fault_id_for_board_error(board_result),
+                        true,
+                        (uint32_t)board_result);
     }
 
     firmware_boot_status = BOOT_STATUS_BOARD_INITIALIZED;
-
-    if (!register_diagnostic_tasks()) {
-        stop_with_status(BOOT_STATUS_TASK_REGISTRATION_ERROR);
+    if (fault_system_attach_clock(&firmware_fault_system, time_us) !=
+        FAULT_CLOCK_ATTACH_OK) {
+        stop_with_fault(BOOT_STATUS_FAULT_CLOCK_ATTACHMENT_ERROR,
+                        FAULT_ID_FAULT_CLOCK_ATTACHMENT,
+                        false,
+                        0U);
     }
-    if (scheduler_initialize(&firmware_scheduler,
-                             &firmware_task_registry,
-                             time_us) != SCHEDULER_INIT_OK) {
-        stop_with_status(BOOT_STATUS_SCHEDULER_INITIALIZATION_ERROR);
+
+    task_registration_result = register_diagnostic_tasks();
+    if (task_registration_result != TASK_REGISTRATION_OK) {
+        stop_with_fault(BOOT_STATUS_TASK_REGISTRATION_ERROR,
+                        FAULT_ID_TASK_REGISTRATION,
+                        true,
+                        (uint32_t)task_registration_result);
+    }
+    scheduler_init_result = scheduler_initialize(&firmware_scheduler,
+                                                 &firmware_task_registry,
+                                                 time_us);
+    if (scheduler_init_result != SCHEDULER_INIT_OK) {
+        stop_with_fault(BOOT_STATUS_SCHEDULER_INITIALIZATION_ERROR,
+                        FAULT_ID_SCHEDULER_INITIALIZATION,
+                        true,
+                        (uint32_t)scheduler_init_result);
     }
     if (!transition_system_state(
             SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED)) {
-        stop_with_status(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR);
+        stop_with_fault(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR,
+                        FAULT_ID_STATE_MACHINE_TRANSITION,
+                        true,
+                        (uint32_t)SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED);
     }
 
     firmware_boot_status = BOOT_STATUS_RUNNING;
@@ -157,7 +234,10 @@ int main(void)
 
         firmware_scheduler_last_result = (uint32_t)scheduler_result;
         if (scheduler_result == SCHEDULER_STEP_INVALID_STATE) {
-            stop_with_status(BOOT_STATUS_SCHEDULER_RUNTIME_ERROR);
+            stop_with_fault(BOOT_STATUS_SCHEDULER_RUNTIME_ERROR,
+                            FAULT_ID_SCHEDULER_RUNTIME,
+                            true,
+                            (uint32_t)scheduler_result);
         }
 
         firmware_uptime_us = time_us();

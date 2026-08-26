@@ -11,7 +11,7 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 5. Task abstraction — complete.
 6. Cooperative scheduler — complete.
 7. Application state machine — complete.
-8. Fault system.
+8. Fault system — complete.
 9. Non-blocking logging core.
 10. USB CDC logging backend.
 11. USB newline-delimited JSON command foundation.

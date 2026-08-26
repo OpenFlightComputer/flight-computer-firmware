@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.7 — application state machine: **complete and owner-approved**.
+Milestone 0.8 — fault system: **complete and owner-approved**.
 
 ## Last completed milestone
 
-Milestone 0.7 — application state machine. The deterministic lifecycle transition policy is host-tested and integrated into startup and fatal-stop paths; production firmware remains explicitly disarmed.
+Milestone 0.8 — fault system. Structured fixed-capacity diagnostics and catalogue-owned safety classification are host-tested and integrated into every existing fatal path.
 
 ## Current implementation status
 
@@ -45,6 +45,14 @@ Milestone 0.7 — application state machine. The deterministic lifecycle transit
 - Integrated startup lifecycle transitions so initialization begins in `INITIALIZING`, successful startup enters `DISARMED`, and every existing fatal stop path first enters `FAULT`.
 - Added exhaustive host coverage of the 36 state/event combinations, invalid arguments, initialization, terminal-fault behavior, and counter saturation.
 - Added `docs/safety.md` documenting lifecycle authority, transition policy, future final actuator gating, fault-system boundaries, and concurrency assumptions.
+- Added a fixed-capacity fault system with catalogue-owned IDs, severity, and source so report sites cannot select their own safety response.
+- Added 16 active record slots containing first/latest timestamps and validity, latest optional context, saturating occurrence counts, and active state.
+- Implemented warning and ordinary-fault recording without lifecycle changes, clearable recoverable records, and reset-latched critical records.
+- Connected critical reports synchronously to `SYSTEM_STATE_FAULT`, while preserving the record first and still applying the transition when record capacity is exhausted.
+- Added explicit pre-timebase timestamp unavailability and attached `time_us()` only after successful board initialization.
+- Mapped every existing fatal board, task, scheduler, state, and fault-clock path to an immutable production fault catalogue and retained detailed boot statuses.
+- Added host tests for catalogue validation, all severities, every critical source state, startup arm prevention, timestamps, duplicate coalescing, context, clearing, capacity/slot reuse, invalid operations, and saturation.
+- Added `docs/fault-system.md` describing classification ownership, lifecycle effects, diagnostics, overflow safety, startup time, and concurrency boundaries.
 
 No USB application behavior, motor output, receiver input, sensor access, logging, or flight-control behavior has been implemented.
 
@@ -61,6 +69,8 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 - Ready-batch fairness prevents selection starvation only when callbacks return. A non-returning callback blocks every task, and CPU overload still causes recorded missed releases.
 - Milestone 0.7 provides no production arm-request source, so firmware remains `DISARMED` after startup. USB command authorization and actuator gating belong to later approved milestones.
 - State-machine mutation currently belongs to main context and is not an interrupt-safe concurrent API.
+- Fault reporting and clearing also currently belong to main context and are not interrupt-safe concurrent APIs.
+- The production catalogue contains only currently detectable critical foundation failures. Warning and ordinary-fault behavior is implemented and tested, but real non-critical IDs remain owned by future subsystem milestones.
 
 ## Open questions
 
@@ -71,7 +81,18 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 
 ## Next step
 
-Milestone 0.8 will implement structured warning, fault, and critical-fault records and connect critical faults to the state machine. Its detailed scope must be reviewed and approved before implementation begins.
+Milestone 0.9 will implement the non-blocking logging core without adding a hardware output backend. Its detailed filtering, queue, and overflow policy must be reviewed and approved before implementation begins.
+
+## Milestone 0.8 verification
+
+- The host-development build runs timebase, task, scheduler, system-state, and fault test executables; all tests pass.
+- Fault tests cover catalogue validation, warning/fault/critical behavior, critical transitions from all six lifecycle states, startup arm prevention, record preservation, early/valid timestamps, repeated reports, context updates, clearing and latching, capacity exhaustion, critical safety under overflow, slot reuse, invalid operations, and saturating counters.
+- Debug and Release firmware configurations build with warnings treated as errors using Arm GCC 15.3.1.
+- Debug uses 10,640 bytes of Flash and reserves 3,984 bytes of RAM.
+- Release uses 7,064 bytes of Flash and reserves 3,984 bytes of RAM.
+- Address/undefined-behavior sanitizer execution of the host fault tests passes.
+- The fault and catalogue modules contain no STM32/HAL dependency, peripheral access, logging output, or runtime allocation.
+- Physical-board behavior remains unverified because no board/ST-Link session was available; this milestone adds no new peripheral configuration.
 
 ## Milestone 0.7 verification
 

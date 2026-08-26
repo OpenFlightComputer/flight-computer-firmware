@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.7 adds the central application state machine over the cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
+Milestone 0.8 adds structured fault policy and diagnostics over the central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -62,6 +62,14 @@ disarm, and failsafe events but the production application has no arm-request
 source. Detailed boot diagnostics remain separate from lifecycle state. Future
 actuator implementations must gate final hardware demand on `ARMED`, as
 specified in `docs/safety.md`.
+
+Milestone 0.8 keeps fault detection separate from safety classification. A
+static application catalogue maps IDs to severity and source; producers report
+IDs and optional context but cannot choose their response. The fixed-capacity
+fault registry owns active diagnostic records. Critical reports synchronously
+send `FAULT_DETECTED` to the state authority after preserving the record.
+Warning and ordinary-fault records leave lifecycle state unchanged. See
+`docs/fault-system.md` for timing, overflow, clearing, and concurrency policy.
 
 ## Separation from manufacturing test
 

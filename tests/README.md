@@ -18,8 +18,14 @@ initialization, explicit-only arming, synchronous disarm, failsafe recovery,
 terminal faults, invalid inputs, previous-state preservation, and saturating
 statistics.
 
-Future hardware-independent tests will cover faults, logging queues, protocol
-parsing, DShot encoding, receiver parsing, mixing, and control algorithms as
-their milestones are approved.
+The native `fault_tests` target verifies catalogue validation, warning, fault,
+and critical handling, critical transitions from every lifecycle state,
+timestamp validity, repeated records, context, clearing/latching, capacity
+exhaustion, critical safety under overflow, slot reuse, invalid operations, and
+saturating statistics.
+
+Future hardware-independent tests will cover logging queues, protocol parsing,
+DShot encoding, receiver parsing, mixing, and control algorithms as their
+milestones are approved.
 
 Hardware tests remain separate and must not be represented as passing host tests.

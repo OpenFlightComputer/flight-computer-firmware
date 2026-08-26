@@ -66,10 +66,12 @@ boot status identifies the specific clock error. Keeping these concepts
 separate prevents hardware initialization details from becoming lifecycle
 states.
 
-Milestone 0.8 will add fault identifiers, severity, source/module, timestamps,
-and the policy that converts critical fault records into the existing
-`FAULT_DETECTED` event. Milestone 0.7 contains no fault registry and assigns no
-meaning to warnings or recoverable faults.
+Milestone 0.8 adds fault identifiers, catalogue-owned severity and source,
+timestamps, occurrence/context metadata, and the policy that converts critical
+fault records into the existing `FAULT_DETECTED` event. Warning and ordinary
+fault records do not change lifecycle state. Critical records are latched, and
+their diagnostic record is preserved before the synchronous state transition.
+See `docs/fault-system.md` for the complete policy and capacity behavior.
 
 ## Concurrency boundary
 

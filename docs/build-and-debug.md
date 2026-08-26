@@ -136,6 +136,9 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_system_state_machine.current` | `SYSTEM_STATE_DISARMED` (`2`) |
 | `firmware_system_state_machine.previous` | `SYSTEM_STATE_INITIALIZING` (`1`) |
 | `firmware_system_state_last_result` | `SYSTEM_STATE_TRANSITION_OK` (`0`) |
+| `firmware_fault_system.active_count` | `0` after successful startup |
+| `firmware_fault_system.dropped_record_count` | `0` |
+| `firmware_fault_last_result` | `0xffffffff` until the first report |
 | `SystemCoreClock` | `168000000` |
 | `TIM5->PSC` | `83` |
 | `TIM5->ARR` | `0xffffffff` |
@@ -156,8 +159,10 @@ Intermediate and error values are intentionally observable:
 | 105 | Scheduler initialization failed |
 | 106 | Scheduler entered an invalid runtime state |
 | 107 | An expected application-state transition was rejected |
+| 108 | The immutable production fault catalogue could not initialize |
+| 109 | The monotonic fault timestamp clock could not be attached |
 
-The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
+The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. Fatal paths retain their detailed boot status and populate `firmware_fault_system.records` before halting; faults before timebase startup have timestamp-valid flags cleared. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
 
 ## Current physical validation status
 

@@ -43,7 +43,7 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 ## Current status
 
-Phase 0, Milestone 0.7 adds the central event-driven application state machine. Successful startup now progresses through `BOOT` and `INITIALIZING` to `DISARMED`; explicit arm, disarm, failsafe, and terminal-fault transitions are deterministic and host-tested. The firmware deliberately has no production arming source, so it remains safely disarmed while the scheduler continues to run its diagnostic tasks.
+Phase 0, Milestone 0.8 adds a fixed-capacity structured fault system. A central immutable catalogue owns fault severity and source, reports retain timestamps, context, and occurrence metadata, and critical reports synchronously enter terminal `FAULT`. Early startup faults explicitly mark timestamps unavailable until the monotonic clock is ready. The firmware deliberately has no production arming source and remains safely `DISARMED` after successful startup.
 
 Initialize the pinned STM32CubeF4 dependency and its two required nested dependencies:
 
@@ -64,6 +64,6 @@ cmake --preset firmware-release
 cmake --build --preset firmware-release
 ```
 
-Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase, task registry, scheduler selection/timing behavior, and every state/event combination. No peripheral pins are initialized, and there is no motor control, receiver decoding, sensor processing, USB application protocol, or operational flight behavior yet.
+Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase, task registry, scheduler, state transitions, and fault classification, records, overflow, and safety behavior. No peripheral pins are initialized, and there is no motor control, receiver decoding, sensor processing, USB application protocol, or operational flight behavior yet.
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/safety.md](docs/safety.md) for state and safety behavior, [docs/scheduler.md](docs/scheduler.md) for scheduler behavior, [docs/task-model.md](docs/task-model.md) for the task contract, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/fault-system.md](docs/fault-system.md) for fault policy and records, [docs/safety.md](docs/safety.md) for lifecycle safety behavior, [docs/scheduler.md](docs/scheduler.md) for scheduler behavior, [docs/task-model.md](docs/task-model.md) for the task contract, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.
