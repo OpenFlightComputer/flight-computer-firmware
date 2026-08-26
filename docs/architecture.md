@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.5 adds the portable Task contract and fixed-capacity registry above the central monotonic clock and hardware boundaries.
+Milestone 0.6 adds the cooperative scheduler over the portable Task contract, central monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -49,10 +49,11 @@ Exact V1 peripheral routing is recorded in `docs/flightcomputer-v1-hardware.md`.
 
 The scheduler, state, fault, logging, and USB interfaces will be specified in their own Phase 0 milestones instead of being guessed early.
 
-Milestone 0.5 now defines Task metadata and registration within `app/`. It does
-not yet instantiate the registry or introduce scheduler control flow. The
-cooperative backend added by Milestone 0.6 will consume this contract and the
-generic `time_us()` API without introducing hardware knowledge into Task code.
+Milestone 0.6 instantiates Task metadata and registration within `app/` and
+runs the cooperative backend from the main loop. The scheduler consumes the
+generic `time_us()` API through an injected clock function and contains no
+hardware knowledge. Ready batches bound selection fairness while execution
+measurements expose overload rather than concealing it.
 
 ## Separation from manufacturing test
 

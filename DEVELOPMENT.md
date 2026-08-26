@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.5 — task abstraction: **complete and owner-approved**.
+Milestone 0.6 — cooperative scheduler: **complete and owner-approved**.
 
 ## Last completed milestone
 
-Milestone 0.5 — task abstraction. The task model and fixed-capacity registry are host-tested; scheduler execution remains intentionally deferred to Milestone 0.6.
+Milestone 0.6 — cooperative scheduler. The deterministic, fixed-capacity scheduler is host-tested and integrated with diagnostic application tasks; physical-board timing verification remains recorded.
 
 ## Current implementation status
 
@@ -32,20 +32,27 @@ Milestone 0.5 — task abstraction. The task model and fixed-capacity registry a
 - Added a fixed-capacity 16-task registry with bounded name validation, unique-name enforcement, deterministic registration order, and no runtime allocation.
 - Added host tests for valid metadata initialization, invalid definitions, duplicate names, priority/order preservation, indexed access, and capacity exhaustion.
 - Added `docs/task-model.md` describing ownership, lifetime, period, priority, registry, metadata, and scheduler boundaries.
+- Added an allocation-free cooperative scheduler driven by an injected monotonic clock; production uses `time_us()` and host tests use a fake clock.
+- Added deterministic ready-task selection by priority, release time, and registration order.
+- Added ready batches so a task can execute at most once per captured batch, preventing an always-ready high-priority task from repeatedly displacing lower-priority tasks already ready.
+- Added phase-preserving release advancement, skipped-release accounting, callback execution/max timing, execution counts, and duration-based overrun detection with saturating statistics.
+- Replaced the temporary counter-only loop with scheduler steps and three debugger-visible diagnostic tasks at 1,000 Hz, 100 Hz, and 10 Hz.
+- Added host tests for initialization, immediate release, idle behavior, priority/release/order selection, disabled tasks, timing, skipped catch-up, overruns, and high-priority starvation protection.
+- Added `docs/scheduler.md` with the algorithm, fairness limits, overload behavior, missed-period policy, diagnostic integration, and explicit RTOS mapping.
 
-No USB application behavior, scheduler, motor output, receiver input, sensor access, logging, or flight-control behavior has been implemented.
+No USB application behavior, motor output, receiver input, sensor access, logging, or flight-control behavior has been implemented.
 
 ## Known issues and limitations
 
 - No ST-Link was connected during Milestone 0.2, as confirmed by STM32CubeProgrammer 2.23.0. SWD programming, reset, HSE startup, and debugger-visible runtime values therefore remain physical-board checks.
 - The hardware repository has owner changes in its working tree. They were inspected read-only and remain untouched.
-- The minimal loop intentionally consumes the processor; it now publishes uptime but remains a temporary bring-up loop that the cooperative scheduler replaces in later milestones.
+- The cooperative scheduler intentionally busy-polls when no task is ready. A future evidence-driven power/idle policy may sleep, but sleeping is not required for the current flight-control foundation.
 - No GPIO or routed peripheral listed in the V1 hardware map is initialized by Milestone 0.4. TIM5 runs internally without timer pins or DMA.
 - Physical verification of the 1 MHz TIM5 rate and continuous operation through a real 71.58-minute hardware wrap remains pending because no board/ST-Link session was available during implementation.
 - Correct 64-bit extension assumes global interrupts are not continuously disabled for a complete 71.58-minute TIM5 wrap period; ordinary bounded critical sections are many orders of magnitude shorter.
 - Receiver UART, motor timer/DMA, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
-- The Task registry exists only as a reusable type and host-tested implementation; the application does not instantiate or execute tasks before Milestone 0.6.
+- Ready-batch fairness prevents selection starvation only when callbacks return. A non-returning callback blocks every task, and CPU overload still causes recorded missed releases.
 
 ## Open questions
 
@@ -56,7 +63,18 @@ No USB application behavior, scheduler, motor output, receiver input, sensor acc
 
 ## Next step
 
-After explicit owner approval, Milestone 0.6 will implement the cooperative scheduler using `time_us()`, deterministic ready-task selection, periodic releases, priority awareness, execution measurement, and an overrun-detection foundation.
+Milestone 0.7 will implement the initial application state machine without adding motor control, receiver input, or sensor-driven flight behavior. Its detailed scope must be reviewed and approved before implementation begins.
+
+## Milestone 0.6 verification
+
+- The host-development build runs timebase, task, and scheduler test executables; all tests pass.
+- Scheduler tests use a deterministic fake clock and cover invalid state, immediate first release, idle timing, priority/release/registration tie-breaking, disabled tasks, execution measurements, phase-preserving advancement, skipped releases, overrun detection, and ready-batch starvation protection.
+- Debug and Release firmware configurations build with warnings treated as errors using Arm GCC 15.3.1.
+- Debug uses 8,136 bytes of Flash and reserves 3,288 bytes of RAM.
+- Release uses 5,596 bytes of Flash and reserves 3,288 bytes of RAM.
+- The Release ELF has no unresolved symbols and retains `scheduler_initialize`, `scheduler_run_once`, Task registry functions, the application registry/scheduler, and all three diagnostic counters for inspection.
+- Address/undefined-behavior sanitizer execution of the host scheduler tests passes.
+- Scheduler and Task sources contain no STM32/HAL dependency or runtime allocation, clangd checks pass, and Git whitespace validation passes.
 
 ## Milestone 0.5 verification
 

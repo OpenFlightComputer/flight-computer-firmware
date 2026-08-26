@@ -52,9 +52,10 @@ Registration initializes each `task_t` as enabled and records:
 - last and maximum execution duration;
 - execution count;
 - overrun count.
+- missed-release count.
 
-Scheduling and measurement fields start at zero. Milestone 0.6 owns the rules
-for updating them.
+Scheduling and measurement fields start at zero. Milestone 0.6 updates them
+through its cooperative ready-batch scheduler.
 
 ## Fixed-capacity registry
 
@@ -68,6 +69,6 @@ it remains an explicit memory-budget decision.
 
 ## Milestone boundary
 
-This milestone does not instantiate an application registry, execute a task,
-read `time_us()`, select by priority, calculate deadlines, or detect overruns.
-Those behaviors belong to the cooperative scheduler in Milestone 0.6.
+Milestone 0.6 now instantiates the application registry and consumes this
+contract. Task definitions remain independent of the scheduler backend and
+hardware clock implementation.

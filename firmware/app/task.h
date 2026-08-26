@@ -36,6 +36,7 @@ typedef struct {
     uint32_t maximum_execution_time_us;
     uint32_t execution_count;
     uint32_t overrun_count;
+    uint32_t missed_release_count;
     uint32_t registration_order;
     bool enabled;
 } task_t;

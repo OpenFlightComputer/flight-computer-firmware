@@ -9,6 +9,10 @@ unique names, deterministic registration order, priority/period preservation,
 and zero-initialized scheduling and execution metadata without invoking task
 callbacks.
 
+The native `scheduler_tests` target uses a fake microsecond clock to verify
+ready-task selection, batch fairness, disabled tasks, stable periodic release,
+execution measurements, skipped-release behavior, and overrun detection.
+
 Future hardware-independent tests will cover task registration, scheduling,
 state transitions, faults, logging queues, protocol parsing, DShot encoding,
 receiver parsing, mixing, and control algorithms as their milestones are

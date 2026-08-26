@@ -43,7 +43,7 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 ## Current status
 
-Phase 0, Milestone 0.5 adds the hardware-independent definition of a periodic task and a fixed-capacity, allocation-free registry. Tasks record a microsecond period, an 8-bit priority, callback/context, deterministic registration order, and future scheduling/statistics metadata. Callback execution remains deliberately deferred to the Milestone 0.6 cooperative scheduler.
+Phase 0, Milestone 0.6 adds a deterministic cooperative scheduler over the fixed-capacity Task registry and monotonic microsecond clock. Ready batches provide bounded fairness, callbacks retain stable periodic phase without catch-up storms, and execution, missed-release, and overrun statistics remain observable. Three diagnostic-only tasks exercise 1,000 Hz, 100 Hz, and 10 Hz rates without touching hardware peripherals.
 
 Initialize the pinned STM32CubeF4 dependency and its two required nested dependencies:
 
@@ -64,6 +64,6 @@ cmake --preset firmware-release
 cmake --build --preset firmware-release
 ```
 
-Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase wrap logic and task registration behavior. No peripheral pins are initialized, and there is no scheduler, motor control, receiver decoding, sensor processing, USB application protocol, or operational flight behavior yet.
+Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase, task registry, and scheduler selection/timing behavior. No peripheral pins are initialized, and there is no motor control, receiver decoding, sensor processing, USB application protocol, or operational flight behavior yet.
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/task-model.md](docs/task-model.md) for the task contract, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/scheduler.md](docs/scheduler.md) for scheduler behavior, [docs/task-model.md](docs/task-model.md) for the task contract, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.

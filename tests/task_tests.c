@@ -80,6 +80,7 @@ static void registers_definition_and_initializes_runtime_metadata(void)
     assert(task->maximum_execution_time_us == 0U);
     assert(task->execution_count == 0U);
     assert(task->overrun_count == 0U);
+    assert(task->missed_release_count == 0U);
     assert(task->registration_order == 0U);
     assert(task->enabled);
     assert(callback_invocation_count == 0U);

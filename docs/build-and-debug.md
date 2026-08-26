@@ -129,6 +129,10 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_boot_status` | `BOOT_STATUS_RUNNING` (`3`) |
 | `firmware_main_loop_iterations` | Increasing between debugger halts |
 | `firmware_uptime_us` | Increasing elapsed microseconds |
+| `firmware_fast_task_executions` | Increasing at approximately 1,000 Hz |
+| `firmware_medium_task_executions` | Increasing at approximately 100 Hz |
+| `firmware_slow_task_executions` | Increasing at approximately 10 Hz |
+| `firmware_scheduler_last_result` | `0` while idle or `1` after execution |
 | `SystemCoreClock` | `168000000` |
 | `TIM5->PSC` | `83` |
 | `TIM5->ARR` | `0xffffffff` |
@@ -145,8 +149,11 @@ Intermediate and error values are intentionally observable:
 | 101 | HSE/PLL or bus-clock configuration failed |
 | 102 | `SystemCoreClock` did not equal 168 MHz |
 | 103 | TIM5 timebase parameters or active timer clock were invalid |
+| 104 | A diagnostic task could not be registered |
+| 105 | Scheduler initialization failed |
+| 106 | Scheduler entered an invalid runtime state |
 
-The loop counter and uptime watch value are temporary bring-up aids, not a scheduler. No LED is used as a heartbeat because Milestone 0.4 does not initialize board GPIO and the discrete LED hardware still has a documented polarity/connectivity concern.
+The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
 
 ## Current physical validation status
 

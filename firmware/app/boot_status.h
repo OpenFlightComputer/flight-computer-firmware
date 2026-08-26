@@ -12,10 +12,17 @@ typedef enum {
     BOOT_STATUS_CLOCK_CONFIGURATION_ERROR = 101U,
     BOOT_STATUS_CLOCK_FREQUENCY_ERROR = 102U,
     BOOT_STATUS_TIMEBASE_CONFIGURATION_ERROR = 103U,
+    BOOT_STATUS_TASK_REGISTRATION_ERROR = 104U,
+    BOOT_STATUS_SCHEDULER_INITIALIZATION_ERROR = 105U,
+    BOOT_STATUS_SCHEDULER_RUNTIME_ERROR = 106U,
 } boot_status_t;
 
 extern volatile boot_status_t firmware_boot_status;
 extern volatile uint32_t firmware_main_loop_iterations;
 extern volatile uint64_t firmware_uptime_us;
+extern volatile uint32_t firmware_scheduler_last_result;
+extern volatile uint32_t firmware_fast_task_executions;
+extern volatile uint32_t firmware_medium_task_executions;
+extern volatile uint32_t firmware_slow_task_executions;
 
 #endif

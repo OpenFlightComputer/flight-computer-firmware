@@ -9,7 +9,7 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 3. Board and MCU hardware-layer skeleton — complete.
 4. Monotonic microsecond timebase — complete.
 5. Task abstraction — complete.
-6. Cooperative scheduler.
+6. Cooperative scheduler — complete.
 7. Application state machine.
 8. Fault system.
 9. Non-blocking logging core.
