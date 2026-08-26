@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.4 adds a central monotonic clock to the concrete board and MCU boundary around the boot path.
+Milestone 0.5 adds the portable Task contract and fixed-capacity registry above the central monotonic clock and hardware boundaries.
 
 ## Dependency direction
 
@@ -47,7 +47,12 @@ Exact V1 peripheral routing is recorded in `docs/flightcomputer-v1-hardware.md`.
 - Logging producers will be bounded and non-blocking; backend latency must not delay realtime work.
 - Runtime memory will use static, stack, and fixed-capacity storage rather than dynamic allocation.
 
-The task, scheduler, state, fault, logging, and USB interfaces will be specified in their own Phase 0 milestones instead of being guessed during repository initialization.
+The scheduler, state, fault, logging, and USB interfaces will be specified in their own Phase 0 milestones instead of being guessed early.
+
+Milestone 0.5 now defines Task metadata and registration within `app/`. It does
+not yet instantiate the registry or introduce scheduler control flow. The
+cooperative backend added by Milestone 0.6 will consume this contract and the
+generic `time_us()` API without introducing hardware knowledge into Task code.
 
 ## Separation from manufacturing test
 

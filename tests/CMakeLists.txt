@@ -15,3 +15,21 @@ target_compile_options(timebase_snapshot_tests PRIVATE
 )
 
 add_test(NAME timebase_snapshot COMMAND timebase_snapshot_tests)
+
+add_executable(task_tests
+    task_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/task.c"
+)
+
+target_include_directories(task_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+)
+
+target_compile_options(task_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME task COMMAND task_tests)

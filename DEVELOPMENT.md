@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.4 — monotonic microsecond timebase: **implemented and awaiting owner review**.
+Milestone 0.5 — task abstraction: **complete and owner-approved**.
 
 ## Last completed milestone
 
-Milestone 0.3 — hardware layer skeleton. Physical SWD validation remains an explicitly recorded hardware follow-up because no ST-Link was connected during implementation.
+Milestone 0.5 — task abstraction. The task model and fixed-capacity registry are host-tested; scheduler execution remains intentionally deferred to Milestone 0.6.
 
 ## Current implementation status
 
@@ -27,6 +27,11 @@ Milestone 0.3 — hardware layer skeleton. Physical SWD validation remains an ex
 - Extended TIM5 to 64 bits with a short update interrupt, a software overflow word, update-pending detection, and a retrying snapshot resolver that handles an interrupt racing a read.
 - Added native tests for ordinary reads, pending hardware overflow, interrupt/read races, and monotonic progression across the 32-bit boundary.
 - Added `docs/timebase.md` with the clock calculation, initialization contract, overflow strategy, interrupt-priority rationale, guarantees, and physical verification boundary.
+- Added a hardware-independent task definition containing name, microsecond period, 8-bit priority, callback/context, scheduling metadata, execution measurements, and enabled state.
+- Defined task priority as `0` highest through `255` lowest, with named reference levels and preserved intermediate values.
+- Added a fixed-capacity 16-task registry with bounded name validation, unique-name enforcement, deterministic registration order, and no runtime allocation.
+- Added host tests for valid metadata initialization, invalid definitions, duplicate names, priority/order preservation, indexed access, and capacity exhaustion.
+- Added `docs/task-model.md` describing ownership, lifetime, period, priority, registry, metadata, and scheduler boundaries.
 
 No USB application behavior, scheduler, motor output, receiver input, sensor access, logging, or flight-control behavior has been implemented.
 
@@ -40,6 +45,7 @@ No USB application behavior, scheduler, motor output, receiver input, sensor acc
 - Correct 64-bit extension assumes global interrupts are not continuously disabled for a complete 71.58-minute TIM5 wrap period; ordinary bounded critical sections are many orders of magnitude shorter.
 - Receiver UART, motor timer/DMA, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
+- The Task registry exists only as a reusable type and host-tested implementation; the application does not instantiate or execute tasks before Milestone 0.6.
 
 ## Open questions
 
@@ -50,7 +56,16 @@ No USB application behavior, scheduler, motor output, receiver input, sensor acc
 
 ## Next step
 
-After owner review and a separately approved commit, Milestone 0.5 will define the hardware-independent fixed-capacity `Task` abstraction. It will not implement the cooperative scheduler, which remains Milestone 0.6.
+After explicit owner approval, Milestone 0.6 will implement the cooperative scheduler using `time_us()`, deterministic ready-task selection, periodic releases, priority awareness, execution measurement, and an overrun-detection foundation.
+
+## Milestone 0.5 verification
+
+- The host-development build runs both the timebase and task test executables; all tests pass.
+- Task tests cover empty initialization, valid metadata copying, zeroed runtime state, invalid arguments, bounded names, zero periods, null callbacks, duplicate names, priority preservation, deterministic registration order, bounds-checked lookup, and all 16 capacity slots.
+- Debug and Release firmware configurations compile `app/task.c` with warnings treated as errors using Arm GCC 15.3.1.
+- The linker correctly removes the currently unreferenced task object from the final image because Milestone 0.5 deliberately does not instantiate the scheduler.
+- Debug and Release image sizes therefore remain unchanged from Milestone 0.4.
+- Application and task sources contain no STM32/HAL dependencies or runtime allocation.
 
 ## Milestone 0.4 verification
 

@@ -84,6 +84,7 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 add_executable(flight_firmware
     app/main.c
     app/runtime_hooks.c
+    app/task.c
     hardware/boards/flightcomputer_v1/board.c
     hardware/boards/flightcomputer_v1/time.c
     hardware/mcu/stm32f405/mcu.c

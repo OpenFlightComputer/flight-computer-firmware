@@ -43,7 +43,7 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 ## Current status
 
-Phase 0, Milestone 0.4 adds a monotonic `uint64_t time_us(void)` clock to the explicit board/MCU foundation. Flight Computer V1 uses TIM5 as a 1 MHz free-running counter and extends its 32-bit hardware range to 64 bits with a race-safe overflow strategy. The implementation is ready for owner review.
+Phase 0, Milestone 0.5 adds the hardware-independent definition of a periodic task and a fixed-capacity, allocation-free registry. Tasks record a microsecond period, an 8-bit priority, callback/context, deterministic registration order, and future scheduling/statistics metadata. Callback execution remains deliberately deferred to the Milestone 0.6 cooperative scheduler.
 
 Initialize the pinned STM32CubeF4 dependency and its two required nested dependencies:
 
@@ -64,6 +64,6 @@ cmake --preset firmware-release
 cmake --build --preset firmware-release
 ```
 
-Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase wrap logic. No peripheral pins are initialized, and there is no scheduler, motor control, receiver decoding, sensor processing, USB application protocol, or operational flight behavior yet.
+Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase wrap logic and task registration behavior. No peripheral pins are initialized, and there is no scheduler, motor control, receiver decoding, sensor processing, USB application protocol, or operational flight behavior yet.
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/task-model.md](docs/task-model.md) for the task contract, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.
