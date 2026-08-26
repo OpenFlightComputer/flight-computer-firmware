@@ -90,11 +90,12 @@ Names such as `GPS_RX` and `RP1_RX` are from the external-device perspective. Th
 
 ## Resolved interface selections
 
-These selections are documented now because they are already established by routing plus the manufacturing-test implementation. Milestone 0.3 does not initialize them.
+Most selections below are established by routing plus the manufacturing-test implementation. The internal timebase selection was added by Milestone 0.4 after checking it does not conflict with those established timer uses.
 
 | Interface | Selection | Relevant V1 signals |
 | --- | --- | --- |
 | System clock | 16 MHz HSE; PLLM 16, PLLN 336, PLLP 2, PLLQ 7 | PH0, PH1 |
+| Monotonic timebase | TIM5, internal 1 MHz free-running counter | No routed pin or DMA stream |
 | USB | OTG FS AF10 with VBUS sensing | PA9, PA11, PA12 |
 | microSD | SPI1 AF5 plus GPIO chip select/detect | PA5, PA6, PA7, PC4, PC5 |
 | BMI270 | SPI3 AF6 plus GPIO chip select | PB3, PB4, PB5, PD2 |
@@ -118,6 +119,6 @@ These selections are documented now because they are already established by rout
 - PC5 card detect is provisionally active-low from the socket and pull-up topology; confirm with the physical board.
 - The hardware working tree contains owner changes. The hashes above identify the exact reviewed design files without treating the Git commit alone as complete provenance.
 
-## Milestone 0.3 initialization scope
+## Milestone 0.4 initialization scope
 
-At boot, `board_initialize()` currently initializes only the STM32 HAL and the system clock, then verifies a 168 MHz core clock. It does not configure any GPIO or peripheral listed above. Each interface will be activated only in its approved milestone through the appropriate board and MCU capability boundary.
+At boot, `board_initialize()` initializes the STM32 HAL and system clock, verifies a 168 MHz core clock, and starts internal TIM5 as the monotonic timebase. It does not configure any GPIO or routed peripheral listed above. Each external interface will be activated only in its approved milestone through the appropriate board and MCU capability boundary.

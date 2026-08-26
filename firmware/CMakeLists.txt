@@ -85,14 +85,18 @@ add_executable(flight_firmware
     app/main.c
     app/runtime_hooks.c
     hardware/boards/flightcomputer_v1/board.c
+    hardware/boards/flightcomputer_v1/time.c
     hardware/mcu/stm32f405/mcu.c
+    hardware/mcu/stm32f405/mcu_timebase.c
     hardware/mcu/stm32f405/stm32f4xx_it.c
     hardware/mcu/stm32f405/system_clock.c
+    hardware/mcu/stm32f405/timebase_snapshot.c
     "${STM32_DEVICE_ROOT}/Source/Templates/gcc/startup_stm32f405xx.s"
 )
 
 target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/app"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"
 )

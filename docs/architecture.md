@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.3 establishes the first concrete board and MCU boundary around the boot path.
+Milestone 0.4 adds a central monotonic clock to the concrete board and MCU boundary around the boot path.
 
 ## Dependency direction
 
@@ -30,11 +30,11 @@ hardware/mcu/stm32f405/mcu.c
 STM32F405 hardware
 ```
 
-The application sees only `board_initialize()` and `board_halt()`. It does not include STM32 headers or interpret HAL return values.
+The application sees `board_initialize()`, `board_halt()`, and the generic `time_us()` API. It does not include STM32 headers or interpret HAL return values.
 
-The V1 board implementation owns board identity, expected clock frequency, and the policy that startup succeeds only when MCU initialization completes and the core reaches 168 MHz. It deliberately does not configure unused peripheral pins.
+The V1 board implementation owns board identity, expected clock frequency, the TIM5 timebase selection, and the policy that startup succeeds only when MCU initialization completes, the core reaches 168 MHz, and the timebase starts successfully. It deliberately does not configure unused peripheral pins.
 
-The STM32F405 implementation owns HAL initialization, the PLL and bus-clock procedure, `SystemCoreClock` access, interrupt shutdown, the core exception table, and the linker/startup foundation. The current clock procedure is intentionally direct rather than a speculative multi-board clock framework.
+The STM32F405 implementation owns HAL initialization, the PLL and bus-clock procedure, `SystemCoreClock` access, TIM5 configuration and overflow handling, interrupt shutdown, the core exception table, and the linker/startup foundation. The current clock procedure is intentionally direct rather than a speculative multi-board clock framework.
 
 Exact V1 peripheral routing is recorded in `docs/flightcomputer-v1-hardware.md`. Routing knowledge will enter executable board support only when an approved peripheral milestone consumes it.
 

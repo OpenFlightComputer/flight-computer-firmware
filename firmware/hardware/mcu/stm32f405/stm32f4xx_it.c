@@ -1,5 +1,7 @@
 #include "stm32f4xx_it.h"
 
+#include "mcu_timebase.h"
+
 #include "stm32f4xx_hal.h"
 
 void NMI_Handler(void)
@@ -47,4 +49,9 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
     HAL_IncTick();
+}
+
+void TIM5_IRQHandler(void)
+{
+    mcu_timebase_handle_overflow_interrupt();
 }

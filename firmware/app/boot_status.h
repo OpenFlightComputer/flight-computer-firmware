@@ -11,9 +11,11 @@ typedef enum {
     BOOT_STATUS_MCU_INITIALIZATION_ERROR = 100U,
     BOOT_STATUS_CLOCK_CONFIGURATION_ERROR = 101U,
     BOOT_STATUS_CLOCK_FREQUENCY_ERROR = 102U,
+    BOOT_STATUS_TIMEBASE_CONFIGURATION_ERROR = 103U,
 } boot_status_t;
 
 extern volatile boot_status_t firmware_boot_status;
 extern volatile uint32_t firmware_main_loop_iterations;
+extern volatile uint64_t firmware_uptime_us;
 
 #endif

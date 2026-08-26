@@ -99,7 +99,10 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | --- | --- |
 | `firmware_boot_status` | `BOOT_STATUS_RUNNING` (`3`) |
 | `firmware_main_loop_iterations` | Increasing between debugger halts |
+| `firmware_uptime_us` | Increasing elapsed microseconds |
 | `SystemCoreClock` | `168000000` |
+| `TIM5->PSC` | `83` |
+| `TIM5->ARR` | `0xffffffff` |
 
 Intermediate and error values are intentionally observable:
 
@@ -112,8 +115,9 @@ Intermediate and error values are intentionally observable:
 | 100 | MCU/HAL initialization failed |
 | 101 | HSE/PLL or bus-clock configuration failed |
 | 102 | `SystemCoreClock` did not equal 168 MHz |
+| 103 | TIM5 timebase parameters or active timer clock were invalid |
 
-The loop counter is a temporary bring-up aid, not a scheduler or timing guarantee. No LED is used as a heartbeat because Milestone 0.3 does not initialize board peripherals and the discrete LED hardware still has a documented polarity/connectivity concern.
+The loop counter and uptime watch value are temporary bring-up aids, not a scheduler. No LED is used as a heartbeat because Milestone 0.4 does not initialize board GPIO and the discrete LED hardware still has a documented polarity/connectivity concern.
 
 ## Current physical validation status
 

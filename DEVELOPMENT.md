@@ -6,7 +6,7 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.3 — hardware layer skeleton: **complete and owner-approved**.
+Milestone 0.4 — monotonic microsecond timebase: **implemented and awaiting owner review**.
 
 ## Last completed milestone
 
@@ -22,6 +22,11 @@ Milestone 0.3 — hardware layer skeleton. Physical SWD validation remains an ex
 - Added hardware-layer responsibility documentation at each directory boundary.
 - Revalidated the current KiCad project hashes and cross-checked all V1 signal mappings against the manufacturing-test board definition and low-level sources.
 - Added `docs/flightcomputer-v1-hardware.md` with installed hardware, full MCU signal mapping, resolved interface selections, deferred choices, and retained electrical concerns.
+- Added the hardware-neutral `uint64_t time_us(void)` API and integrated it into the temporary main loop as the debugger-visible `firmware_uptime_us` value.
+- Reserved internal TIM5 for the V1 timebase, validated its 84 MHz APB1-derived input clock, and configured a 1 MHz free-running 32-bit counter with no GPIO or DMA use.
+- Extended TIM5 to 64 bits with a short update interrupt, a software overflow word, update-pending detection, and a retrying snapshot resolver that handles an interrupt racing a read.
+- Added native tests for ordinary reads, pending hardware overflow, interrupt/read races, and monotonic progression across the 32-bit boundary.
+- Added `docs/timebase.md` with the clock calculation, initialization contract, overflow strategy, interrupt-priority rationale, guarantees, and physical verification boundary.
 
 No USB application behavior, scheduler, motor output, receiver input, sensor access, logging, or flight-control behavior has been implemented.
 
@@ -29,10 +34,12 @@ No USB application behavior, scheduler, motor output, receiver input, sensor acc
 
 - No ST-Link was connected during Milestone 0.2, as confirmed by STM32CubeProgrammer 2.23.0. SWD programming, reset, HSE startup, and debugger-visible runtime values therefore remain physical-board checks.
 - The hardware repository has owner changes in its working tree. They were inspected read-only and remain untouched.
-- The minimal loop intentionally consumes the processor and has no timing semantics; the cooperative scheduler replaces it in later milestones.
-- No GPIO or peripheral listed in the V1 hardware map is initialized by Milestone 0.3.
+- The minimal loop intentionally consumes the processor; it now publishes uptime but remains a temporary bring-up loop that the cooperative scheduler replaces in later milestones.
+- No GPIO or routed peripheral listed in the V1 hardware map is initialized by Milestone 0.4. TIM5 runs internally without timer pins or DMA.
+- Physical verification of the 1 MHz TIM5 rate and continuous operation through a real 71.58-minute hardware wrap remains pending because no board/ST-Link session was available during implementation.
+- Correct 64-bit extension assumes global interrupts are not continuously disabled for a complete 71.58-minute TIM5 wrap period; ordinary bounded critical sections are many orders of magnitude shorter.
 - Receiver UART, motor timer/DMA, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
-- The host CMake preset still has no unit-test target because the current changes are hardware boundary wiring around the already-built startup path rather than portable logic.
+- Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
 
 ## Open questions
 
@@ -43,7 +50,19 @@ No USB application behavior, scheduler, motor output, receiver input, sensor acc
 
 ## Next step
 
-After explicit approval, Milestone 0.4 will implement the monotonic `uint64_t time_us(void)` abstraction using an appropriate STM32F405 hardware timebase. It will define and verify monotonicity, elapsed-time behavior, and a wrap-extension strategy without implementing the scheduler or protocol timing.
+After owner review and a separately approved commit, Milestone 0.5 will define the hardware-independent fixed-capacity `Task` abstraction. It will not implement the cooperative scheduler, which remains Milestone 0.6.
+
+## Milestone 0.4 verification
+
+- The host-development build runs one native timebase test executable; all tests pass.
+- The tests execute the same snapshot resolver linked into the firmware and cover normal reads, a pending update before interrupt service, an overflow interrupt racing a read, and monotonic values across `0xffffffff` to zero.
+- Debug and Release firmware configurations build with warnings treated as errors using Arm GCC 15.3.1.
+- Debug uses 5,956 bytes of Flash and reserves 2,088 bytes of RAM.
+- Release uses 3,940 bytes of Flash and reserves 2,088 bytes of RAM.
+- The Release ELF is a statically linked, 32-bit little-endian ARM EABI5 hard-float executable with no unresolved symbols.
+- The TIM5 vector slot resolves to the implemented Thumb `TIM5_IRQHandler` rather than the startup default handler.
+- `time_us`, `mcu_timebase_initialize`, `mcu_timebase_us`, `mcu_timebase_handle_overflow_interrupt`, `timebase_snapshot_resolve`, `TIM5_IRQHandler`, and `firmware_uptime_us` remain inspectable symbols.
+- Application source contains no STM32/HAL register access, and Git whitespace validation passes.
 
 ## Milestone 0.3 verification
 
