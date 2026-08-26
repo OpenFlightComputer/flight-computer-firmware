@@ -6,7 +6,7 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 
 1. Repository initialization — complete.
 2. STM32F405 build and boot foundation — complete; physical-board verification remains recorded.
-3. Board and MCU hardware-layer skeleton — next after approval.
+3. Board and MCU hardware-layer skeleton — complete.
 4. Monotonic microsecond timebase.
 5. Task abstraction.
 6. Cooperative scheduler.

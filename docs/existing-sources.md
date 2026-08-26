@@ -73,7 +73,7 @@ The working path uses PA11/PA12 as OTG FS DM/DP on AF10, PA9 for VBUS sensing, F
 
 ### Knowledge to retain without implementing now
 
-The tester also proves current board mappings and low-level access for BMI270 over SPI3, BMP388 over I2C2, microSD over SPI1, status LEDs, and WS2812 timer/DMA output. Those sources remain references for their future approved milestones. Milestone 0.1 does not copy or execute any sensor, storage, LED, DShot, receiver, or flight-control code.
+The tester also establishes current board selections and low-level implementations for BMI270 over SPI3, BMP388 over I2C2, microSD over SPI1, status LEDs, and WS2812 timer/DMA output. Milestone 0.3 records those mappings in `docs/flightcomputer-v1-hardware.md` without copying or executing sensor, storage, LED, DShot, receiver, or flight-control code.
 
 ### Tester architecture deliberately not reused
 

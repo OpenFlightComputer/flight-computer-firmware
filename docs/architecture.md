@@ -1,6 +1,6 @@
-# Initial architecture boundaries
+# Architecture boundaries
 
-Milestone 0.1 establishes responsibility and dependency rules; it does not yet introduce application modules.
+Milestone 0.3 establishes the first concrete board and MCU boundary around the boot path.
 
 ## Dependency direction
 
@@ -17,6 +17,26 @@ The arrows indicate allowed knowledge toward increasingly hardware-specific impl
 | `peripherals/` | External-device semantics such as DShot, CRSF, BMI270, and BMP388 protocols | Board pin and peripheral-instance selection |
 | `hardware/boards/flightcomputer_v1/` | V1 routed pins, installed devices, peripheral selections, and board initialization policy | Generic flight behavior |
 | `hardware/mcu/stm32f405/` | STM32F405 clocks, interrupt support, timers, DMA, and low-level adapters | Flight Computer V1 routing unless unavoidable |
+
+## Current boot path
+
+```text
+app/main.c
+    ↓ generic board API
+hardware/boards/flightcomputer_v1/board.c
+    ↓ generic MCU API
+hardware/mcu/stm32f405/mcu.c
+    ↓ STM32 HAL/CMSIS
+STM32F405 hardware
+```
+
+The application sees only `board_initialize()` and `board_halt()`. It does not include STM32 headers or interpret HAL return values.
+
+The V1 board implementation owns board identity, expected clock frequency, and the policy that startup succeeds only when MCU initialization completes and the core reaches 168 MHz. It deliberately does not configure unused peripheral pins.
+
+The STM32F405 implementation owns HAL initialization, the PLL and bus-clock procedure, `SystemCoreClock` access, interrupt shutdown, the core exception table, and the linker/startup foundation. The current clock procedure is intentionally direct rather than a speculative multi-board clock framework.
+
+Exact V1 peripheral routing is recorded in `docs/flightcomputer-v1-hardware.md`. Routing knowledge will enter executable board support only when an approved peripheral milestone consumes it.
 
 ## Execution and ownership rules
 

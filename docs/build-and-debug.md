@@ -106,13 +106,14 @@ Intermediate and error values are intentionally observable:
 | Value | Meaning |
 | ---: | --- |
 | 0 | Reset/startup has not reached HAL initialization |
-| 1 | HAL initialized |
-| 2 | HSE and PLL configuration returned successfully |
+| 1 | Board initialization started |
+| 2 | MCU initialization and board clock verification completed |
 | 3 | Clock frequency verified; minimal loop running |
+| 100 | MCU/HAL initialization failed |
 | 101 | HSE/PLL or bus-clock configuration failed |
 | 102 | `SystemCoreClock` did not equal 168 MHz |
 
-The loop counter is a temporary bring-up aid, not a scheduler or timing guarantee. No LED is used as a heartbeat because Milestone 0.2 does not initialize board peripherals and the discrete LED hardware still has a documented polarity/connectivity concern.
+The loop counter is a temporary bring-up aid, not a scheduler or timing guarantee. No LED is used as a heartbeat because Milestone 0.3 does not initialize board peripherals and the discrete LED hardware still has a documented polarity/connectivity concern.
 
 ## Current physical validation status
 
