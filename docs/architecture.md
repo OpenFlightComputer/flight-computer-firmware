@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.6 adds the cooperative scheduler over the portable Task contract, central monotonic clock, and hardware boundaries.
+Milestone 0.7 adds the central application state machine over the cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -54,6 +54,14 @@ runs the cooperative backend from the main loop. The scheduler consumes the
 generic `time_us()` API through an injected clock function and contains no
 hardware knowledge. Ready batches bound selection fairness while execution
 measurements expose overload rather than concealing it.
+
+Milestone 0.7 gives `app/` one event-driven lifecycle authority. Successful
+startup progresses from `BOOT` through `INITIALIZING` to `DISARMED`; startup or
+runtime fatal paths enter terminal `FAULT`. The module exposes explicit arm,
+disarm, and failsafe events but the production application has no arm-request
+source. Detailed boot diagnostics remain separate from lifecycle state. Future
+actuator implementations must gate final hardware demand on `ARMED`, as
+specified in `docs/safety.md`.
 
 ## Separation from manufacturing test
 

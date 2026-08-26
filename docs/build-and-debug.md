@@ -133,6 +133,9 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_medium_task_executions` | Increasing at approximately 100 Hz |
 | `firmware_slow_task_executions` | Increasing at approximately 10 Hz |
 | `firmware_scheduler_last_result` | `0` while idle or `1` after execution |
+| `firmware_system_state_machine.current` | `SYSTEM_STATE_DISARMED` (`2`) |
+| `firmware_system_state_machine.previous` | `SYSTEM_STATE_INITIALIZING` (`1`) |
+| `firmware_system_state_last_result` | `SYSTEM_STATE_TRANSITION_OK` (`0`) |
 | `SystemCoreClock` | `168000000` |
 | `TIM5->PSC` | `83` |
 | `TIM5->ARR` | `0xffffffff` |
@@ -144,7 +147,7 @@ Intermediate and error values are intentionally observable:
 | 0 | Reset/startup has not reached HAL initialization |
 | 1 | Board initialization started |
 | 2 | MCU initialization and board clock verification completed |
-| 3 | Clock frequency verified; minimal loop running |
+| 3 | Initialization completed; scheduler running in `DISARMED` state |
 | 100 | MCU/HAL initialization failed |
 | 101 | HSE/PLL or bus-clock configuration failed |
 | 102 | `SystemCoreClock` did not equal 168 MHz |
@@ -152,6 +155,7 @@ Intermediate and error values are intentionally observable:
 | 104 | A diagnostic task could not be registered |
 | 105 | Scheduler initialization failed |
 | 106 | Scheduler entered an invalid runtime state |
+| 107 | An expected application-state transition was rejected |
 
 The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
 

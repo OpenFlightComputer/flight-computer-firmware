@@ -85,6 +85,7 @@ add_executable(flight_firmware
     app/main.c
     app/runtime_hooks.c
     app/scheduler.c
+    app/system_state.c
     app/task.c
     hardware/boards/flightcomputer_v1/board.c
     hardware/boards/flightcomputer_v1/time.c

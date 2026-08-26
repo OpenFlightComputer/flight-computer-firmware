@@ -15,6 +15,7 @@ typedef enum {
     BOOT_STATUS_TASK_REGISTRATION_ERROR = 104U,
     BOOT_STATUS_SCHEDULER_INITIALIZATION_ERROR = 105U,
     BOOT_STATUS_SCHEDULER_RUNTIME_ERROR = 106U,
+    BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR = 107U,
 } boot_status_t;
 
 extern volatile boot_status_t firmware_boot_status;
@@ -24,5 +25,6 @@ extern volatile uint32_t firmware_scheduler_last_result;
 extern volatile uint32_t firmware_fast_task_executions;
 extern volatile uint32_t firmware_medium_task_executions;
 extern volatile uint32_t firmware_slow_task_executions;
+extern volatile uint32_t firmware_system_state_last_result;
 
 #endif

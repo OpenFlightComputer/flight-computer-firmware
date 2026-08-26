@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.6 — cooperative scheduler: **complete and owner-approved**.
+Milestone 0.7 — application state machine: **complete and owner-approved**.
 
 ## Last completed milestone
 
-Milestone 0.6 — cooperative scheduler. The deterministic, fixed-capacity scheduler is host-tested and integrated with diagnostic application tasks; physical-board timing verification remains recorded.
+Milestone 0.7 — application state machine. The deterministic lifecycle transition policy is host-tested and integrated into startup and fatal-stop paths; production firmware remains explicitly disarmed.
 
 ## Current implementation status
 
@@ -39,6 +39,12 @@ Milestone 0.6 — cooperative scheduler. The deterministic, fixed-capacity sched
 - Replaced the temporary counter-only loop with scheduler steps and three debugger-visible diagnostic tasks at 1,000 Hz, 100 Hz, and 10 Hz.
 - Added host tests for initialization, immediate release, idle behavior, priority/release/order selection, disabled tasks, timing, skipped catch-up, overruns, and high-priority starvation protection.
 - Added `docs/scheduler.md` with the algorithm, fairness limits, overload behavior, missed-period policy, diagnostic integration, and explicit RTOS mapping.
+- Added a hardware-independent event-driven application state machine covering `BOOT`, `INITIALIZING`, `DISARMED`, `ARMED`, `FAILSAFE`, and terminal `FAULT` states.
+- Defined and enforced every legal state/event pair, synchronous disarm transitions, explicit-only arming, failsafe recovery through disarm, and fault entry from every non-fault state.
+- Added saturating accepted/rejected transition statistics while preserving current and previous state across rejected events.
+- Integrated startup lifecycle transitions so initialization begins in `INITIALIZING`, successful startup enters `DISARMED`, and every existing fatal stop path first enters `FAULT`.
+- Added exhaustive host coverage of the 36 state/event combinations, invalid arguments, initialization, terminal-fault behavior, and counter saturation.
+- Added `docs/safety.md` documenting lifecycle authority, transition policy, future final actuator gating, fault-system boundaries, and concurrency assumptions.
 
 No USB application behavior, motor output, receiver input, sensor access, logging, or flight-control behavior has been implemented.
 
@@ -53,6 +59,8 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 - Receiver UART, motor timer/DMA, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
 - Ready-batch fairness prevents selection starvation only when callbacks return. A non-returning callback blocks every task, and CPU overload still causes recorded missed releases.
+- Milestone 0.7 provides no production arm-request source, so firmware remains `DISARMED` after startup. USB command authorization and actuator gating belong to later approved milestones.
+- State-machine mutation currently belongs to main context and is not an interrupt-safe concurrent API.
 
 ## Open questions
 
@@ -63,7 +71,17 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 
 ## Next step
 
-Milestone 0.7 will implement the initial application state machine without adding motor control, receiver input, or sensor-driven flight behavior. Its detailed scope must be reviewed and approved before implementation begins.
+Milestone 0.8 will implement structured warning, fault, and critical-fault records and connect critical faults to the state machine. Its detailed scope must be reviewed and approved before implementation begins.
+
+## Milestone 0.7 verification
+
+- The host-development build runs timebase, task, scheduler, and system-state test executables; all tests pass.
+- State tests cover every one of the 36 state/event combinations, legal and illegal transitions, explicit-only arming, failsafe disarm recovery, terminal `FAULT`, invalid arguments, initialization, previous-state preservation, and saturating counters.
+- Debug and Release firmware configurations build with warnings treated as errors using Arm GCC 15.3.1.
+- Debug uses 8,816 bytes of Flash and reserves 3,312 bytes of RAM.
+- Release uses 5,808 bytes of Flash and reserves 3,312 bytes of RAM.
+- The state module contains no STM32/HAL dependency, peripheral behavior, runtime allocation, or concurrent interrupt mutation.
+- Physical-board behavior remains unverified because no board/ST-Link session was available; this milestone adds no new peripheral configuration.
 
 ## Milestone 0.6 verification
 

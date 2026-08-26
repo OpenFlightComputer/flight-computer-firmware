@@ -13,9 +13,13 @@ The native `scheduler_tests` target uses a fake microsecond clock to verify
 ready-task selection, batch fairness, disabled tasks, stable periodic release,
 execution measurements, skipped-release behavior, and overrun detection.
 
-Future hardware-independent tests will cover task registration, scheduling,
-state transitions, faults, logging queues, protocol parsing, DShot encoding,
-receiver parsing, mixing, and control algorithms as their milestones are
-approved.
+The native `system_state_tests` target verifies all 36 state/event pairs,
+initialization, explicit-only arming, synchronous disarm, failsafe recovery,
+terminal faults, invalid inputs, previous-state preservation, and saturating
+statistics.
+
+Future hardware-independent tests will cover faults, logging queues, protocol
+parsing, DShot encoding, receiver parsing, mixing, and control algorithms as
+their milestones are approved.
 
 Hardware tests remain separate and must not be represented as passing host tests.

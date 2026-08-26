@@ -1,0 +1,80 @@
+# System state and safety boundary
+
+Milestone 0.7 introduces the central application lifecycle state. The state
+machine is hardware-independent, allocation-free, synchronous, and driven by
+explicit events. It does not control motors or infer state from peripherals.
+
+## States
+
+| State | Meaning |
+| --- | --- |
+| `BOOT` | Software state immediately after state-machine initialization |
+| `INITIALIZING` | Board, task registry, and scheduler initialization is in progress |
+| `DISARMED` | Initialization succeeded; future actuator output must be inhibited |
+| `ARMED` | An explicit arm request was accepted; future actuator output may be considered |
+| `FAILSAFE` | A failsafe was detected while armed; future actuator policy must inhibit or explicitly handle output |
+| `FAULT` | A fatal condition occurred; the state is terminal until reset |
+
+The application reaches `DISARMED` after successful startup. It never requests
+`ARMED` by itself. Milestone 0.7 exposes the event API for host testing and
+future command integration but deliberately adds no temporary debugger flag or
+other production arming source.
+
+## Legal transitions
+
+| Current state | Event | Next state |
+| --- | --- | --- |
+| `BOOT` | initialization started | `INITIALIZING` |
+| `INITIALIZING` | initialization completed | `DISARMED` |
+| `DISARMED` | arm requested | `ARMED` |
+| `ARMED` | disarm requested | `DISARMED` |
+| `ARMED` | failsafe detected | `FAILSAFE` |
+| `FAILSAFE` | disarm requested | `DISARMED` |
+| Any state except `FAULT` | fault detected | `FAULT` |
+
+Every other state/event pair is rejected without changing either the current
+or previous state. In particular:
+
+- initialization cannot directly produce `ARMED`;
+- `FAILSAFE` cannot return directly to `ARMED`;
+- `FAULT` rejects every event and requires an MCU reset;
+- repeated arm, disarm, initialization, failsafe, and fault events are not
+  silently treated as successful transitions.
+
+## Disarm authority
+
+The state transition API is synchronous. An accepted disarm request changes
+`ARMED` or `FAILSAFE` to `DISARMED` before returning. Once an actuator subsystem
+exists, its final output gate must consume this authoritative state so that
+any state other than `ARMED` prevents normal motor demand from reaching the
+hardware.
+
+Milestone 0.7 establishes that software contract but does not implement motor
+outputs. The DShot milestone must enforce the gate at the final actuator
+boundary; merely checking state at an earlier command source would not be
+sufficient.
+
+## State versus boot status and faults
+
+`system_state_machine_t` is the lifecycle authority. It records current state,
+previous state, accepted-transition count, and rejected-transition count.
+Counters saturate instead of wrapping.
+
+`boot_status_t` remains a separate detailed startup/debug diagnostic. For
+example, a clock configuration failure sets system state to `FAULT` while its
+boot status identifies the specific clock error. Keeping these concepts
+separate prevents hardware initialization details from becoming lifecycle
+states.
+
+Milestone 0.8 will add fault identifiers, severity, source/module, timestamps,
+and the policy that converts critical fault records into the existing
+`FAULT_DETECTED` event. Milestone 0.7 contains no fault registry and assigns no
+meaning to warnings or recoverable faults.
+
+## Concurrency boundary
+
+The current application calls the state machine from main context. It does not
+provide interrupt-safe concurrent mutation. Future interrupt handlers must
+publish bounded events for main-context handling rather than mutate system
+state directly, unless a later design explicitly adds and validates a critical
+section policy.

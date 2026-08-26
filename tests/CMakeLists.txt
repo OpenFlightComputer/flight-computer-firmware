@@ -52,3 +52,21 @@ target_compile_options(scheduler_tests PRIVATE
 )
 
 add_test(NAME scheduler COMMAND scheduler_tests)
+
+add_executable(system_state_tests
+    system_state_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
+)
+
+target_include_directories(system_state_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+)
+
+target_compile_options(system_state_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME system_state COMMAND system_state_tests)

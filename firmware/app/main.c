@@ -1,6 +1,7 @@
 #include "boot_status.h"
 #include "board.h"
 #include "scheduler.h"
+#include "system_state.h"
 #include "task.h"
 #include "time.h"
 
@@ -13,9 +14,11 @@ volatile uint32_t firmware_scheduler_last_result;
 volatile uint32_t firmware_fast_task_executions;
 volatile uint32_t firmware_medium_task_executions;
 volatile uint32_t firmware_slow_task_executions;
+volatile uint32_t firmware_system_state_last_result;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
+system_state_machine_t firmware_system_state_machine;
 
 static void diagnostic_fast_task(void *context)
 {
@@ -58,8 +61,22 @@ static const task_definition_t diagnostic_task_definitions[] = {
 
 static void stop_with_status(boot_status_t status)
 {
+    firmware_system_state_last_result =
+        (uint32_t)system_state_machine_handle_event(
+            &firmware_system_state_machine,
+            SYSTEM_STATE_EVENT_FAULT_DETECTED);
     firmware_boot_status = status;
     board_halt();
+}
+
+static bool transition_system_state(system_state_event_t event)
+{
+    const system_state_transition_result_t result =
+        system_state_machine_handle_event(&firmware_system_state_machine,
+                                          event);
+
+    firmware_system_state_last_result = (uint32_t)result;
+    return result == SYSTEM_STATE_TRANSITION_OK;
 }
 
 static boot_status_t boot_status_for_board_error(board_init_result_t result)
@@ -104,6 +121,12 @@ int main(void)
 {
     board_init_result_t board_result;
 
+    system_state_machine_initialize(&firmware_system_state_machine);
+    if (!transition_system_state(
+            SYSTEM_STATE_EVENT_INITIALIZATION_STARTED)) {
+        stop_with_status(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR);
+    }
+
     firmware_boot_status = BOOT_STATUS_BOARD_INITIALIZATION_STARTED;
     board_result = board_initialize();
 
@@ -120,6 +143,10 @@ int main(void)
                              &firmware_task_registry,
                              time_us) != SCHEDULER_INIT_OK) {
         stop_with_status(BOOT_STATUS_SCHEDULER_INITIALIZATION_ERROR);
+    }
+    if (!transition_system_state(
+            SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED)) {
+        stop_with_status(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR);
     }
 
     firmware_boot_status = BOOT_STATUS_RUNNING;

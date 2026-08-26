@@ -10,7 +10,7 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 4. Monotonic microsecond timebase — complete.
 5. Task abstraction — complete.
 6. Cooperative scheduler — complete.
-7. Application state machine.
+7. Application state machine — complete.
 8. Fault system.
 9. Non-blocking logging core.
 10. USB CDC logging backend.
