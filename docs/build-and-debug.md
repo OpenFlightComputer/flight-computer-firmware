@@ -139,6 +139,10 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_fault_system.active_count` | `0` after successful startup |
 | `firmware_fault_system.dropped_record_count` | `0` |
 | `firmware_fault_last_result` | `0xffffffff` until the first report |
+| `firmware_logging_system.count` | `6` startup records |
+| `firmware_logging_system.next_sequence` | `7` |
+| `firmware_logging_system.statistics.dropped_count` | `0` |
+| `firmware_logging_system.backend_attached` | `false` |
 | `SystemCoreClock` | `168000000` |
 | `TIM5->PSC` | `83` |
 | `TIM5->ARR` | `0xffffffff` |
@@ -162,7 +166,7 @@ Intermediate and error values are intentionally observable:
 | 108 | The immutable production fault catalogue could not initialize |
 | 109 | The monotonic fault timestamp clock could not be attached |
 
-The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. Fatal paths retain their detailed boot status and populate `firmware_fault_system.records` before halting; faults before timebase startup have timestamp-valid flags cleared. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
+The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. Fatal paths retain their detailed boot status, enqueue a best-effort fatal log, and populate `firmware_fault_system.records` before halting. The first successful-startup log has its timestamp-valid flag cleared; the following five use `time_us()`. Milestone 0.9 deliberately has no backend, so `logging_drain_once()` is not scheduled and these records remain in RAM. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
 
 ## Current physical validation status
 

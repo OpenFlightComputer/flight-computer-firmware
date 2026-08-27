@@ -15,6 +15,7 @@ enum {
     FAULT_ID_SCHEDULER_RUNTIME = 7U,
     FAULT_ID_STATE_MACHINE_TRANSITION = 8U,
     FAULT_ID_FAULT_CLOCK_ATTACHMENT = 9U,
+    FAULT_ID_LOGGING_CLOCK_ATTACHMENT = 10U,
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count);

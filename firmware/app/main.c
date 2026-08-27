@@ -2,6 +2,7 @@
 #include "board.h"
 #include "fault.h"
 #include "fault_catalog.h"
+#include "logging.h"
 #include "scheduler.h"
 #include "system_state.h"
 #include "task.h"
@@ -68,6 +69,13 @@ static void stop_with_fault(boot_status_t status,
                             bool context_valid,
                             uint32_t context)
 {
+    LOG_FATAL(LOG_MODULE_FAULT,
+              "id=%u boot_status=%u context_valid=%u context=%lu",
+              (unsigned int)fault_id,
+              (unsigned int)status,
+              context_valid ? 1U : 0U,
+              (unsigned long)context);
+
     firmware_fault_last_result =
         (uint32_t)fault_system_report(&firmware_fault_system,
                                       fault_id,
@@ -164,6 +172,9 @@ int main(void)
     task_registration_result_t task_registration_result;
     scheduler_init_result_t scheduler_init_result;
 
+    logging_initialize();
+    LOG_INFO(LOG_MODULE_SYSTEM, "OpenFlightComputer booting");
+
     system_state_machine_initialize(&firmware_system_state_machine);
     fault_definitions = firmware_fault_catalog(&fault_definition_count);
     if (fault_system_initialize(&firmware_fault_system,
@@ -201,6 +212,16 @@ int main(void)
                         false,
                         0U);
     }
+    if (logging_attach_clock(time_us) != LOGGING_CLOCK_ATTACH_OK) {
+        firmware_fault_last_result =
+            (uint32_t)fault_system_report(
+                &firmware_fault_system,
+                FAULT_ID_LOGGING_CLOCK_ATTACHMENT,
+                false,
+                0U);
+        LOG_ERROR(LOG_MODULE_SYSTEM, "logging clock attachment failed");
+    }
+    LOG_INFO(LOG_MODULE_BOARD, "Flight Computer V1 initialized");
 
     task_registration_result = register_diagnostic_tasks();
     if (task_registration_result != TASK_REGISTRATION_OK) {
@@ -209,6 +230,9 @@ int main(void)
                         true,
                         (uint32_t)task_registration_result);
     }
+    LOG_INFO(LOG_MODULE_TASK,
+             "task registry initialized count=%u",
+             (unsigned int)task_registry_count(&firmware_task_registry));
     scheduler_init_result = scheduler_initialize(&firmware_scheduler,
                                                  &firmware_task_registry,
                                                  time_us);
@@ -218,6 +242,7 @@ int main(void)
                         true,
                         (uint32_t)scheduler_init_result);
     }
+    LOG_INFO(LOG_MODULE_SCHEDULER, "scheduler initialized");
     if (!transition_system_state(
             SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED)) {
         stop_with_fault(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR,
@@ -225,8 +250,10 @@ int main(void)
                         true,
                         (uint32_t)SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED);
     }
+    LOG_INFO(LOG_MODULE_STATE, "INITIALIZING -> DISARMED");
 
     firmware_boot_status = BOOT_STATUS_RUNNING;
+    LOG_INFO(LOG_MODULE_SYSTEM, "firmware running");
 
     for (;;) {
         const scheduler_step_result_t scheduler_result =

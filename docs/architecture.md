@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.8 adds structured fault policy and diagnostics over the central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
+Milestone 0.9 adds a destination-neutral non-blocking logging core over structured fault policy, the central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -70,6 +70,15 @@ fault registry owns active diagnostic records. Critical reports synchronously
 send `FAULT_DETECTED` to the state authority after preserving the record.
 Warning and ordinary-fault records leave lifecycle state unchanged. See
 `docs/fault-system.md` for timing, overflow, clearing, and concurrency policy.
+
+Milestone 0.9 keeps producers independent of output transport. Application and
+future flight/peripheral code call the central logging facade, which captures a
+bounded structured record into RAM. A backend consumes at most one immutable
+record per drain attempt and must return without waiting. The current firmware
+attaches no backend or drain task; USB transport belongs to Milestone 0.10.
+Core state, fault, and scheduler modules do not depend on the logger, avoiding
+hidden diagnostic coupling in portable policy code. See `docs/logging.md` for
+filtering, formatting, overflow, sequence, and concurrency rules.
 
 ## Separation from manufacturing test
 

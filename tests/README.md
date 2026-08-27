@@ -24,8 +24,14 @@ timestamp validity, repeated records, context, clearing/latching, capacity
 exhaustion, critical safety under overflow, slot reuse, invalid operations, and
 saturating statistics.
 
-Future hardware-independent tests will cover logging queues, protocol parsing,
-DShot encoding, receiver parsing, mixing, and control algorithms as their
-milestones are approved.
+The native `logging_tests` target verifies defaults and names, filtering and
+module overrides, suppression of filtered argument evaluation, timestamps and
+sequences, bounded formatting and truncation, canonical lines, FIFO wrap and
+overflow, backend retry/error behavior, invalid operations, and saturating
+statistics.
+
+Future hardware-independent tests will cover protocol parsing, DShot encoding,
+receiver parsing, mixing, and control algorithms as their milestones are
+approved.
 
 Hardware tests remain separate and must not be represented as passing host tests.

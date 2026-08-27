@@ -25,9 +25,12 @@ already detect:
 | Scheduler invalid runtime state | Critical | Scheduler |
 | State-machine transition | Critical | State machine |
 | Fault-clock attachment | Critical | Application |
+| Logging-clock attachment | Fault | Application |
 
-Warning and non-critical fault behavior is implemented and host-tested with a
-test catalogue. Production warning/fault IDs will be added only when an owning
+Warning and non-critical fault behavior is host-tested with a test catalogue.
+The first production non-critical ID records failure to attach the logging
+clock: diagnostics remain operational without valid timestamps, so lifecycle
+state does not change. Other production IDs will be added only when an owning
 subsystem defines a real detectable condition and its safety consequence.
 
 ## Severity behavior

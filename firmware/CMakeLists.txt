@@ -84,6 +84,8 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 add_executable(flight_firmware
     app/fault.c
     app/fault_catalog.c
+    app/logging.c
+    app/logging_config.c
     app/main.c
     app/runtime_hooks.c
     app/scheduler.c

@@ -90,3 +90,22 @@ target_compile_options(fault_tests PRIVATE
 )
 
 add_test(NAME fault COMMAND fault_tests)
+
+add_executable(logging_tests
+    logging_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/logging_config.c"
+)
+
+target_include_directories(logging_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+)
+
+target_compile_options(logging_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME logging COMMAND logging_tests)

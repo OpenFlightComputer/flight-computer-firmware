@@ -6,7 +6,7 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.8 — fault system: **complete and owner-approved**.
+Milestone 0.9 — non-blocking logging core: **implemented and awaiting owner review**.
 
 ## Last completed milestone
 
@@ -53,8 +53,18 @@ Milestone 0.8 — fault system. Structured fixed-capacity diagnostics and catalo
 - Mapped every existing fatal board, task, scheduler, state, and fault-clock path to an immutable production fault catalogue and retained detailed boot statuses.
 - Added host tests for catalogue validation, all severities, every critical source state, startup arm prevention, timestamps, duplicate coalescing, context, clearing, capacity/slot reuse, invalid operations, and saturation.
 - Added `docs/fault-system.md` describing classification ownership, lifecycle effects, diagnostics, overflow safety, startup time, and concurrency boundaries.
+- Added a central logging facade with `DEBUG`, `INFO`, `WARN`, `ERROR`, and `FATAL` levels plus fixed current-subsystem module IDs.
+- Added a global `INFO` threshold, per-module overrides including `OFF`, and macros that avoid evaluating filtered format arguments.
+- Added a 32-record FIFO containing immediate timestamp/validity, 64-bit sequence, level, module, bounded 95-character message, length, and truncation metadata.
+- Added bounded `vsnprintf()` producer formatting, FIFO wrap handling, total/per-level drop counters, and saturating filter, truncation, format, drain, busy, and backend-error statistics.
+- Added a destination-neutral backend contract and one-record `logging_drain_once()` operation with explicit accepted, busy/retry, and error/drop behavior.
+- Added a bounded canonical text formatter containing timestamp, sequence, level, module, message, and newline while keeping transport outside the core.
+- Initialized logging before board bring-up, attached `time_us()` only after successful board initialization, and added six debugger-visible startup records plus fatal-path records.
+- Added a real non-critical logging-clock fault policy: timestamp degradation is recorded without forcing `SYSTEM_STATE_FAULT`.
+- Added host tests for defaults/names, filtering, per-module overrides, filtered-argument evaluation, time/sequence capture, truncation, canonical formatting, FIFO wrap, overflow, backend behavior, invalid inputs, and saturating statistics.
+- Added `docs/logging.md` defining levels, modules, formatting, queue/overflow, backend, timing, concurrency, debugging, and no-immediate-output policies.
 
-No USB application behavior, motor output, receiver input, sensor access, logging, or flight-control behavior has been implemented.
+No USB application behavior, motor output, receiver input, sensor access, logging output backend, or flight-control behavior has been implemented.
 
 ## Known issues and limitations
 
@@ -70,7 +80,10 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 - Milestone 0.7 provides no production arm-request source, so firmware remains `DISARMED` after startup. USB command authorization and actuator gating belong to later approved milestones.
 - State-machine mutation currently belongs to main context and is not an interrupt-safe concurrent API.
 - Fault reporting and clearing also currently belong to main context and are not interrupt-safe concurrent APIs.
-- The production catalogue contains only currently detectable critical foundation failures. Warning and ordinary-fault behavior is implemented and tested, but real non-critical IDs remain owned by future subsystem milestones.
+- The production catalogue contains current foundation failures plus one ordinary logging-clock fault; additional warning and non-critical IDs remain owned by their future subsystem milestones.
+- The logging queue has no production backend or drain task in Milestone 0.9; successful startup leaves six records in RAM for debugger inspection until Milestone 0.10 adds USB draining.
+- Logging is main/cooperative-task-context only, not interrupt-safe, and bounded formatting still consumes execution time even though it never waits for output.
+- The initial logger deliberately excludes floating-point formatting, synchronous immediate output, panic/crash transport, multiple backends, persistent storage, and high-rate flight-data recording.
 
 ## Open questions
 
@@ -81,7 +94,18 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 
 ## Next step
 
-Milestone 0.9 will implement the non-blocking logging core without adding a hardware output backend. Its detailed filtering, queue, and overflow policy must be reviewed and approved before implementation begins.
+After owner review and a separately approved commit, Milestone 0.10 will connect the logger to a non-blocking USB CDC backend and add a 1,000 us background drain task. USB hardware and manufacturing-test evidence must be re-inspected before implementation.
+
+## Milestone 0.9 verification
+
+- The host-development build runs timebase, task, scheduler, system-state, fault, and logging test executables; all tests pass.
+- Logging tests cover default configuration and names, global/per-module filtering, `OFF`, filtered argument suppression, timestamp validity, sequences, bounded formatting, truncation, canonical lines, FIFO ordering and wrap, queue overflow and sequence gaps, backend busy/retry/accept/error behavior, invalid operations, and saturating counters.
+- Debug and Release firmware configurations build with warnings treated as errors using Arm GCC 15.3.1.
+- Debug uses 15,196 bytes of Flash and reserves 8,032 bytes of RAM.
+- Release uses 10,916 bytes of Flash and reserves 8,032 bytes of RAM.
+- Address/undefined-behavior sanitizer execution of the host logging tests passes.
+- Logging sources contain no STM32/HAL dependency, peripheral access, USB behavior, runtime allocation, or synchronous output path.
+- Physical-board behavior remains unverified because no board/ST-Link session was available; this milestone adds no new peripheral configuration.
 
 ## Milestone 0.8 verification
 
