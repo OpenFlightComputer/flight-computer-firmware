@@ -91,16 +91,20 @@ range saturate rather than wrap.
 
 ## Firmware diagnostics
 
-The first firmware integration registers three no-hardware diagnostic tasks:
+The firmware always registers three no-hardware diagnostic tasks and, after a
+successful USB/backend initialization, one bounded logging task:
 
 | Task | Period | Frequency | Priority | Action |
 | --- | ---: | ---: | ---: | --- |
 | `diagnostic-fast` | 1,000 us | 1,000 Hz | High (64) | Increment debugger counter |
 | `diagnostic-medium` | 10,000 us | 100 Hz | Normal (128) | Increment debugger counter |
 | `diagnostic-slow` | 100,000 us | 10 Hz | Low (192) | Increment debugger counter |
+| `logging-drain` | 1,000 us | 1,000 Hz | Background (255) | Advance USB state and attempt one record |
 
-They exercise the scheduler and expose approximate 100:10:1 execution ratios
-without initializing a peripheral or implementing flight behavior.
+The diagnostic tasks expose approximate 100:10:1 execution ratios. The USB
+task demonstrates that a high-frequency task may still remain lowest priority:
+ready-batch fairness lets it run after higher-priority ready tasks, while its
+callback remains bounded and never waits for a host.
 
 ## RTOS migration boundary
 

@@ -7,8 +7,12 @@
 #include "system_state.h"
 #include "task.h"
 #include "time.h"
+#include "usb_cdc_transport.h"
+#include "usb_logging_backend.h"
 
 #include <stddef.h>
+
+#define USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT UINT32_C(100)
 
 volatile boot_status_t firmware_boot_status = BOOT_STATUS_RESET;
 volatile uint32_t firmware_main_loop_iterations;
@@ -19,6 +23,9 @@ volatile uint32_t firmware_medium_task_executions;
 volatile uint32_t firmware_slow_task_executions;
 volatile uint32_t firmware_system_state_last_result;
 volatile uint32_t firmware_fault_last_result = UINT32_MAX;
+volatile uint32_t firmware_usb_initialization_result = UINT32_MAX;
+volatile uint32_t firmware_logging_drain_last_result = UINT32_MAX;
+volatile uint32_t firmware_logging_drain_task_executions;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
@@ -43,6 +50,16 @@ static void diagnostic_slow_task(void *context)
     firmware_slow_task_executions++;
 }
 
+static void logging_drain_task(void *context)
+{
+    (void)context;
+
+    usb_cdc_transport_process();
+    firmware_logging_drain_last_result =
+        (uint32_t)logging_drain_once();
+    firmware_logging_drain_task_executions++;
+}
+
 static const task_definition_t diagnostic_task_definitions[] = {
     {
         .name = "diagnostic-fast",
@@ -62,6 +79,13 @@ static const task_definition_t diagnostic_task_definitions[] = {
         .priority = TASK_PRIORITY_LOW,
         .callback = diagnostic_slow_task,
     },
+};
+
+static const task_definition_t logging_drain_task_definition = {
+    .name = "logging-drain",
+    .period_us = 1000U,
+    .priority = TASK_PRIORITY_BACKGROUND,
+    .callback = logging_drain_task,
 };
 
 static void stop_with_fault(boot_status_t status,
@@ -142,7 +166,8 @@ static fault_id_t fault_id_for_board_error(board_init_result_t result)
     return FAULT_ID_MCU_INITIALIZATION;
 }
 
-static task_registration_result_t register_diagnostic_tasks(void)
+static task_registration_result_t register_application_tasks(
+    bool register_logging_task)
 {
     size_t index;
 
@@ -161,6 +186,11 @@ static task_registration_result_t register_diagnostic_tasks(void)
         }
     }
 
+    if (register_logging_task) {
+        return task_registry_register(&firmware_task_registry,
+                                      &logging_drain_task_definition);
+    }
+
     return TASK_REGISTRATION_OK;
 }
 
@@ -171,6 +201,8 @@ int main(void)
     board_init_result_t board_result;
     task_registration_result_t task_registration_result;
     scheduler_init_result_t scheduler_init_result;
+    usb_cdc_init_result_t usb_init_result;
+    bool usb_logging_available = false;
 
     logging_initialize();
     LOG_INFO(LOG_MODULE_SYSTEM, "OpenFlightComputer booting");
@@ -223,7 +255,35 @@ int main(void)
     }
     LOG_INFO(LOG_MODULE_BOARD, "Flight Computer V1 initialized");
 
-    task_registration_result = register_diagnostic_tasks();
+    usb_init_result = usb_cdc_transport_initialize();
+    firmware_usb_initialization_result = (uint32_t)usb_init_result;
+    if (usb_init_result != USB_CDC_INIT_OK) {
+        firmware_fault_last_result =
+            (uint32_t)fault_system_report(&firmware_fault_system,
+                                          FAULT_ID_USB_LOGGING_INITIALIZATION,
+                                          true,
+                                          (uint32_t)usb_init_result);
+        LOG_ERROR(LOG_MODULE_USB,
+                  "CDC initialization failed result=%u",
+                  (unsigned int)usb_init_result);
+    } else {
+        const logging_backend_t backend = usb_logging_backend();
+
+        if (logging_attach_backend(&backend) == LOGGING_BACKEND_ATTACH_OK) {
+            usb_logging_available = true;
+            LOG_INFO(LOG_MODULE_USB, "CDC logging backend initialized");
+        } else {
+            firmware_fault_last_result =
+                (uint32_t)fault_system_report(&firmware_fault_system,
+                                              FAULT_ID_USB_LOGGING_INITIALIZATION,
+                                              true,
+                                              USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT);
+            LOG_ERROR(LOG_MODULE_USB, "logging backend attachment failed");
+        }
+    }
+
+    task_registration_result =
+        register_application_tasks(usb_logging_available);
     if (task_registration_result != TASK_REGISTRATION_OK) {
         stop_with_fault(BOOT_STATUS_TASK_REGISTRATION_ERROR,
                         FAULT_ID_TASK_REGISTRATION,

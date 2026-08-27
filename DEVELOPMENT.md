@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.9 — non-blocking logging core: **implemented and awaiting owner review**.
+Milestone 0.10 — USB CDC logging backend: **implemented and awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 0.8 — fault system. Structured fixed-capacity diagnostics and catalogue-owned safety classification are host-tested and integrated into every existing fatal path.
+Milestone 0.9 — non-blocking logging core. Fixed-capacity sequenced records, filtering, bounded formatting, overflow diagnostics, and a destination-neutral backend contract are host-tested and integrated.
 
 ## Current implementation status
 
@@ -63,8 +63,18 @@ Milestone 0.8 — fault system. Structured fixed-capacity diagnostics and catalo
 - Added a real non-critical logging-clock fault policy: timestamp degradation is recorded without forcing `SYSTEM_STATE_FAULT`.
 - Added host tests for defaults/names, filtering, per-module overrides, filtered-argument evaluation, time/sequence capture, truncation, canonical formatting, FIFO wrap, overflow, backend behavior, invalid inputs, and saturating statistics.
 - Added `docs/logging.md` defining levels, modules, formatting, queue/overflow, backend, timing, concurrency, debugging, and no-immediate-output policies.
+- Reinspected and closely adapted the manufacturing tester's proven PA9/PA11/PA12, OTG FS, FIFO, static-allocation, STM32 USB Device CDC, descriptor, and interrupt implementation.
+- Added a flight-firmware USB identity with development-only `0xCAFE:0x4002`; CMake refuses to label that default identity as distribution-approved.
+- Added a two-entry, 160-byte-per-entry USB-owned transmit queue whose accepted result guarantees the complete canonical log line has been copied before the logging record is released.
+- Kept USB transfer completion in interrupt context to a flag update; formatting, queue ownership changes, and transfer start/retry run in cooperative-task context.
+- Added a production USB logging adapter that maps accepted, busy, and error transport outcomes directly to the Milestone 0.9 backend contract.
+- Registered a `logging-drain` task at a 1,000 us period and `TASK_PRIORITY_BACKGROUND`; it advances USB once and attempts at most one record per invocation.
+- Added the non-critical `FAULT_ID_USB_LOGGING_INITIALIZATION` policy. USB initialization or backend attachment failure disables USB draining without preventing startup into `DISARMED`.
+- Added debugger-visible USB initialization, drain result, and drain execution values plus transport counters for queued/completed/busy/invalid/start-error/ignored-receive behavior.
+- Added host tests for exact USB backend bytes, accepted ownership, busy retry, and error/drop behavior.
+- Added `docs/usb-cdc-logging.md` defining proven reuse, ownership, scheduling, disconnect, failure, receive, identity, and physical-verification boundaries.
 
-No USB application behavior, motor output, receiver input, sensor access, logging output backend, or flight-control behavior has been implemented.
+No USB command protocol, motor output, receiver input, sensor access, persistent flight-data logging, or flight-control behavior has been implemented.
 
 ## Known issues and limitations
 
@@ -81,9 +91,12 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 - State-machine mutation currently belongs to main context and is not an interrupt-safe concurrent API.
 - Fault reporting and clearing also currently belong to main context and are not interrupt-safe concurrent APIs.
 - The production catalogue contains current foundation failures plus one ordinary logging-clock fault; additional warning and non-critical IDs remain owned by their future subsystem milestones.
-- The logging queue has no production backend or drain task in Milestone 0.9; successful startup leaves six records in RAM for debugger inspection until Milestone 0.10 adds USB draining.
+- When no USB host is configured, the transport accepts two complete log lines and then reports busy; the remaining records stay in the logging queue until reconnection or eventual queue overflow.
 - Logging is main/cooperative-task-context only, not interrupt-safe, and bounded formatting still consumes execution time even though it never waits for output.
 - The initial logger deliberately excludes floating-point formatting, synchronous immediate output, panic/crash transport, multiple backends, persistent storage, and high-rate flight-data recording.
+- USB OUT packets are re-armed, discarded, and counted. Receive framing and commands deliberately remain Milestone 0.11 work.
+- The default USB VID/PID is explicitly development-only and must be replaced with assigned values before distributing hardware.
+- Physical USB enumeration, output, disconnect/reconnect, VBUS sensing, and throughput remain unverified without a connected Flight Computer V1.
 
 ## Open questions
 
@@ -94,7 +107,20 @@ No USB application behavior, motor output, receiver input, sensor access, loggin
 
 ## Next step
 
-After owner review and a separately approved commit, Milestone 0.10 will connect the logger to a non-blocking USB CDC backend and add a 1,000 us background drain task. USB hardware and manufacturing-test evidence must be re-inspected before implementation.
+After owner review and a separately approved commit, Milestone 0.11 will add a bounded newline-delimited USB receive foundation and strict JSON command envelope. It will not add arming or actuator commands.
+
+## Milestone 0.10 verification
+
+- The host-development build runs seven test executables; all tests pass.
+- USB logging adapter tests verify exact canonical output bytes, transport-owned copying, accepted removal, busy retention/retry, and error removal/counting.
+- Debug and Release firmware configurations build with warnings treated as errors using Arm GCC 15.3.1 and link the STM32CubeF4 USB Device CDC stack.
+- Debug uses 41,752 bytes of Flash and reserves 11,360 bytes of RAM.
+- Release uses 27,968 bytes of Flash and reserves 11,352 bytes of RAM.
+- Address/undefined-behavior sanitizer execution of all seven host test suites passes.
+- clangd checks of the application integration, backend, transport, descriptors, and V1 USB port report zero errors.
+- The USB implementation contains no runtime dynamic allocation; STM USB class allocation is redirected to fixed static storage.
+- Application sources contain no STM32 HAL calls, and USB formatting/draining remains outside interrupt context.
+- Physical-board USB behavior remains unverified because no connected board session was available.
 
 ## Milestone 0.9 verification
 

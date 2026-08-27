@@ -2,7 +2,7 @@
 
 This directory contains the operational embedded firmware foundation.
 
-Milestone 0.9 adds the destination-neutral logging core over the fault, state, and scheduler foundation:
+Milestone 0.10 adds USB CDC output to the destination-neutral logging core:
 
 ```text
 application main
@@ -31,9 +31,11 @@ fixed-capacity registry and ready-batch scheduler
     ↓
 1,000 Hz, 100 Hz, and 10 Hz diagnostic counters
     ↓
-six startup records retained in a fixed logging queue
+seven startup records enter the fixed logging queue
+    ↓
+1,000 Hz background task drains one record into a two-entry USB CDC queue
 ```
 
-`app/` contains boot/status orchestration plus the portable logging core, fault system, system state, Task registry, and cooperative scheduler. It depends on generic board and time APIs and contains no STM32 HAL calls. `hardware/boards/flightcomputer_v1/` owns board identity, timebase frequency selection, and initialization policy. `hardware/mcu/stm32f405/` owns F405 startup support, linker layout, HAL configuration, clock implementation, TIM5 register access, and core interrupt handlers.
+`app/` contains boot/status orchestration plus the portable logging core, USB logging adapter, fault system, system state, Task registry, and cooperative scheduler. It contains no STM32 HAL calls. `peripherals/usb/` owns the CDC descriptors and bounded transmit state. `hardware/boards/flightcomputer_v1/` owns board identity, routed USB pins and OTG FS setup, timebase frequency selection, and initialization policy. `hardware/mcu/stm32f405/` owns F405 startup support, linker layout, HAL configuration, clock implementation, TIM5 register access, and core interrupt handlers.
 
-The build intentionally excludes the manufacturing tester's session protocol, component registry, USB implementation, device drivers, and operator workflow.
+The USB hardware path is adapted closely from the manufacturing tester. The build intentionally excludes its session protocol, component registry, component drivers, acceptance policy, and operator workflow.

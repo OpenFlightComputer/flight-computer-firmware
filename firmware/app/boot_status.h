@@ -29,5 +29,8 @@ extern volatile uint32_t firmware_medium_task_executions;
 extern volatile uint32_t firmware_slow_task_executions;
 extern volatile uint32_t firmware_system_state_last_result;
 extern volatile uint32_t firmware_fault_last_result;
+extern volatile uint32_t firmware_usb_initialization_result;
+extern volatile uint32_t firmware_logging_drain_last_result;
+extern volatile uint32_t firmware_logging_drain_task_executions;
 
 #endif

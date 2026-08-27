@@ -27,6 +27,7 @@ typedef enum {
     FAULT_SOURCE_MCU,
     FAULT_SOURCE_SCHEDULER,
     FAULT_SOURCE_STATE_MACHINE,
+    FAULT_SOURCE_USB,
     FAULT_SOURCE_COUNT,
 } fault_source_t;
 

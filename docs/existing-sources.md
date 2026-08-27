@@ -59,15 +59,15 @@ The proven clock tree is 16 MHz HSE divided by 16, multiplied by 336, and divide
 
 The tester pins STM32CubeF4 `v1.28.3` at commit `94cae6e83f00e276a11957e7833c01ac3d0bd7af`, with its required CMSIS/STM32F4 HAL dependencies. It builds successfully with Arm GNU Toolchain `15.3.rel1` / GCC `15.3.1`. There is no `.ioc` file in the repository: this proven configuration is directly maintained in C, CMake, the linker script, and the pinned vendor sources.
 
-### Working USB implementation worth reusing later
+### Working USB implementation reused by Milestone 0.10
 
 | Concern | Proven source | Reuse intent |
 | --- | --- | --- |
-| OTG FS pins, VBUS sense, PCD and FIFO setup | `firmware/manufacturing_test/board_support/flightcomputer_v1/usb_device_port.c` | Adapt board/MCU setup for the Phase 0 USB backend |
-| OTG FS IRQ forwarding | `firmware/manufacturing_test/board_support/flightcomputer_v1/stm32f4xx_it.c` | Adapt the short interrupt entry point |
-| Static CDC transport queues | `firmware/manufacturing_test/protocol/usb_cdc_transport.c` | Reuse bounded, non-blocking design patterns rather than tester protocol semantics |
+| OTG FS pins, VBUS sense, PCD and FIFO setup | `firmware/manufacturing_test/board_support/flightcomputer_v1/usb_device_port.c` | Adapted closely in the flight board support |
+| OTG FS IRQ forwarding | `firmware/manufacturing_test/board_support/flightcomputer_v1/stm32f4xx_it.c` | Kept as a short handler beside the flight USB port |
+| Static CDC transport queues | `firmware/manufacturing_test/protocol/usb_cdc_transport.c` | Reused as a two-entry logging transmit pattern without tester protocol semantics |
 | Newline framing | `firmware/manufacturing_test/protocol/newline_framer.c` | Candidate reusable hardware-independent implementation for the later JSON-command milestone |
-| USB descriptors | `firmware/manufacturing_test/protocol/usb_descriptors.c` | Adapt with a distinct flight-firmware product identity |
+| USB descriptors | `firmware/manufacturing_test/protocol/usb_descriptors.c` | Reused with a distinct flight-firmware product identity |
 
 The working path uses PA11/PA12 as OTG FS DM/DP on AF10, PA9 for VBUS sensing, Full-Speed CDC ACM, static ST USB class storage, a 512-byte ISR-to-main receive ring, bounded complete-line and transmit queues, and parsing/transmit scheduling outside the interrupt. This design is relevant to later flight USB and logging work because slow computer I/O never blocks inside the producer call path.
 

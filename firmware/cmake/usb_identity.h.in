@@ -1,0 +1,17 @@
+#ifndef OPENFLIGHTCOMPUTER_USB_IDENTITY_H
+#define OPENFLIGHTCOMPUTER_USB_IDENTITY_H
+
+/*
+ * These values are temporary development identifiers. They are not assigned
+ * to OpenFlightComputer and must be replaced before distributing hardware.
+ */
+#define OPENFLIGHTCOMPUTER_USB_VID @OPENFLIGHTCOMPUTER_USB_VID@U
+#define OPENFLIGHTCOMPUTER_USB_PID @OPENFLIGHTCOMPUTER_USB_PID@U
+
+#define OPENFLIGHTCOMPUTER_USB_MANUFACTURER "OpenFlightComputer"
+#define OPENFLIGHTCOMPUTER_USB_PRODUCT "OpenFlightComputer Flight Firmware"
+#define OPENFLIGHTCOMPUTER_USB_CONFIGURATION "Flight Firmware CDC"
+#define OPENFLIGHTCOMPUTER_USB_INTERFACE "Flight Firmware Serial"
+
+#endif
+

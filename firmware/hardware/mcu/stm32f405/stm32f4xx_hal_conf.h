@@ -5,6 +5,7 @@
 #define HAL_CORTEX_MODULE_ENABLED
 #define HAL_FLASH_MODULE_ENABLED
 #define HAL_GPIO_MODULE_ENABLED
+#define HAL_PCD_MODULE_ENABLED
 #define HAL_PWR_MODULE_ENABLED
 #define HAL_RCC_MODULE_ENABLED
 
@@ -26,6 +27,7 @@
 #include "stm32f4xx_hal_cortex.h"
 #include "stm32f4xx_hal_flash.h"
 #include "stm32f4xx_hal_gpio.h"
+#include "stm32f4xx_hal_pcd.h"
 #include "stm32f4xx_hal_pwr.h"
 #include "stm32f4xx_hal_rcc.h"
 

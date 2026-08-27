@@ -166,7 +166,7 @@ static void validates_initialization_and_catalogs(void)
 
     firmware_definitions =
         firmware_fault_catalog(&firmware_definition_count);
-    assert(firmware_definition_count == 10U);
+    assert(firmware_definition_count == 11U);
     assert(fault_system_initialize(&system,
                                    &state_machine,
                                    firmware_definitions,

@@ -26,11 +26,14 @@ already detect:
 | State-machine transition | Critical | State machine |
 | Fault-clock attachment | Critical | Application |
 | Logging-clock attachment | Fault | Application |
+| USB logging initialization | Fault | USB |
 
 Warning and non-critical fault behavior is host-tested with a test catalogue.
 The first production non-critical ID records failure to attach the logging
 clock: diagnostics remain operational without valid timestamps, so lifecycle
-state does not change. Other production IDs will be added only when an owning
+state does not change. USB initialization is also non-critical because USB is
+a diagnostic channel: its backend and task remain detached while the firmware
+continues without host output. Other production IDs will be added only when an owning
 subsystem defines a real detectable condition and its safety consequence.
 
 ## Severity behavior

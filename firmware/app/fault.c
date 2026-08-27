@@ -37,6 +37,7 @@ static bool source_is_valid(fault_source_t source)
     case FAULT_SOURCE_MCU:
     case FAULT_SOURCE_SCHEDULER:
     case FAULT_SOURCE_STATE_MACHINE:
+    case FAULT_SOURCE_USB:
         return true;
     case FAULT_SOURCE_COUNT:
         break;

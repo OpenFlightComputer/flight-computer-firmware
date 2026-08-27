@@ -30,6 +30,12 @@ sequences, bounded formatting and truncation, canonical lines, FIFO wrap and
 overflow, backend retry/error behavior, invalid operations, and saturating
 statistics.
 
+The native `usb_logging_backend_tests` target replaces the physical transport
+with a copying fake and verifies exact canonical bytes, accepted ownership,
+busy retry/retention, and error/drop mapping. The STM32 USB device library,
+interrupt behavior, pins, enumeration, and physical transfer remain firmware
+build or board-level checks rather than host-test claims.
+
 Future hardware-independent tests will cover protocol parsing, DShot encoding,
 receiver parsing, mixing, and control algorithms as their milestones are
 approved.

@@ -2,8 +2,8 @@
 
 Milestone 0.9 provides a central hardware-independent logging facade. Producers
 capture timestamped records into a fixed RAM queue and return without touching
-an output device. Milestone 0.10 will attach the USB CDC backend and schedule
-bounded drain attempts.
+an output device. Milestone 0.10 attaches the USB CDC backend through scheduled
+bounded drain attempts without changing producer behavior.
 
 ## Levels
 
@@ -26,7 +26,7 @@ retains critical diagnostics independently of the lossy logging queue.
 ## Modules and configuration
 
 The currently defined modules are `SYSTEM`, `BOARD`, `TIMEBASE`, `TASK`,
-`SCHEDULER`, `STATE`, and `FAULT`. Module enums prevent inconsistent free-form
+`SCHEDULER`, `STATE`, `FAULT`, and `USB`. Module enums prevent inconsistent free-form
 names. Future milestones add a module only when its owning subsystem exists.
 
 The global threshold defaults to `INFO`. A record passes when its level is at
@@ -117,13 +117,14 @@ duration of one callback and returns immediately:
 | `LOG_BACKEND_ERROR` | Count the error and remove the record to avoid head-of-line blocking |
 
 `logging_drain_once()` processes at most one record. With no backend, it leaves
-the queue unchanged. Milestone 0.9 attaches no production backend and registers
-no drain task; the six successful-startup records remain debugger-visible.
+the queue unchanged.
 
-Milestone 0.10 will attach a USB backend and register a 1,000 us background
-task. That task will make at most one drain attempt per release. USB interrupt
-handling will only advance the device/transfer state; it will not format or
-drain application records.
+Milestone 0.10 attaches the USB CDC backend and registers a 1,000 us background
+task. That task first advances USB completion/start state, then makes at most
+one drain attempt per release. Accepted lines have already been copied into
+one of two USB-owned 160-byte entries. USB interrupt handling only advances the
+device/transfer state; it does not format or drain application records. See
+`docs/usb-cdc-logging.md` for the transport and disconnect policy.
 
 ## Canonical text format
 
@@ -151,7 +152,7 @@ context. The queue has no locks and is not interrupt-safe. Interrupt handlers
 must update a bounded counter/timestamp or publish a small module-owned event
 for later logging in main context.
 
-The startup integration logs boot, board initialization, task registration,
+The startup integration logs boot, board and USB initialization, task registration,
 scheduler initialization, the transition to `DISARMED`, normal running, and
 fatal stop information. The 1,000 Hz diagnostic task intentionally emits no
 logs because doing so would manufacture overload instead of useful evidence.

@@ -109,3 +109,24 @@ target_compile_options(logging_tests PRIVATE
 )
 
 add_test(NAME logging COMMAND logging_tests)
+
+add_executable(usb_logging_backend_tests
+    usb_logging_backend_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/logging_config.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_logging_backend.c"
+)
+
+target_include_directories(usb_logging_backend_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
+)
+
+target_compile_options(usb_logging_backend_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME usb_logging_backend COMMAND usb_logging_backend_tests)

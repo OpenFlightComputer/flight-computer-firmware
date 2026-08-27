@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.9 adds a destination-neutral non-blocking logging core over structured fault policy, the central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
+Milestone 0.10 adds a non-blocking USB CDC logging backend over the destination-neutral logging core, structured fault policy, central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -14,7 +14,7 @@ The arrows indicate allowed knowledge toward increasingly hardware-specific impl
 | --- | --- | --- |
 | `app/` | Startup orchestration, scheduler integration, system state, fault coordination | Device protocols or routed pins |
 | `flight/` | Hardware-independent control input, mixing, estimation, and control policy | STM32 HAL or PCB routing |
-| `peripherals/` | External-device semantics such as DShot, CRSF, BMI270, and BMP388 protocols | Board pin and peripheral-instance selection |
+| `peripherals/` | Semantic transports and external-device protocols such as USB CDC, DShot, CRSF, BMI270, and BMP388 | Board pin and peripheral-instance selection |
 | `hardware/boards/flightcomputer_v1/` | V1 routed pins, installed devices, peripheral selections, and board initialization policy | Generic flight behavior |
 | `hardware/mcu/stm32f405/` | STM32F405 clocks, interrupt support, timers, DMA, and low-level adapters | Flight Computer V1 routing unless unavoidable |
 
@@ -75,10 +75,20 @@ Milestone 0.9 keeps producers independent of output transport. Application and
 future flight/peripheral code call the central logging facade, which captures a
 bounded structured record into RAM. A backend consumes at most one immutable
 record per drain attempt and must return without waiting. The current firmware
-attaches no backend or drain task; USB transport belongs to Milestone 0.10.
+defines no transport behavior itself.
 Core state, fault, and scheduler modules do not depend on the logger, avoiding
 hidden diagnostic coupling in portable policy code. See `docs/logging.md` for
 filtering, formatting, overflow, sequence, and concurrency rules.
+
+Milestone 0.10 adapts the tester-proven OTG FS/CDC hardware path while replacing
+its unrestricted application-loop and session-protocol ownership. A
+lowest-priority 1,000 us task advances the USB transmit state and makes one
+logging drain attempt. The application-facing backend formats a record and the
+transport copies it before acceptance, so asynchronous USB never retains
+logging-queue storage. USB initialization failure is a non-critical diagnostic
+fault and does not prevent successful startup. See
+`docs/usb-cdc-logging.md` for ownership, disconnect, interrupt, and physical
+verification boundaries.
 
 ## Separation from manufacturing test
 

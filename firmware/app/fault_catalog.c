@@ -53,6 +53,11 @@ static const fault_definition_t definitions[] = {
         .severity = FAULT_SEVERITY_FAULT,
         .source = FAULT_SOURCE_APPLICATION,
     },
+    {
+        .id = FAULT_ID_USB_LOGGING_INITIALIZATION,
+        .severity = FAULT_SEVERITY_FAULT,
+        .source = FAULT_SOURCE_USB,
+    },
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count)

@@ -132,6 +132,7 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_fast_task_executions` | Increasing at approximately 1,000 Hz |
 | `firmware_medium_task_executions` | Increasing at approximately 100 Hz |
 | `firmware_slow_task_executions` | Increasing at approximately 10 Hz |
+| `firmware_logging_drain_task_executions` | Increasing at approximately 1,000 Hz when USB initialized |
 | `firmware_scheduler_last_result` | `0` while idle or `1` after execution |
 | `firmware_system_state_machine.current` | `SYSTEM_STATE_DISARMED` (`2`) |
 | `firmware_system_state_machine.previous` | `SYSTEM_STATE_INITIALIZING` (`1`) |
@@ -139,10 +140,12 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_fault_system.active_count` | `0` after successful startup |
 | `firmware_fault_system.dropped_record_count` | `0` |
 | `firmware_fault_last_result` | `0xffffffff` until the first report |
-| `firmware_logging_system.count` | `6` startup records |
-| `firmware_logging_system.next_sequence` | `7` |
+| `firmware_usb_initialization_result` | `USB_CDC_INIT_OK` (`0`) |
+| `firmware_logging_system.next_sequence` | `8` after seven successful-startup records |
 | `firmware_logging_system.statistics.dropped_count` | `0` |
-| `firmware_logging_system.backend_attached` | `false` |
+| `firmware_logging_system.backend_attached` | `true` |
+| `firmware_logging_system.count` | Eventually `0` with a consuming host; normally `5` after the disconnected USB queue accepts two records |
+| `firmware_logging_drain_last_result` | Eventually `LOGGING_DRAIN_IDLE` with a host; `LOGGING_DRAIN_BACKEND_BUSY` while disconnected queues are full |
 | `SystemCoreClock` | `168000000` |
 | `TIM5->PSC` | `83` |
 | `TIM5->ARR` | `0xffffffff` |
@@ -166,8 +169,28 @@ Intermediate and error values are intentionally observable:
 | 108 | The immutable production fault catalogue could not initialize |
 | 109 | The monotonic fault timestamp clock could not be attached |
 
-The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. Fatal paths retain their detailed boot status, enqueue a best-effort fatal log, and populate `firmware_fault_system.records` before halting. The first successful-startup log has its timestamp-valid flag cleared; the following five use `time_us()`. Milestone 0.9 deliberately has no backend, so `logging_drain_once()` is not scheduled and these records remain in RAM. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
+The task counters validate scheduler ratios without using board GPIO. Halting the core in a debugger also halts callbacks; after continuation, missed periods are skipped and recorded rather than replayed. Fatal paths retain their detailed boot status, enqueue a best-effort fatal log, and populate `firmware_fault_system.records` before halting. The first successful-startup log has its timestamp-valid flag cleared; the following six use `time_us()`. The USB transport may own two records asynchronously, so logging-queue count alone is not the total pending-line count. No LED is used as a heartbeat because the discrete LED hardware still has a documented polarity/connectivity concern.
+
+## USB CDC observation
+
+After connecting the board's USB-C data port, find the CDC device on macOS:
+
+```bash
+ls /dev/cu.usbmodem*
+```
+
+Print newline-delimited logs until interrupted with Control-C:
+
+```bash
+cat /dev/cu.usbmodem<device>
+```
+
+Linux commonly exposes the same interface as `/dev/ttyACM0`. CDC line coding
+defaults to 115200 8N1 for terminal compatibility, but Full-Speed USB transfer
+rate is not determined by that nominal UART setting. Verify initial queued
+lines, continued output, disconnect/reconnect recovery, and zero unexpected
+drop/error counters. Received host bytes are deliberately ignored in 0.10.
 
 ## Current physical validation status
 
-Debug and Release images build and pass static artifact inspection. STM32CubeProgrammer 2.23.0 was installed but reported no attached ST-Link during the Milestone 0.2 implementation session. Programming, reset, HSE startup, the running status, and the loop counter must therefore be checked when the hardware is connected.
+Debug and Release images build and pass static artifact inspection. STM32CubeProgrammer 2.23.0 was installed but reported no attached ST-Link during the Milestone 0.2 implementation session. Programming, reset, HSE startup, USB enumeration/output/reconnection, the running status, and the task counters must therefore be checked when the hardware is connected.

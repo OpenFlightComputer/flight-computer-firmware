@@ -56,9 +56,9 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 | PA5 | `SD_SCK` | Output | microSD SPI clock | SPI1_SCK AF5 | Implemented by tester; not initialized here |
 | PA6 | `SD_MISO` | Input | microSD data to MCU | SPI1_MISO AF5 | Implemented by tester; not initialized here |
 | PA7 | `SD_MOSI` | Output | microSD data from MCU | SPI1_MOSI AF5 | Implemented by tester; not initialized here |
-| PA9 | unnamed VBUS divider net | Input | USB VBUS sense | OTG_FS_VBUS | Implemented by tester; not initialized here |
-| PA11 | `USB_DN` | Bidirectional | USB data minus | OTG_FS_DM AF10 | Implemented by tester; not initialized here |
-| PA12 | `USB_DP` | Bidirectional | USB data plus | OTG_FS_DP AF10 | Implemented by tester; not initialized here |
+| PA9 | unnamed VBUS divider net | Input | USB VBUS sense | OTG_FS_VBUS | Active in Milestone 0.10; adapted from tester |
+| PA11 | `USB_DN` | Bidirectional | USB data minus | OTG_FS_DM AF10 | Active in Milestone 0.10; adapted from tester |
+| PA12 | `USB_DP` | Bidirectional | USB data plus | OTG_FS_DP AF10 | Active in Milestone 0.10; adapted from tester |
 | PA13 | `SWDIO` | Bidirectional | SWD data | JTMS/SWDIO AF0 | Fixed debug function |
 | PA14 | `SWCLK` | Input | SWD clock | JTCK/SWCLK AF0 | Fixed debug function |
 | PB0 | `CURR_ADC` | Analog input | ESC current sense | ADC1_IN8 | Routed; conversion policy deferred |
@@ -119,6 +119,6 @@ Most selections below are established by routing plus the manufacturing-test imp
 - PC5 card detect is provisionally active-low from the socket and pull-up topology; confirm with the physical board.
 - The hardware working tree contains owner changes. The hashes above identify the exact reviewed design files without treating the Git commit alone as complete provenance.
 
-## Milestone 0.4 initialization scope
+## Current initialization scope
 
-At boot, `board_initialize()` initializes the STM32 HAL and system clock, verifies a 168 MHz core clock, and starts internal TIM5 as the monotonic timebase. It does not configure any GPIO or routed peripheral listed above. Each external interface will be activated only in its approved milestone through the appropriate board and MCU capability boundary.
+At boot, `board_initialize()` initializes the STM32 HAL and system clock, verifies a 168 MHz core clock, and starts internal TIM5 as the monotonic timebase. Milestone 0.10 then initializes OTG FS CDC logging using PA9, PA11, and PA12. No other routed peripheral listed above is configured. Each remaining external interface will be activated only in its approved milestone through the appropriate board and MCU capability boundary.
