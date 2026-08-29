@@ -19,6 +19,9 @@ usb_cdc_write_result_t usb_cdc_transport_try_write(const uint8_t *data,
     captured_length = length;
     if (length <= sizeof(captured_line)) {
         memcpy(captured_line, data, length);
+        if (length < sizeof(captured_line)) {
+            captured_line[length] = 0U;
+        }
     }
     return fake_write_result;
 }
@@ -42,7 +45,9 @@ static void attach_production_backend(void)
 static void accepted_record_is_copied_and_removed(void)
 {
     static const char expected[] =
-        "[----------] #0000000001 INFO  SYSTEM    boot\n";
+        "{\"type\":\"log\",\"timestamp_us\":null,\"sequence\":1,"
+        "\"level\":\"INFO\",\"module\":\"SYSTEM\",\"message\":"
+        "\"boot\",\"truncated\":false}\n";
 
     reset_fake_transport(USB_CDC_WRITE_ACCEPTED);
     attach_production_backend();
@@ -54,6 +59,66 @@ static void accepted_record_is_copied_and_removed(void)
     assert(captured_length == sizeof(expected) - 1U);
     assert(memcmp(captured_line, expected, sizeof(expected) - 1U) == 0);
     assert(logging_queue_count() == 0U);
+}
+
+static uint64_t fake_clock(void)
+{
+    return UINT64_C(42);
+}
+
+static uint64_t maximum_clock(void)
+{
+    return UINT64_MAX;
+}
+
+static void json_special_characters_are_escaped(void)
+{
+    static const char message[] = {'\"', '\\', '\n', '\t',
+                                   (char)0x01, (char)0x80, '\0'};
+    static const char expected[] =
+        "{\"type\":\"log\",\"timestamp_us\":42,\"sequence\":1,"
+        "\"level\":\"DEBUG\",\"module\":\"USB\",\"message\":"
+        "\"\\\"\\\\\\n\\t\\u0001\\u0080\",\"truncated\":false}\n";
+
+    reset_fake_transport(USB_CDC_WRITE_ACCEPTED);
+    attach_production_backend();
+    assert(logging_attach_clock(fake_clock) == LOGGING_CLOCK_ATTACH_OK);
+    assert(logging_write(LOG_LEVEL_DEBUG, LOG_MODULE_USB, "%s", message) ==
+           LOGGING_WRITE_FILTERED);
+    assert(logging_set_module_threshold(LOG_MODULE_USB,
+                                        LOG_THRESHOLD_DEBUG) ==
+           LOGGING_CONFIG_OK);
+    assert(logging_write(LOG_LEVEL_DEBUG, LOG_MODULE_USB, "%s", message) ==
+           LOGGING_WRITE_ENQUEUED);
+
+    assert(logging_drain_once() == LOGGING_DRAIN_ACCEPTED);
+    assert(captured_length == sizeof(expected) - 1U);
+    assert(memcmp(captured_line, expected, sizeof(expected) - 1U) == 0);
+}
+
+static void worst_case_message_fits_one_transport_entry(void)
+{
+    char message[LOGGING_MESSAGE_CAPACITY + 1U];
+    size_t index;
+
+    for (index = 0U; index < LOGGING_MESSAGE_CAPACITY; index++) {
+        message[index] = (char)0x80;
+    }
+    message[LOGGING_MESSAGE_CAPACITY] = '\0';
+
+    reset_fake_transport(USB_CDC_WRITE_ACCEPTED);
+    attach_production_backend();
+    assert(logging_attach_clock(maximum_clock) == LOGGING_CLOCK_ATTACH_OK);
+    firmware_logging_system.next_sequence = UINT64_MAX;
+    assert(logging_write(LOG_LEVEL_FATAL,
+                         LOG_MODULE_SCHEDULER,
+                         "%s",
+                         message) == LOGGING_WRITE_ENQUEUED);
+    assert(logging_peek()->truncated);
+    assert(logging_drain_once() == LOGGING_DRAIN_ACCEPTED);
+    assert(captured_length < USB_CDC_TRANSMIT_CAPACITY);
+    assert(strstr((const char *)captured_line,
+                  "\"truncated\":true}\n") != NULL);
 }
 
 static void busy_transport_retains_record_for_retry(void)
@@ -88,6 +153,8 @@ static void transport_error_drops_record_without_blocking_queue(void)
 int main(void)
 {
     accepted_record_is_copied_and_removed();
+    json_special_characters_are_escaped();
+    worst_case_message_fits_one_transport_entry();
     busy_transport_retains_record_for_retry();
     transport_error_drops_record_without_blocking_queue();
     return 0;

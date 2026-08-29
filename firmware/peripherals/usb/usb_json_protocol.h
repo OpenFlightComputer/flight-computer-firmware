@@ -1,0 +1,49 @@
+#ifndef OPENFLIGHTCOMPUTER_USB_JSON_PROTOCOL_H
+#define OPENFLIGHTCOMPUTER_USB_JSON_PROTOCOL_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+typedef enum {
+    USB_JSON_COMMAND_STATUS = 0,
+    USB_JSON_COMMAND_HEALTH,
+    USB_JSON_COMMAND_ARM,
+    USB_JSON_COMMAND_DISARM,
+    USB_JSON_COMMAND_UNSUPPORTED,
+    USB_JSON_COMMAND_INVALID,
+} usb_json_command_t;
+
+typedef struct {
+    usb_json_command_t command;
+} usb_json_request_t;
+
+bool usb_json_parse_request(const char *line,
+                            size_t line_length,
+                            usb_json_request_t *request);
+const char *usb_json_command_name(usb_json_command_t command);
+
+bool usb_json_build_error_response(const char *error,
+                                   char *destination,
+                                   size_t capacity,
+                                   size_t *length);
+bool usb_json_build_transition_response(usb_json_command_t command,
+                                        bool accepted,
+                                        const char *state,
+                                        const char *error,
+                                        char *destination,
+                                        size_t capacity,
+                                        size_t *length);
+bool usb_json_build_status_response(const char *state,
+                                    uint64_t uptime_us,
+                                    char *destination,
+                                    size_t capacity,
+                                    size_t *length);
+bool usb_json_build_health_response(const char *state,
+                                    size_t active_fault_count,
+                                    uint32_t dropped_fault_count,
+                                    char *destination,
+                                    size_t capacity,
+                                    size_t *length);
+
+#endif

@@ -132,3 +132,25 @@ system_state_transition_result_t system_state_machine_handle_event(
 
     return SYSTEM_STATE_TRANSITION_OK;
 }
+
+const char *system_state_name(system_state_t state)
+{
+    switch (state) {
+    case SYSTEM_STATE_BOOT:
+        return "BOOT";
+    case SYSTEM_STATE_INITIALIZING:
+        return "INITIALIZING";
+    case SYSTEM_STATE_DISARMED:
+        return "DISARMED";
+    case SYSTEM_STATE_ARMED:
+        return "ARMED";
+    case SYSTEM_STATE_FAILSAFE:
+        return "FAILSAFE";
+    case SYSTEM_STATE_FAULT:
+        return "FAULT";
+    case SYSTEM_STATE_COUNT:
+        break;
+    }
+
+    return "UNKNOWN";
+}

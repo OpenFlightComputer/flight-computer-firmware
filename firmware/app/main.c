@@ -8,6 +8,7 @@
 #include "task.h"
 #include "time.h"
 #include "usb_cdc_transport.h"
+#include "usb_command_processor.h"
 #include "usb_logging_backend.h"
 
 #include <stddef.h>
@@ -25,12 +26,14 @@ volatile uint32_t firmware_system_state_last_result;
 volatile uint32_t firmware_fault_last_result = UINT32_MAX;
 volatile uint32_t firmware_usb_initialization_result = UINT32_MAX;
 volatile uint32_t firmware_logging_drain_last_result = UINT32_MAX;
-volatile uint32_t firmware_logging_drain_task_executions;
+volatile uint32_t firmware_usb_command_last_result = UINT32_MAX;
+volatile uint32_t firmware_usb_service_task_executions;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
 system_state_machine_t firmware_system_state_machine;
 fault_system_t firmware_fault_system;
+usb_command_processor_t firmware_usb_command_processor;
 
 static void diagnostic_fast_task(void *context)
 {
@@ -50,14 +53,21 @@ static void diagnostic_slow_task(void *context)
     firmware_slow_task_executions++;
 }
 
-static void logging_drain_task(void *context)
+static void usb_service_task(void *context)
 {
     (void)context;
 
     usb_cdc_transport_process();
+    firmware_usb_command_last_result =
+        (uint32_t)usb_command_processor_process_once(
+            &firmware_usb_command_processor);
+    if (firmware_usb_command_processor.last_transition_valid) {
+        firmware_system_state_last_result =
+            (uint32_t)firmware_usb_command_processor.last_transition_result;
+    }
     firmware_logging_drain_last_result =
         (uint32_t)logging_drain_once();
-    firmware_logging_drain_task_executions++;
+    firmware_usb_service_task_executions++;
 }
 
 static const task_definition_t diagnostic_task_definitions[] = {
@@ -81,11 +91,11 @@ static const task_definition_t diagnostic_task_definitions[] = {
     },
 };
 
-static const task_definition_t logging_drain_task_definition = {
-    .name = "logging-drain",
+static const task_definition_t usb_service_task_definition = {
+    .name = "usb-service",
     .period_us = 1000U,
     .priority = TASK_PRIORITY_BACKGROUND,
-    .callback = logging_drain_task,
+    .callback = usb_service_task,
 };
 
 static void stop_with_fault(boot_status_t status,
@@ -167,7 +177,7 @@ static fault_id_t fault_id_for_board_error(board_init_result_t result)
 }
 
 static task_registration_result_t register_application_tasks(
-    bool register_logging_task)
+    bool register_usb_service_task)
 {
     size_t index;
 
@@ -186,9 +196,9 @@ static task_registration_result_t register_application_tasks(
         }
     }
 
-    if (register_logging_task) {
+    if (register_usb_service_task) {
         return task_registry_register(&firmware_task_registry,
-                                      &logging_drain_task_definition);
+                                      &usb_service_task_definition);
     }
 
     return TASK_REGISTRATION_OK;
@@ -202,7 +212,7 @@ int main(void)
     task_registration_result_t task_registration_result;
     scheduler_init_result_t scheduler_init_result;
     usb_cdc_init_result_t usb_init_result;
-    bool usb_logging_available = false;
+    bool usb_service_available = false;
 
     logging_initialize();
     LOG_INFO(LOG_MODULE_SYSTEM, "OpenFlightComputer booting");
@@ -270,8 +280,23 @@ int main(void)
         const logging_backend_t backend = usb_logging_backend();
 
         if (logging_attach_backend(&backend) == LOGGING_BACKEND_ATTACH_OK) {
-            usb_logging_available = true;
-            LOG_INFO(LOG_MODULE_USB, "CDC logging backend initialized");
+            if (usb_command_processor_initialize(
+                    &firmware_usb_command_processor,
+                    &firmware_system_state_machine,
+                    &firmware_fault_system,
+                    time_us) == USB_COMMAND_INIT_OK) {
+                usb_service_available = true;
+                LOG_INFO(LOG_MODULE_USB, "CDC JSON service initialized");
+            } else {
+                firmware_fault_last_result =
+                    (uint32_t)fault_system_report(
+                        &firmware_fault_system,
+                        FAULT_ID_USB_COMMAND_INITIALIZATION,
+                        false,
+                        0U);
+                LOG_ERROR(LOG_MODULE_USB,
+                          "command processor initialization failed");
+            }
         } else {
             firmware_fault_last_result =
                 (uint32_t)fault_system_report(&firmware_fault_system,
@@ -283,7 +308,7 @@ int main(void)
     }
 
     task_registration_result =
-        register_application_tasks(usb_logging_available);
+        register_application_tasks(usb_service_available);
     if (task_registration_result != TASK_REGISTRATION_OK) {
         stop_with_fault(BOOT_STATUS_TASK_REGISTRATION_ERROR,
                         FAULT_ID_TASK_REGISTRATION,

@@ -2,8 +2,9 @@
 
 Milestone 0.9 provides a central hardware-independent logging facade. Producers
 capture timestamped records into a fixed RAM queue and return without touching
-an output device. Milestone 0.10 attaches the USB CDC backend through scheduled
-bounded drain attempts without changing producer behavior.
+an output device. Milestone 0.10 attached the USB CDC backend through scheduled
+bounded drain attempts. Milestone 0.11 changes only that backend's wire format
+to JSON so logs and command responses share one newline-delimited stream.
 
 ## Levels
 
@@ -119,12 +120,11 @@ duration of one callback and returns immediately:
 `logging_drain_once()` processes at most one record. With no backend, it leaves
 the queue unchanged.
 
-Milestone 0.10 attaches the USB CDC backend and registers a 1,000 us background
-task. That task first advances USB completion/start state, then makes at most
-one drain attempt per release. Accepted lines have already been copied into
-one of two USB-owned 160-byte entries. USB interrupt handling only advances the
-device/transfer state; it does not format or drain application records. See
-`docs/usb-cdc-logging.md` for the transport and disconnect policy.
+The USB CDC backend is serviced by a 1,000 us background task. That task first
+advances USB state, gives a command response priority, then makes at most one
+log-drain attempt. Accepted lines have already been copied into one of two
+USB-owned 768-byte entries. USB interrupt handling does not format, parse, or
+drain application records. See `docs/usb-cdc-logging.md` for transport policy.
 
 ## Canonical text format
 
@@ -144,6 +144,11 @@ The formatter owns timestamp, sequence, level/module names, spacing, message,
 and newline. A backend owns only transport. An asynchronous backend must copy
 or format a record into storage whose lifetime covers its transfer before it
 returns `LOG_BACKEND_ACCEPTED`.
+
+The canonical text formatter remains part of the destination-neutral logging
+core and its host tests. The production USB backend instead emits a structured
+`type: "log"` JSON object and JSON-escapes every message byte that could affect
+syntax or newline framing. See `docs/usb-json-protocol.md` for that wire format.
 
 ## Concurrency and debugging boundary
 

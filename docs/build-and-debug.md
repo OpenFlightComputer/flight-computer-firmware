@@ -132,7 +132,7 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_fast_task_executions` | Increasing at approximately 1,000 Hz |
 | `firmware_medium_task_executions` | Increasing at approximately 100 Hz |
 | `firmware_slow_task_executions` | Increasing at approximately 10 Hz |
-| `firmware_logging_drain_task_executions` | Increasing at approximately 1,000 Hz when USB initialized |
+| `firmware_usb_service_task_executions` | Increasing at approximately 1,000 Hz when USB initialized |
 | `firmware_scheduler_last_result` | `0` while idle or `1` after execution |
 | `firmware_system_state_machine.current` | `SYSTEM_STATE_DISARMED` (`2`) |
 | `firmware_system_state_machine.previous` | `SYSTEM_STATE_INITIALIZING` (`1`) |
@@ -141,6 +141,7 @@ Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link
 | `firmware_fault_system.dropped_record_count` | `0` |
 | `firmware_fault_last_result` | `0xffffffff` until the first report |
 | `firmware_usb_initialization_result` | `USB_CDC_INIT_OK` (`0`) |
+| `firmware_usb_command_last_result` | `USB_COMMAND_PROCESS_IDLE` (`0`) without commands |
 | `firmware_logging_system.next_sequence` | `8` after seven successful-startup records |
 | `firmware_logging_system.statistics.dropped_count` | `0` |
 | `firmware_logging_system.backend_attached` | `true` |
@@ -179,7 +180,7 @@ After connecting the board's USB-C data port, find the CDC device on macOS:
 ls /dev/cu.usbmodem*
 ```
 
-Print newline-delimited logs until interrupted with Control-C:
+Print newline-delimited JSON events until interrupted with Control-C:
 
 ```bash
 cat /dev/cu.usbmodem<device>
@@ -187,9 +188,10 @@ cat /dev/cu.usbmodem<device>
 
 Linux commonly exposes the same interface as `/dev/ttyACM0`. CDC line coding
 defaults to 115200 8N1 for terminal compatibility, but Full-Speed USB transfer
-rate is not determined by that nominal UART setting. Verify initial queued
-lines, continued output, disconnect/reconnect recovery, and zero unexpected
-drop/error counters. Received host bytes are deliberately ignored in 0.10.
+rate is not determined by that nominal UART setting. Send one-line JSON command
+objects from a serial client as documented in `docs/usb-json-protocol.md`.
+Verify initial queued events, `status`, `health`, arm/disarm transitions,
+disconnect/reconnect recovery, and zero unexpected drop/error counters.
 
 ## Current physical validation status
 

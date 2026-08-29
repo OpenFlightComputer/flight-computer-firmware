@@ -13,8 +13,8 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 7. Application state machine — complete.
 8. Fault system — complete.
 9. Non-blocking logging core — complete.
-10. USB CDC logging backend — implemented; awaiting owner review.
-11. USB newline-delimited JSON command foundation.
+10. USB CDC logging backend — complete.
+11. USB newline-delimited JSON command foundation — implemented; awaiting owner review.
 12. Structured health reporting.
 13. Integration review.
 

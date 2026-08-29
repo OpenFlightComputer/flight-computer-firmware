@@ -42,5 +42,6 @@ void system_state_machine_initialize(system_state_machine_t *state_machine);
 system_state_transition_result_t system_state_machine_handle_event(
     system_state_machine_t *state_machine,
     system_state_event_t event);
+const char *system_state_name(system_state_t state);
 
 #endif

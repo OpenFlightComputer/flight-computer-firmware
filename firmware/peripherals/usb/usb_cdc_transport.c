@@ -1,5 +1,6 @@
 #include "usb_cdc_transport.h"
 
+#include "newline_framer.h"
 #include "usb_descriptors.h"
 #include "usbd_cdc.h"
 #include "usbd_core.h"
@@ -15,6 +16,15 @@ typedef struct {
     uint8_t data[USB_CDC_TRANSMIT_CAPACITY];
     size_t length;
 } transmit_entry_t;
+
+typedef struct {
+    uint8_t data[USB_CDC_RECEIVE_LINE_CAPACITY];
+    size_t length;
+} received_line_t;
+
+_Static_assert(USB_CDC_RECEIVE_LINE_CAPACITY ==
+                   NEWLINE_FRAMER_MAX_LINE_LENGTH,
+               "Transport and newline framer line capacities must match");
 
 static int8_t cdc_initialize(void);
 static int8_t cdc_deinitialize(void);
@@ -41,13 +51,22 @@ static USBD_CDC_LineCodingTypeDef line_coding = {
 };
 
 static uint8_t receive_packet[USB_CDC_RECEIVE_PACKET_SIZE];
+static uint8_t raw_receive_buffer[USB_CDC_RAW_RECEIVE_CAPACITY];
+static volatile uint16_t raw_receive_head;
+static volatile uint16_t raw_receive_tail;
+static volatile bool receive_overflow_pending;
+static newline_framer_t receive_framer;
+static received_line_t received_lines[USB_CDC_RECEIVE_LINE_QUEUE_DEPTH];
+static size_t received_line_head;
+static size_t received_line_tail;
+static size_t received_line_count;
 static transmit_entry_t transmit_queue[USB_CDC_TRANSMIT_QUEUE_DEPTH];
 static size_t transmit_head;
 static size_t transmit_tail;
 static size_t transmit_count;
 static volatile bool transmit_active;
 static volatile bool transmit_completed;
-static volatile uint32_t received_bytes_ignored;
+static volatile uint32_t received_bytes_dropped;
 static bool initialized;
 static usb_cdc_transport_statistics_t statistics;
 
@@ -58,12 +77,10 @@ static void saturating_increment(uint32_t *value)
     }
 }
 
-static void saturating_add_volatile(volatile uint32_t *value, uint32_t amount)
+static void saturating_increment_volatile(volatile uint32_t *value)
 {
-    if (UINT32_MAX - *value < amount) {
-        *value = UINT32_MAX;
-    } else {
-        *value += amount;
+    if (*value < UINT32_MAX) {
+        (*value)++;
     }
 }
 
@@ -85,6 +102,15 @@ static void leave_critical_section(uint32_t previous_mask)
 static void reset_transport_state(void)
 {
     usb_device = (USBD_HandleTypeDef){0};
+    raw_receive_head = 0U;
+    raw_receive_tail = 0U;
+    receive_overflow_pending = false;
+    newline_framer_initialize(&receive_framer);
+    received_lines[0] = (received_line_t){0};
+    received_lines[1] = (received_line_t){0};
+    received_line_head = 0U;
+    received_line_tail = 0U;
+    received_line_count = 0U;
     transmit_queue[0] = (transmit_entry_t){0};
     transmit_queue[1] = (transmit_entry_t){0};
     transmit_head = 0U;
@@ -92,7 +118,7 @@ static void reset_transport_state(void)
     transmit_count = 0U;
     transmit_active = false;
     transmit_completed = false;
-    received_bytes_ignored = 0U;
+    received_bytes_dropped = 0U;
     initialized = false;
     statistics = (usb_cdc_transport_statistics_t){0};
 }
@@ -120,6 +146,73 @@ usb_cdc_init_result_t usb_cdc_transport_initialize(void)
 
     initialized = true;
     return USB_CDC_INIT_OK;
+}
+
+static void completed_line(const uint8_t *line,
+                           size_t length,
+                           void *context)
+{
+    received_line_t *destination;
+
+    (void)context;
+
+    if (received_line_count == USB_CDC_RECEIVE_LINE_QUEUE_DEPTH) {
+        saturating_increment(&statistics.completed_lines_dropped);
+        return;
+    }
+
+    destination = &received_lines[received_line_head];
+    if (length > 0U) {
+        memcpy(destination->data, line, length);
+    }
+    destination->length = length;
+    received_line_head =
+        (received_line_head + 1U) % USB_CDC_RECEIVE_LINE_QUEUE_DEPTH;
+    received_line_count++;
+}
+
+static bool pop_received_byte(uint8_t *byte, bool *overflowed)
+{
+    const uint32_t previous_mask = enter_critical_section();
+    const uint16_t tail = raw_receive_tail;
+
+    *overflowed = receive_overflow_pending;
+    receive_overflow_pending = false;
+
+    if (tail == raw_receive_head) {
+        leave_critical_section(previous_mask);
+        return false;
+    }
+
+    *byte = raw_receive_buffer[tail];
+    raw_receive_tail =
+        (uint16_t)((tail + 1U) % USB_CDC_RAW_RECEIVE_CAPACITY);
+    leave_critical_section(previous_mask);
+    return true;
+}
+
+static void process_received_bytes(void)
+{
+    uint8_t byte;
+    bool overflowed = false;
+    size_t processed = 0U;
+
+    while ((processed < USB_CDC_RECEIVE_PROCESS_BUDGET) &&
+           pop_received_byte(&byte, &overflowed)) {
+        if (overflowed) {
+            newline_framer_discard_current_line(&receive_framer);
+        }
+        newline_framer_consume(&receive_framer,
+                               &byte,
+                               1U,
+                               completed_line,
+                               NULL);
+        processed++;
+    }
+
+    if (overflowed && (processed == 0U)) {
+        newline_framer_discard_current_line(&receive_framer);
+    }
 }
 
 static void finish_completed_transmission(void)
@@ -171,6 +264,7 @@ void usb_cdc_transport_process(void)
         return;
     }
 
+    process_received_bytes();
     finish_completed_transmission();
     start_pending_transmission();
 }
@@ -200,13 +294,46 @@ usb_cdc_write_result_t usb_cdc_transport_try_write(const uint8_t *data,
     return USB_CDC_WRITE_ACCEPTED;
 }
 
+usb_cdc_line_result_t usb_cdc_transport_read_line(uint8_t *destination,
+                                                  size_t capacity,
+                                                  size_t *length)
+{
+    received_line_t *line;
+
+    if ((destination == NULL) || (capacity == 0U) || (length == NULL)) {
+        return USB_CDC_LINE_INVALID_ARGUMENT;
+    }
+    if (received_line_count == 0U) {
+        *length = 0U;
+        return USB_CDC_LINE_UNAVAILABLE;
+    }
+
+    line = &received_lines[received_line_tail];
+    if (capacity <= line->length) {
+        *length = 0U;
+        return USB_CDC_LINE_BUFFER_TOO_SMALL;
+    }
+
+    if (line->length > 0U) {
+        memcpy(destination, line->data, line->length);
+    }
+    destination[line->length] = 0U;
+    *length = line->length;
+    *line = (received_line_t){0};
+    received_line_tail =
+        (received_line_tail + 1U) % USB_CDC_RECEIVE_LINE_QUEUE_DEPTH;
+    received_line_count--;
+    return USB_CDC_LINE_AVAILABLE;
+}
+
 usb_cdc_transport_statistics_t usb_cdc_transport_statistics(void)
 {
     usb_cdc_transport_statistics_t snapshot;
     const uint32_t previous_mask = enter_critical_section();
 
     snapshot = statistics;
-    snapshot.received_bytes_ignored = received_bytes_ignored;
+    snapshot.received_bytes_dropped = received_bytes_dropped;
+    snapshot.oversized_lines_dropped = receive_framer.overflow_count;
     leave_critical_section(previous_mask);
     return snapshot;
 }
@@ -267,13 +394,22 @@ static int8_t cdc_control(uint8_t command, uint8_t *buffer, uint16_t length)
 
 static int8_t cdc_receive(uint8_t *buffer, uint32_t *length)
 {
-    uint32_t previous_mask;
+    uint32_t index;
 
-    (void)buffer;
+    for (index = 0U; index < *length; index++) {
+        const uint16_t head = raw_receive_head;
+        const uint16_t next =
+            (uint16_t)((head + 1U) % USB_CDC_RAW_RECEIVE_CAPACITY);
 
-    previous_mask = enter_critical_section();
-    saturating_add_volatile(&received_bytes_ignored, *length);
-    leave_critical_section(previous_mask);
+        if (next == raw_receive_tail) {
+            saturating_increment_volatile(&received_bytes_dropped);
+            receive_overflow_pending = true;
+            continue;
+        }
+
+        raw_receive_buffer[head] = buffer[index];
+        raw_receive_head = next;
+    }
 
     if ((USBD_CDC_SetRxBuffer(&usb_device, receive_packet) != USBD_OK) ||
         (USBD_CDC_ReceivePacket(&usb_device) != USBD_OK)) {

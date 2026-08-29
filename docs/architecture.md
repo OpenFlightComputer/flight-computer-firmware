@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.10 adds a non-blocking USB CDC logging backend over the destination-neutral logging core, structured fault policy, central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
+Milestone 0.11 adds a bounded newline-delimited USB JSON command channel beside the non-blocking USB logging backend, structured fault policy, central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -58,8 +58,9 @@ measurements expose overload rather than concealing it.
 Milestone 0.7 gives `app/` one event-driven lifecycle authority. Successful
 startup progresses from `BOOT` through `INITIALIZING` to `DISARMED`; startup or
 runtime fatal paths enter terminal `FAULT`. The module exposes explicit arm,
-disarm, and failsafe events but the production application has no arm-request
-source. Detailed boot diagnostics remain separate from lifecycle state. Future
+disarm, and failsafe events. Milestone 0.11 supplies USB as an explicit
+main-context arm/disarm event source. Detailed boot diagnostics remain separate
+from lifecycle state. Future
 actuator implementations must gate final hardware demand on `ARMED`, as
 specified in `docs/safety.md`.
 
@@ -89,6 +90,15 @@ logging-queue storage. USB initialization failure is a non-critical diagnostic
 fault and does not prevent successful startup. See
 `docs/usb-cdc-logging.md` for ownership, disconnect, interrupt, and physical
 verification boundaries.
+
+Milestone 0.11 keeps USB interrupt work to bounded byte copying and flag
+updates. The background `usb-service` task frames at most 64 bytes per release,
+parses at most one strict request, sends or retains one response, and then
+attempts one log drain. Command dispatch lives in `app/` because it coordinates
+state and fault authorities; newline framing and the wire protocol live in
+`peripherals/usb/`. Fixed queues and discard-through-newline recovery prevent
+partial or unbounded input from becoming a command. See
+`docs/usb-json-protocol.md` for schemas and bounds.
 
 ## Separation from manufacturing test
 

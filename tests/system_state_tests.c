@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <stddef.h>
+#include <string.h>
 
 typedef struct {
     bool accepted;
@@ -208,6 +209,15 @@ static void counters_saturate(void)
 
 int main(void)
 {
+    assert(strcmp(system_state_name(SYSTEM_STATE_BOOT), "BOOT") == 0);
+    assert(strcmp(system_state_name(SYSTEM_STATE_INITIALIZING),
+                  "INITIALIZING") == 0);
+    assert(strcmp(system_state_name(SYSTEM_STATE_DISARMED), "DISARMED") == 0);
+    assert(strcmp(system_state_name(SYSTEM_STATE_ARMED), "ARMED") == 0);
+    assert(strcmp(system_state_name(SYSTEM_STATE_FAILSAFE), "FAILSAFE") == 0);
+    assert(strcmp(system_state_name(SYSTEM_STATE_FAULT), "FAULT") == 0);
+    assert(strcmp(system_state_name(SYSTEM_STATE_COUNT), "UNKNOWN") == 0);
+
     initializes_in_boot();
     verifies_every_state_event_pair();
     rejects_invalid_arguments_without_changing_state();

@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.10 — USB CDC logging backend: **implemented and awaiting owner review**.
+Milestone 0.11 — USB newline-delimited JSON command foundation: **implemented and awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 0.9 — non-blocking logging core. Fixed-capacity sequenced records, filtering, bounded formatting, overflow diagnostics, and a destination-neutral backend contract are host-tested and integrated.
+Milestone 0.10 — USB CDC logging backend. The proven V1 USB hardware path, fixed asynchronous transmit queue, production logging adapter, and non-critical initialization policy are integrated and reviewed.
 
 ## Current implementation status
 
@@ -74,7 +74,38 @@ Milestone 0.9 — non-blocking logging core. Fixed-capacity sequenced records, f
 - Added host tests for exact USB backend bytes, accepted ownership, busy retry, and error/drop behavior.
 - Added `docs/usb-cdc-logging.md` defining proven reuse, ownership, scheduling, disconnect, failure, receive, identity, and physical-verification boundaries.
 
-No USB command protocol, motor output, receiver input, sensor access, persistent flight-data logging, or flight-control behavior has been implemented.
+- Closely adapted the tester's allocation-free newline framer, JSMN parser,
+  512-byte raw receive ring, two-entry completed-line queue, and short receive
+  callback while keeping tester session/application policy out of this firmware.
+- Added a 256-byte maximum input line and a 64-byte receive-processing budget
+  per 1 ms service release, with discard-through-newline recovery and saturating
+  raw-byte, completed-line, and oversized-line drop statistics.
+- Added strict two-member JSON requests for `status`, `health`, `arm`, and
+  `disarm`, with exact bounded response serialization and explicit malformed
+  and unsupported-command errors.
+- Added an application command processor that handles at most one command per
+  release, routes arm/disarm exclusively through the state machine, logs
+  accepted transitions, and retains one response across USB backpressure.
+- Kept Milestone 0.11 health deliberately limited to lifecycle state plus active
+  and dropped fault counts; structured per-fault reporting remains Milestone
+  0.12.
+- Replaced USB plain-text log output with JSON log objects on the same
+  newline-delimited stream, including valid/null timestamp, sequence, level,
+  module, escaped message, and truncation flag.
+- Enlarged the two USB transmit entries to 768 bytes so each can own a complete
+  worst-case escaped log event; response admission is attempted before log
+  draining.
+- Replaced `logging-drain` with a shared 1,000 Hz background `usb-service` task
+  performing bounded receive/TX progress, one command/response action, and one
+  logging drain attempt in that order.
+- Added non-critical `FAULT_ID_USB_COMMAND_INITIALIZATION`, debugger-visible
+  command/service results, and focused host tests for framing, protocol,
+  dispatch, transitions, backpressure, exact JSON, and escaping.
+- Added `docs/usb-json-protocol.md` defining schemas, lifecycle effects,
+  capacity/budget choices, priority, overflow recovery, reuse, and physical
+  verification boundaries.
+
+No motor output, receiver input, sensor access, persistent flight-data logging, or flight-control behavior has been implemented. The `ARMED` lifecycle state has no actuator effect.
 
 ## Known issues and limitations
 
@@ -87,16 +118,18 @@ No USB command protocol, motor output, receiver input, sensor access, persistent
 - Receiver UART, motor timer/DMA, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
 - Ready-batch fairness prevents selection starvation only when callbacks return. A non-returning callback blocks every task, and CPU overload still causes recorded missed releases.
-- Milestone 0.7 provides no production arm-request source, so firmware remains `DISARMED` after startup. USB command authorization and actuator gating belong to later approved milestones.
+- USB is now an explicit development/bench arm-request source, but it is unauthenticated and changes only lifecycle state. Actuator authorization and final output gating must be defined before later motor commands can affect hardware.
 - State-machine mutation currently belongs to main context and is not an interrupt-safe concurrent API.
 - Fault reporting and clearing also currently belong to main context and are not interrupt-safe concurrent APIs.
-- The production catalogue contains current foundation failures plus one ordinary logging-clock fault; additional warning and non-critical IDs remain owned by their future subsystem milestones.
-- When no USB host is configured, the transport accepts two complete log lines and then reports busy; the remaining records stay in the logging queue until reconnection or eventual queue overflow.
+- The production catalogue contains current foundation failures plus ordinary logging-clock and USB-service faults; additional warning and non-critical IDs remain owned by their future subsystem milestones.
+- When no USB host is configured, the transport accepts two complete output events and then reports busy; responses remain pending in the command processor and logs remain in the logging queue until reconnection or eventual queue overflow.
 - Logging is main/cooperative-task-context only, not interrupt-safe, and bounded formatting still consumes execution time even though it never waits for output.
 - The initial logger deliberately excludes floating-point formatting, synchronous immediate output, panic/crash transport, multiple backends, persistent storage, and high-rate flight-data recording.
-- USB OUT packets are re-armed, discarded, and counted. Receive framing and commands deliberately remain Milestone 0.11 work.
+- USB receive buffering is bounded and lossy under overload. Raw-ring overflow,
+  full completed-line queues, and oversized lines are counted; affected input
+  is discarded rather than partially executed.
 - The default USB VID/PID is explicitly development-only and must be replaced with assigned values before distributing hardware.
-- Physical USB enumeration, output, disconnect/reconnect, VBUS sensing, and throughput remain unverified without a connected Flight Computer V1.
+- Physical USB enumeration, input/output, disconnect/reconnect, VBUS sensing, and throughput remain unverified without a connected Flight Computer V1.
 
 ## Open questions
 
@@ -107,7 +140,27 @@ No USB command protocol, motor output, receiver input, sensor access, persistent
 
 ## Next step
 
-After owner review and a separately approved commit, Milestone 0.11 will add a bounded newline-delimited USB receive foundation and strict JSON command envelope. It will not add arming or actuator commands.
+After owner review and a separately approved commit, Milestone 0.12 will add structured health reporting: stable subsystem/overall health schemas and bounded fault detail, without adding actuator output or sensor drivers.
+
+## Milestone 0.11 verification
+
+- The host-development build runs ten test executables; all tests pass.
+- New tests cover fragmented LF/CRLF input, empty and multiple lines, exact and
+  oversized bounds, recovery, all four commands, strict malformed-object
+  rejection, exact response bytes, accepted/rejected state transitions,
+  response backpressure/order, and JSON log escaping.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1 and retain the full STM32 USB integration.
+- Debug uses 48,864 bytes of Flash and reserves 14,736 bytes of RAM.
+- Release uses 32,600 bytes of Flash and reserves 14,736 bytes of RAM.
+- Address/undefined-behavior sanitizer execution of all ten host test suites
+  passes, and clangd checks of all changed production C integration units report
+  zero errors.
+- All receive, parse, dispatch, serialization, and queue storage is fixed-size;
+  there is no runtime dynamic allocation or parsing/state mutation in ISR
+  context.
+- Physical USB receive, interactive commands, overflow recovery, enumeration,
+  and disconnect/reconnect remain unverified without a connected board.
 
 ## Milestone 0.10 verification
 

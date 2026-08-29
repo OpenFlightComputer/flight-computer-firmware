@@ -15,10 +15,11 @@ explicit events. It does not control motors or infer state from peripherals.
 | `FAILSAFE` | A failsafe was detected while armed; future actuator policy must inhibit or explicitly handle output |
 | `FAULT` | A fatal condition occurred; the state is terminal until reset |
 
-The application reaches `DISARMED` after successful startup. It never requests
-`ARMED` by itself. Milestone 0.7 exposes the event API for host testing and
-future command integration but deliberately adds no temporary debugger flag or
-other production arming source.
+The application reaches `DISARMED` after successful startup and never requests
+`ARMED` by itself. Milestone 0.11 adds an explicit USB `arm` command as a
+development/bench lifecycle-event source. It has no actuator effect because no
+motor subsystem exists. Before a later actuator command can be considered safe,
+its authorization and final output-gating policy must be designed and tested.
 
 ## Legal transitions
 
@@ -75,7 +76,8 @@ See `docs/fault-system.md` for the complete policy and capacity behavior.
 
 ## Concurrency boundary
 
-The current application calls the state machine from main context. It does not
+The application and USB command processor call the state machine only from main
+context. It does not
 provide interrupt-safe concurrent mutation. Future interrupt handlers must
 publish bounded events for main-context handling rather than mutate system
 state directly, unless a later design explicitly adds and validates a critical

@@ -99,7 +99,7 @@ successful USB/backend initialization, one bounded logging task:
 | `diagnostic-fast` | 1,000 us | 1,000 Hz | High (64) | Increment debugger counter |
 | `diagnostic-medium` | 10,000 us | 100 Hz | Normal (128) | Increment debugger counter |
 | `diagnostic-slow` | 100,000 us | 10 Hz | Low (192) | Increment debugger counter |
-| `logging-drain` | 1,000 us | 1,000 Hz | Background (255) | Advance USB state and attempt one record |
+| `usb-service` | 1,000 us | 1,000 Hz | Background (255) | Bounded RX/TX processing, one command/response, then one log |
 
 The diagnostic tasks expose approximate 100:10:1 execution ratios. The USB
 task demonstrates that a high-frequency task may still remain lowest priority:

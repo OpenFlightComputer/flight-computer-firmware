@@ -130,3 +130,63 @@ target_compile_options(usb_logging_backend_tests PRIVATE
 )
 
 add_test(NAME usb_logging_backend COMMAND usb_logging_backend_tests)
+
+add_executable(newline_framer_tests
+    newline_framer_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb/newline_framer.c"
+)
+
+target_include_directories(newline_framer_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
+)
+
+target_compile_options(newline_framer_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME newline_framer COMMAND newline_framer_tests)
+
+add_executable(usb_json_protocol_tests
+    usb_json_protocol_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb/usb_json_protocol.c"
+)
+
+target_include_directories(usb_json_protocol_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
+)
+
+target_compile_options(usb_json_protocol_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME usb_json_protocol COMMAND usb_json_protocol_tests)
+
+add_executable(usb_command_processor_tests
+    usb_command_processor_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/logging_config.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_command_processor.c"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb/usb_json_protocol.c"
+)
+
+target_include_directories(usb_command_processor_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
+)
+
+target_compile_options(usb_command_processor_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME usb_command_processor COMMAND usb_command_processor_tests)

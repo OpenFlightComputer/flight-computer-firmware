@@ -31,13 +31,25 @@ overflow, backend retry/error behavior, invalid operations, and saturating
 statistics.
 
 The native `usb_logging_backend_tests` target replaces the physical transport
-with a copying fake and verifies exact canonical bytes, accepted ownership,
-busy retry/retention, and error/drop mapping. The STM32 USB device library,
-interrupt behavior, pins, enumeration, and physical transfer remain firmware
-build or board-level checks rather than host-test claims.
+with a copying fake and verifies exact JSON bytes and escaping, accepted
+ownership, busy retry/retention, and error/drop mapping.
 
-Future hardware-independent tests will cover protocol parsing, DShot encoding,
-receiver parsing, mixing, and control algorithms as their milestones are
-approved.
+The native `newline_framer_tests` target verifies fragmented input, LF and
+CRLF, empty/multiple lines, the exact 256-byte bound, oversized-line discard,
+recovery, explicit discard, and saturating overflow statistics.
+
+The native `usb_json_protocol_tests` target verifies every command, member
+ordering, unsupported commands, strict rejection of malformed/noncanonical
+objects, and exact bounded response serialization.
+
+The native `usb_command_processor_tests` target uses a fake line source and
+transport to verify status/health summaries, state-machine-only arm/disarm,
+rejected transitions, malformed/unsupported errors, and pending-response
+backpressure. The STM32 USB device library, interrupt behavior, pins,
+enumeration, and physical transfer remain firmware-build or board-level checks.
+
+Future hardware-independent tests will cover structured health detail, DShot
+encoding, receiver parsing, mixing, and control algorithms as their milestones
+are approved.
 
 Hardware tests remain separate and must not be represented as passing host tests.

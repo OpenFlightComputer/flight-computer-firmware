@@ -146,9 +146,12 @@ add_executable(flight_firmware
     app/scheduler.c
     app/system_state.c
     app/task.c
+    app/usb_command_processor.c
     app/usb_logging_backend.c
+    peripherals/usb/newline_framer.c
     peripherals/usb/usb_cdc_transport.c
     peripherals/usb/usb_descriptors.c
+    peripherals/usb/usb_json_protocol.c
     hardware/boards/flightcomputer_v1/board.c
     hardware/boards/flightcomputer_v1/time.c
     hardware/boards/flightcomputer_v1/usb_device_port.c
