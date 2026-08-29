@@ -14,8 +14,8 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 8. Fault system — complete.
 9. Non-blocking logging core — complete.
 10. USB CDC logging backend — complete.
-11. USB newline-delimited JSON command foundation — implemented; awaiting owner review.
-12. Structured health reporting.
+11. USB newline-delimited JSON command foundation — complete.
+12. Structured health reporting — implemented; awaiting owner review.
 13. Integration review.
 
 Phase 0 does not control motors, decode receiver input, or use sensor data for flight.

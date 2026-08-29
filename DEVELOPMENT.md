@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.11 — USB newline-delimited JSON command foundation: **implemented and awaiting owner review**.
+Milestone 0.12 — structured health reporting: **implemented and awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 0.10 — USB CDC logging backend. The proven V1 USB hardware path, fixed asynchronous transmit queue, production logging adapter, and non-critical initialization policy are integrated and reviewed.
+Milestone 0.11 — USB newline-delimited JSON command foundation. Bounded receive/framing, strict status/health/arm/disarm parsing, state-machine dispatch, response backpressure, and unified JSON output are integrated and reviewed.
 
 ## Current implementation status
 
@@ -104,6 +104,27 @@ Milestone 0.10 — USB CDC logging backend. The proven V1 USB hardware path, fix
 - Added `docs/usb-json-protocol.md` defining schemas, lifecycle effects,
   capacity/budget choices, priority, overflow recovery, reuse, and physical
   verification boundaries.
+- Added a transport-independent health evaluator that scans the fixed active
+  fault registry once and derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or
+  `CRITICAL` using the reviewed precedence.
+- Made lifecycle `FAULT` and active critical records override all lower health
+  outcomes; a dropped fault record yields `UNKNOWN` when critical health is not
+  already certain.
+- Added retained active, warning, ordinary-fault, critical, and dropped counts
+  plus an explicit `fault_data_complete` result without mutating fault or state
+  authorities.
+- Added stable fault-severity and fault-source names owned by the fault module.
+- Replaced the Milestone 0.11 basic health response with per-fault ID, severity,
+  source, occurrence count, validity-aware first/latest timestamps, and optional
+  raw context.
+- Added deterministic fixed-capacity response packing in active-record slot
+  order. Only complete records are emitted; `reported_fault_count` and
+  `truncated` distinguish USB response omission from internal registry loss.
+- Kept health evaluation/serialization in cooperative main context, reused the
+  existing 768-byte response buffer and transport backpressure behavior, and
+  added no allocation, peripheral access, state mutation, or new scheduled task.
+- Added dedicated health-policy, response-serialization, and updated command
+  integration tests plus `docs/health-reporting.md`.
 
 No motor output, receiver input, sensor access, persistent flight-data logging, or flight-control behavior has been implemented. The `ARMED` lifecycle state has no actuator effect.
 
@@ -128,6 +149,11 @@ No motor output, receiver input, sensor access, persistent flight-data logging, 
 - USB receive buffering is bounded and lossy under overload. Raw-ring overflow,
   full completed-line queues, and oversized lines are counted; affected input
   is discarded rather than partially executed.
+- A health response may omit later fault details to stay within one 768-byte
+  transport entry; total severity counts remain complete and `truncated`
+  exposes the omission.
+- Once a fault record has been dropped, non-critical overall health remains
+  `UNKNOWN` until reset because the missing severity cannot be reconstructed.
 - The default USB VID/PID is explicitly development-only and must be replaced with assigned values before distributing hardware.
 - Physical USB enumeration, input/output, disconnect/reconnect, VBUS sensing, and throughput remain unverified without a connected Flight Computer V1.
 
@@ -140,7 +166,29 @@ No motor output, receiver input, sensor access, persistent flight-data logging, 
 
 ## Next step
 
-After owner review and a separately approved commit, Milestone 0.12 will add structured health reporting: stable subsystem/overall health schemas and bounded fault detail, without adding actuator output or sensor drivers.
+After owner review and a separately approved commit, Milestone 0.13 will perform the Phase 0 integration review: consolidate foundation contracts, verify cross-module failure and startup behavior, close documentation inconsistencies, and define the evidence required before Phase 1 actuator work.
+
+## Milestone 0.12 verification
+
+- The host-development build runs twelve test executables; all tests pass.
+- Health tests cover all five overall states, severity precedence/counts,
+  clearing recovery, lifecycle-critical override, dropped-record uncertainty,
+  invalid inputs, stable names, exact empty output, complete record metadata,
+  fixed-capacity truncation, and USB command integration.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1.
+- Debug uses 51,560 bytes of Flash and reserves 14,736 bytes of RAM.
+- Release uses 34,148 bytes of Flash and reserves 14,736 bytes of RAM.
+- Address/undefined-behavior sanitizer execution of all twelve host suites
+  passes, and clangd checks of all changed production C units report zero
+  errors.
+- Health evaluation scans at most 16 slots; response serialization uses only
+  fixed stack buffers and the existing command response storage.
+- Arm GCC stack-usage output reports static local frames for the health command
+  path; the nested service, processor, serializer, and formatting frames remain
+  within the firmware's reserved 2 KiB minimum stack before library internals.
+- Physical structured-health output remains unverified without a connected
+  Flight Computer V1.
 
 ## Milestone 0.11 verification
 

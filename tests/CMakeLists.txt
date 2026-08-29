@@ -91,6 +91,26 @@ target_compile_options(fault_tests PRIVATE
 
 add_test(NAME fault COMMAND fault_tests)
 
+add_executable(health_tests
+    health_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
+)
+
+target_include_directories(health_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+)
+
+target_compile_options(health_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME health COMMAND health_tests)
+
 add_executable(logging_tests
     logging_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"
@@ -167,13 +187,36 @@ target_compile_options(usb_json_protocol_tests PRIVATE
 
 add_test(NAME usb_json_protocol COMMAND usb_json_protocol_tests)
 
+add_executable(usb_health_response_tests
+    usb_health_response_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_health_response.c"
+)
+
+target_include_directories(usb_health_response_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+)
+
+target_compile_options(usb_health_response_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME usb_health_response COMMAND usb_health_response_tests)
+
 add_executable(usb_command_processor_tests
     usb_command_processor_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/logging_config.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_command_processor.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_health_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb/usb_json_protocol.c"
 )
 

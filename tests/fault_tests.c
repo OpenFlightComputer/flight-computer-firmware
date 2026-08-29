@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #define TEST_WARNING_ID UINT16_C(100)
 #define TEST_FAULT_ID UINT16_C(101)
@@ -498,6 +499,17 @@ static void counters_saturate_and_transition_failures_preserve_records(void)
 
 int main(void)
 {
+    assert(strcmp(fault_severity_name(FAULT_SEVERITY_WARNING), "WARNING") ==
+           0);
+    assert(strcmp(fault_severity_name(FAULT_SEVERITY_FAULT), "FAULT") == 0);
+    assert(strcmp(fault_severity_name(FAULT_SEVERITY_CRITICAL), "CRITICAL") ==
+           0);
+    assert(strcmp(fault_source_name(FAULT_SOURCE_APPLICATION),
+                  "APPLICATION") == 0);
+    assert(strcmp(fault_source_name(FAULT_SOURCE_STATE_MACHINE),
+                  "STATE_MACHINE") == 0);
+    assert(strcmp(fault_source_name(FAULT_SOURCE_USB), "USB") == 0);
+
     validates_initialization_and_catalogs();
     severity_controls_state_and_preserves_diagnostics();
     critical_fault_transitions_every_non_fault_state();

@@ -82,3 +82,9 @@ provide interrupt-safe concurrent mutation. Future interrupt handlers must
 publish bounded events for main-context handling rather than mutate system
 state directly, unless a later design explicitly adds and validates a critical
 section policy.
+
+Milestone 0.12 health labels are a read-only diagnostic projection and do not
+alter this authority. In particular, `WARNING`, `DEGRADED`, and `UNKNOWN` do not
+implicitly accept or reject arm requests. Any such relationship must be added
+later as an explicit state/fault safety policy and enforced at the final
+actuator boundary.

@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.11 adds a bounded newline-delimited USB JSON command channel beside the non-blocking USB logging backend, structured fault policy, central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
+Milestone 0.12 adds structured health projection over the bounded newline-delimited USB JSON channel, non-blocking logging backend, structured fault policy, central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -99,6 +99,13 @@ state and fault authorities; newline framing and the wire protocol live in
 `peripherals/usb/`. Fixed queues and discard-through-newline recovery prevent
 partial or unbounded input from becoming a command. See
 `docs/usb-json-protocol.md` for schemas and bounds.
+
+Milestone 0.12 keeps health evaluation in `app/health.c`: it scans the existing
+fixed fault registry and lifecycle authority without mutating either. The
+application USB adapter owns bounded serialization of that result and complete
+fault objects. This prevents the peripheral protocol layer from depending on
+application fault types and prevents the fault system from acquiring transport
+knowledge. See `docs/health-reporting.md` for precedence and completeness.
 
 ## Separation from manufacturing test
 

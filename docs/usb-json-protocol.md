@@ -19,7 +19,7 @@ The supported commands are:
 | Command | Effect |
 | --- | --- |
 | `status` | Report lifecycle state and monotonic uptime |
-| `health` | Report lifecycle state plus active and dropped fault counts |
+| `health` | Report derived overall health, lifecycle state, severity counts, and bounded active-fault details |
 | `arm` | Submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
 
@@ -35,16 +35,19 @@ Examples, each followed by one newline:
 
 ```json
 {"type":"response","command":"status","ok":true,"state":"DISARMED","uptime_us":123456}
-{"type":"response","command":"health","ok":true,"state":"DISARMED","active_fault_count":0,"dropped_fault_count":0}
+{"type":"response","command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
 {"type":"response","command":"arm","ok":true,"state":"ARMED"}
 {"type":"response","command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
 {"type":"error","error":"invalid_request"}
 {"type":"error","error":"unsupported_command"}
 ```
 
-The 0.11 `health` response is deliberately a small foundation summary.
-Per-fault structured detail and richer subsystem health belong to Milestone
-0.12.
+Milestone 0.12 derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or `CRITICAL`
+from the existing lifecycle and fault authorities. Each serialized active fault
+contains its ID, catalogue severity/source, occurrence count, validity-aware
+timestamps, and optional context. `fault_data_complete` identifies an internal
+registry drop, while `truncated` identifies records omitted only from this
+bounded response. See `docs/health-reporting.md` for the complete policy.
 
 ## Log events
 

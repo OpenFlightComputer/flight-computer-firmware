@@ -54,10 +54,6 @@ static void response_builders_are_exact_and_bounded(void)
     static const char status[] =
         "{\"type\":\"response\",\"command\":\"status\",\"ok\":true,"
         "\"state\":\"DISARMED\",\"uptime_us\":42}\n";
-    static const char health[] =
-        "{\"type\":\"response\",\"command\":\"health\",\"ok\":true,"
-        "\"state\":\"ARMED\",\"active_fault_count\":2,"
-        "\"dropped_fault_count\":3}\n";
     static const char accepted[] =
         "{\"type\":\"response\",\"command\":\"arm\",\"ok\":true,"
         "\"state\":\"ARMED\"}\n";
@@ -71,10 +67,6 @@ static void response_builders_are_exact_and_bounded(void)
                                           sizeof(output), &length));
     assert(length == sizeof(status) - 1U);
     assert(memcmp(output, status, length) == 0);
-    assert(usb_json_build_health_response("ARMED", 2U, 3U, output,
-                                          sizeof(output), &length));
-    assert(length == sizeof(health) - 1U);
-    assert(memcmp(output, health, length) == 0);
     assert(usb_json_build_transition_response(USB_JSON_COMMAND_ARM, true,
                                               "ARMED", NULL, output,
                                               sizeof(output), &length));

@@ -118,8 +118,14 @@ static void status_and_health_report_current_summary(void)
         "\"state\":\"DISARMED\",\"uptime_us\":123456}\n";
     static const char health[] =
         "{\"type\":\"response\",\"command\":\"health\",\"ok\":true,"
-        "\"state\":\"DISARMED\",\"active_fault_count\":1,"
-        "\"dropped_fault_count\":0}\n";
+        "\"health\":\"WARNING\",\"state\":\"DISARMED\","
+        "\"fault_data_complete\":true,\"active_fault_count\":1,"
+        "\"warning_count\":1,\"fault_count\":0,\"critical_count\":0,"
+        "\"dropped_fault_count\":0,\"faults\":[{\"id\":1,"
+        "\"severity\":\"WARNING\",\"source\":\"USB\","
+        "\"occurrence_count\":1,\"first_timestamp_us\":null,"
+        "\"last_timestamp_us\":null,\"context\":null}],"
+        "\"reported_fault_count\":1,\"truncated\":false}\n";
 
     reset_fakes();
     initialize_system(&processor, &state_machine, &fault_system);

@@ -1,6 +1,8 @@
 #include "usb_command_processor.h"
 
+#include "health.h"
 #include "logging.h"
+#include "usb_health_response.h"
 #include "usb_json_protocol.h"
 
 #include <limits.h>
@@ -65,15 +67,20 @@ static bool build_command_response(usb_command_processor_t *processor,
             processor->pending_response,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
-    case USB_JSON_COMMAND_HEALTH:
+    case USB_JSON_COMMAND_HEALTH: {
+        health_summary_t summary;
+
         saturating_increment(&processor->statistics.health_count);
-        return usb_json_build_health_response(
-            system_state_name(processor->state_machine->current),
-            fault_system_active_count(processor->fault_system),
-            processor->fault_system->dropped_record_count,
-            processor->pending_response,
-            sizeof(processor->pending_response),
-            &processor->pending_response_length);
+        if (health_evaluate(processor->fault_system, &summary) !=
+            HEALTH_EVALUATE_OK) {
+            return false;
+        }
+        return usb_health_response_build(&summary,
+                                         processor->fault_system,
+                                         processor->pending_response,
+                                         sizeof(processor->pending_response),
+                                         &processor->pending_response_length);
+    }
     case USB_JSON_COMMAND_ARM:
     case USB_JSON_COMMAND_DISARM: {
         const system_state_t previous = processor->state_machine->current;

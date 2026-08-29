@@ -326,3 +326,41 @@ size_t fault_system_active_count(const fault_system_t *system)
 
     return system->active_count;
 }
+
+const char *fault_severity_name(fault_severity_t severity)
+{
+    switch (severity) {
+    case FAULT_SEVERITY_WARNING:
+        return "WARNING";
+    case FAULT_SEVERITY_FAULT:
+        return "FAULT";
+    case FAULT_SEVERITY_CRITICAL:
+        return "CRITICAL";
+    case FAULT_SEVERITY_COUNT:
+        break;
+    }
+
+    return "UNKNOWN";
+}
+
+const char *fault_source_name(fault_source_t source)
+{
+    switch (source) {
+    case FAULT_SOURCE_APPLICATION:
+        return "APPLICATION";
+    case FAULT_SOURCE_BOARD:
+        return "BOARD";
+    case FAULT_SOURCE_MCU:
+        return "MCU";
+    case FAULT_SOURCE_SCHEDULER:
+        return "SCHEDULER";
+    case FAULT_SOURCE_STATE_MACHINE:
+        return "STATE_MACHINE";
+    case FAULT_SOURCE_USB:
+        return "USB";
+    case FAULT_SOURCE_COUNT:
+        break;
+    }
+
+    return "UNKNOWN";
+}

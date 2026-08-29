@@ -24,6 +24,10 @@ timestamp validity, repeated records, context, clearing/latching, capacity
 exhaustion, critical safety under overflow, slot reuse, invalid operations, and
 saturating statistics.
 
+The native `health_tests` target verifies overall-state precedence, severity
+counts, recoverable clearing, critical lifecycle override, incomplete-registry
+`UNKNOWN` handling, invalid records, and stable health names.
+
 The native `logging_tests` target verifies defaults and names, filtering and
 module overrides, suppression of filtered argument evaluation, timestamps and
 sequences, bounded formatting and truncation, canonical lines, FIFO wrap and
@@ -42,14 +46,17 @@ The native `usb_json_protocol_tests` target verifies every command, member
 ordering, unsupported commands, strict rejection of malformed/noncanonical
 objects, and exact bounded response serialization.
 
+The native `usb_health_response_tests` target verifies exact empty health,
+validity-aware active-fault metadata, fixed-capacity response truncation,
+reported/active count distinction, and invalid destination handling.
+
 The native `usb_command_processor_tests` target uses a fake line source and
-transport to verify status/health summaries, state-machine-only arm/disarm,
+transport to verify status/structured-health responses, state-machine-only arm/disarm,
 rejected transitions, malformed/unsupported errors, and pending-response
 backpressure. The STM32 USB device library, interrupt behavior, pins,
 enumeration, and physical transfer remain firmware-build or board-level checks.
 
-Future hardware-independent tests will cover structured health detail, DShot
-encoding, receiver parsing, mixing, and control algorithms as their milestones
-are approved.
+Future hardware-independent tests will cover DShot encoding, receiver parsing,
+mixing, and control algorithms as their milestones are approved.
 
 Hardware tests remain separate and must not be represented as passing host tests.

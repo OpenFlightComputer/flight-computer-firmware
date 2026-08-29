@@ -106,5 +106,7 @@ fault_clear_result_t fault_system_clear(fault_system_t *system, fault_id_t id);
 const fault_record_t *fault_system_record_for_id(const fault_system_t *system,
                                                 fault_id_t id);
 size_t fault_system_active_count(const fault_system_t *system);
+const char *fault_severity_name(fault_severity_t severity);
+const char *fault_source_name(fault_source_t source);
 
 #endif

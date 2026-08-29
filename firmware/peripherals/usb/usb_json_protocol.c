@@ -194,29 +194,3 @@ bool usb_json_build_status_response(const char *state,
                        (unsigned long long)uptime_us);
     return finish_response(written, capacity, length);
 }
-
-bool usb_json_build_health_response(const char *state,
-                                    size_t active_fault_count,
-                                    uint32_t dropped_fault_count,
-                                    char *destination,
-                                    size_t capacity,
-                                    size_t *length)
-{
-    int written;
-
-    if ((state == NULL) || (destination == NULL) || (capacity == 0U) ||
-        (length == NULL)) {
-        return false;
-    }
-
-    written = snprintf(destination,
-                       capacity,
-                       "{\"type\":\"response\",\"command\":\"health\","
-                       "\"ok\":true,\"state\":\"%s\","
-                       "\"active_fault_count\":%lu,"
-                       "\"dropped_fault_count\":%lu}\n",
-                       state,
-                       (unsigned long)active_fault_count,
-                       (unsigned long)dropped_fault_count);
-    return finish_response(written, capacity, length);
-}

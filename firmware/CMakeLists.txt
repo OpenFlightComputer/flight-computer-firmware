@@ -139,6 +139,7 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 add_executable(flight_firmware
     app/fault.c
     app/fault_catalog.c
+    app/health.c
     app/logging.c
     app/logging_config.c
     app/main.c
@@ -147,6 +148,7 @@ add_executable(flight_firmware
     app/system_state.c
     app/task.c
     app/usb_command_processor.c
+    app/usb_health_response.c
     app/usb_logging_backend.c
     peripherals/usb/newline_framer.c
     peripherals/usb/usb_cdc_transport.c

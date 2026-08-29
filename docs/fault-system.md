@@ -101,8 +101,9 @@ latest timestamp becomes valid.
 Context is an optional raw `uint32_t` owned by each fault ID's documentation.
 Current application reports use it for the originating board, task,
 scheduler, or state-event result. The fault system does not interpret context.
-Future structured health and logging milestones may format known IDs and their
-context without changing the realtime reporting API.
+Milestone 0.12 exposes known IDs and their raw context through the read-only
+health response without changing the realtime reporting API or classification
+ownership. See `docs/health-reporting.md`.
 
 `boot_status_t` remains separate. It retains the compact reason a fatal startup
 path halted, while the fault registry adds source, severity, timing, repeated
