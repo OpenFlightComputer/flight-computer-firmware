@@ -20,6 +20,35 @@ static bool token_equals(const char *line,
            (memcmp(&line[token->start], value, value_length) == 0);
 }
 
+static bool parse_uint32(const char *line,
+                         const jsmntok_t *token,
+                         uint32_t *value)
+{
+    uint32_t parsed = 0U;
+    int index;
+
+    if ((token->type != JSMN_PRIMITIVE) ||
+        (token->start >= token->end) ||
+        (((token->end - token->start) > 1) &&
+         (line[token->start] == '0'))) {
+        return false;
+    }
+
+    for (index = token->start; index < token->end; index++) {
+        const char character = line[index];
+        const uint32_t digit = (uint32_t)(character - '0');
+
+        if ((character < '0') || (character > '9') ||
+            (parsed > ((UINT32_MAX - digit) / 10U))) {
+            return false;
+        }
+        parsed = (parsed * 10U) + digit;
+    }
+
+    *value = parsed;
+    return true;
+}
+
 static bool finish_response(int written,
                             size_t capacity,
                             size_t *length)
@@ -43,6 +72,7 @@ bool usb_json_parse_request(const char *line,
     jsmntok_t tokens[USB_JSON_TOKEN_CAPACITY];
     bool type_seen = false;
     bool command_seen = false;
+    bool request_id_seen = false;
     int token_count;
     int index;
 
@@ -51,13 +81,14 @@ bool usb_json_parse_request(const char *line,
     }
 
     request->command = USB_JSON_COMMAND_INVALID;
+    request->request_id = 0U;
     jsmn_init(&parser);
     token_count = jsmn_parse(&parser,
                              line,
                              line_length,
                              tokens,
                              USB_JSON_TOKEN_CAPACITY);
-    if ((token_count != 5) || (tokens[0].type != JSMN_OBJECT)) {
+    if ((token_count != 7) || (tokens[0].type != JSMN_OBJECT)) {
         return false;
     }
 
@@ -87,12 +118,18 @@ bool usb_json_parse_request(const char *line,
                 request->command = USB_JSON_COMMAND_UNSUPPORTED;
             }
             command_seen = true;
+        } else if (token_equals(line, key, "request_id")) {
+            if (request_id_seen ||
+                !parse_uint32(line, value, &request->request_id)) {
+                return false;
+            }
+            request_id_seen = true;
         } else {
             return false;
         }
     }
 
-    return type_seen && command_seen;
+    return type_seen && command_seen && request_id_seen;
 }
 
 const char *usb_json_command_name(usb_json_command_t command)
@@ -115,7 +152,9 @@ const char *usb_json_command_name(usb_json_command_t command)
     return "invalid";
 }
 
-bool usb_json_build_error_response(const char *error,
+bool usb_json_build_error_response(bool request_id_valid,
+                                   uint32_t request_id,
+                                   const char *error,
                                    char *destination,
                                    size_t capacity,
                                    size_t *length)
@@ -127,14 +166,25 @@ bool usb_json_build_error_response(const char *error,
         return false;
     }
 
-    written = snprintf(destination,
-                       capacity,
-                       "{\"type\":\"error\",\"error\":\"%s\"}\n",
-                       error);
+    if (request_id_valid) {
+        written = snprintf(destination,
+                           capacity,
+                           "{\"type\":\"error\",\"request_id\":%lu,"
+                           "\"error\":\"%s\"}\n",
+                           (unsigned long)request_id,
+                           error);
+    } else {
+        written = snprintf(destination,
+                           capacity,
+                           "{\"type\":\"error\",\"request_id\":null,"
+                           "\"error\":\"%s\"}\n",
+                           error);
+    }
     return finish_response(written, capacity, length);
 }
 
 bool usb_json_build_transition_response(usb_json_command_t command,
+                                        uint32_t request_id,
                                         bool accepted,
                                         const char *state,
                                         const char *error,
@@ -154,16 +204,20 @@ bool usb_json_build_transition_response(usb_json_command_t command,
     if (accepted) {
         written = snprintf(destination,
                            capacity,
-                           "{\"type\":\"response\",\"command\":\"%s\","
+                           "{\"type\":\"response\",\"request_id\":%lu,"
+                           "\"command\":\"%s\","
                            "\"ok\":true,\"state\":\"%s\"}\n",
+                           (unsigned long)request_id,
                            usb_json_command_name(command),
                            state);
     } else {
         written = snprintf(destination,
                            capacity,
-                           "{\"type\":\"response\",\"command\":\"%s\","
+                           "{\"type\":\"response\",\"request_id\":%lu,"
+                           "\"command\":\"%s\","
                            "\"ok\":false,\"state\":\"%s\","
                            "\"error\":\"%s\"}\n",
+                           (unsigned long)request_id,
                            usb_json_command_name(command),
                            state,
                            error);
@@ -173,6 +227,7 @@ bool usb_json_build_transition_response(usb_json_command_t command,
 }
 
 bool usb_json_build_status_response(const char *state,
+                                    uint32_t request_id,
                                     uint64_t uptime_us,
                                     char *destination,
                                     size_t capacity,
@@ -187,9 +242,11 @@ bool usb_json_build_status_response(const char *state,
 
     written = snprintf(destination,
                        capacity,
-                       "{\"type\":\"response\",\"command\":\"status\","
+                       "{\"type\":\"response\",\"request_id\":%lu,"
+                       "\"command\":\"status\","
                        "\"ok\":true,\"state\":\"%s\","
                        "\"uptime_us\":%llu}\n",
+                       (unsigned long)request_id,
                        state,
                        (unsigned long long)uptime_us);
     return finish_response(written, capacity, length);

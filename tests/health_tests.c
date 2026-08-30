@@ -100,7 +100,7 @@ static void clearing_recoverable_faults_improves_health(void)
     assert(summary.state == HEALTH_STATE_OK);
 }
 
-static void dropped_records_make_noncritical_health_unknown(void)
+static void dropped_records_force_critical_health(void)
 {
     system_state_machine_t state_machine;
     fault_system_t fault_system;
@@ -117,18 +117,13 @@ static void dropped_records_make_noncritical_health_unknown(void)
     }
     assert(fault_system_report(&fault_system, 17U, false, 0U) ==
            FAULT_REPORT_CAPACITY_EXCEEDED);
+    assert(state_machine.current == SYSTEM_STATE_FAULT);
     assert(health_evaluate(&fault_system, &summary) == HEALTH_EVALUATE_OK);
-    assert(summary.state == HEALTH_STATE_UNKNOWN);
+    assert(summary.state == HEALTH_STATE_CRITICAL);
     assert(!summary.fault_data_complete);
     assert(summary.active_fault_count == FAULT_SYSTEM_CAPACITY);
     assert(summary.dropped_fault_count == 1U);
 
-    assert(system_state_machine_handle_event(
-               &state_machine,
-               SYSTEM_STATE_EVENT_FAULT_DETECTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
-    assert(health_evaluate(&fault_system, &summary) == HEALTH_EVALUATE_OK);
-    assert(summary.state == HEALTH_STATE_CRITICAL);
 }
 
 static void invalid_inputs_and_names_are_safe(void)
@@ -165,7 +160,7 @@ int main(void)
 {
     severity_precedence_and_counts_are_deterministic();
     clearing_recoverable_faults_improves_health();
-    dropped_records_make_noncritical_health_unknown();
+    dropped_records_force_critical_health();
     invalid_inputs_and_names_are_safe();
     return 0;
 }

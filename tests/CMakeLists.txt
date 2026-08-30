@@ -111,6 +111,26 @@ target_compile_options(health_tests PRIVATE
 
 add_test(NAME health COMMAND health_tests)
 
+add_executable(foundation_integration_tests
+    foundation_integration_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
+)
+
+target_include_directories(foundation_integration_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+)
+
+target_compile_options(foundation_integration_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME foundation_integration COMMAND foundation_integration_tests)
+
 add_executable(logging_tests
     logging_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"

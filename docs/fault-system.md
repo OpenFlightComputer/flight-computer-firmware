@@ -76,9 +76,15 @@ consume another slot. Clearing a warning or ordinary fault releases its slot;
 critical records cannot be cleared.
 
 If all slots are occupied, a new record is dropped and the saturating dropped
-counter increments. A new critical incident still requests
-`SYSTEM_STATE_FAULT` even when no record slot is available. Capacity pressure
-can therefore reduce diagnostics but cannot suppress the safety transition.
+counter increments once for each report attempt that cannot be stored. Losing
+an otherwise valid fault record is itself treated
+as a critical internal diagnostic failure, so every capacity-exceeded result
+synchronously requests `SYSTEM_STATE_FAULT`, regardless of the missing
+record's original severity. Repeated reports of an already-active ID update its
+existing slot and do not consume capacity. A repeated report for an ID that was
+never stored can increment the dropped counter again, so the counter measures
+lost report events rather than distinct fault IDs or current active faults. It
+is cumulative and saturating until reset.
 
 The catalogue itself is also bounded to 32 definitions, rejects invalid IDs,
 severities, sources, and duplicates during initialization, and must remain

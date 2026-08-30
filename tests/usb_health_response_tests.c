@@ -34,7 +34,8 @@ static void empty_health_response_is_exact(void)
         {1U, FAULT_SEVERITY_WARNING, FAULT_SOURCE_APPLICATION},
     };
     static const char expected[] =
-        "{\"type\":\"response\",\"command\":\"health\",\"ok\":true,"
+        "{\"type\":\"response\",\"request_id\":42,"
+        "\"command\":\"health\",\"ok\":true,"
         "\"health\":\"OK\",\"state\":\"BOOT\","
         "\"fault_data_complete\":true,\"active_fault_count\":0,"
         "\"warning_count\":0,\"fault_count\":0,\"critical_count\":0,"
@@ -50,6 +51,7 @@ static void empty_health_response_is_exact(void)
     assert(health_evaluate(&fault_system, &summary) == HEALTH_EVALUATE_OK);
     assert(usb_health_response_build(&summary,
                                      &fault_system,
+                                     42U,
                                      response,
                                      sizeof(response),
                                      &length));
@@ -80,10 +82,12 @@ static void active_fault_metadata_is_serialized(void)
     assert(health_evaluate(&fault_system, &summary) == HEALTH_EVALUATE_OK);
     assert(usb_health_response_build(&summary,
                                      &fault_system,
+                                     43U,
                                      response,
                                      sizeof(response),
                                      &length));
     assert(strstr(response, "\"health\":\"DEGRADED\"") != NULL);
+    assert(strstr(response, "\"request_id\":43") != NULL);
     assert(strstr(response,
                   "{\"id\":7,\"severity\":\"FAULT\","
                   "\"source\":\"USB\",\"occurrence_count\":2,"
@@ -124,6 +128,7 @@ static void response_truncation_is_explicit_and_valid(void)
     assert(health_evaluate(&fault_system, &summary) == HEALTH_EVALUATE_OK);
     assert(usb_health_response_build(&summary,
                                      &fault_system,
+                                     44U,
                                      response,
                                      sizeof(response),
                                      &length));
@@ -159,6 +164,7 @@ static void incomplete_data_and_worst_case_metadata_are_representable(void)
     assert(summary.state == HEALTH_STATE_UNKNOWN);
     assert(usb_health_response_build(&summary,
                                      &fault_system,
+                                     UINT32_MAX,
                                      response,
                                      sizeof(response),
                                      &length));
@@ -187,12 +193,14 @@ static void invalid_or_small_destinations_are_rejected(void)
     assert(health_evaluate(&fault_system, &summary) == HEALTH_EVALUATE_OK);
     assert(!usb_health_response_build(&summary,
                                       &fault_system,
+                                      45U,
                                       response,
                                       sizeof(response),
                                       &length));
     assert(length == 0U);
     assert(!usb_health_response_build(NULL,
                                       &fault_system,
+                                      45U,
                                       response,
                                       sizeof(response),
                                       &length));

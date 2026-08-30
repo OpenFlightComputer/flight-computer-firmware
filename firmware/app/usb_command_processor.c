@@ -46,9 +46,13 @@ static usb_command_process_result_t try_send_pending_response(
 }
 
 static bool build_error(usb_command_processor_t *processor,
+                        bool request_id_valid,
+                        uint32_t request_id,
                         const char *error)
 {
     return usb_json_build_error_response(
+        request_id_valid,
+        request_id,
         error,
         processor->pending_response,
         sizeof(processor->pending_response),
@@ -56,13 +60,14 @@ static bool build_error(usb_command_processor_t *processor,
 }
 
 static bool build_command_response(usb_command_processor_t *processor,
-                                   usb_json_command_t command)
+                                   const usb_json_request_t *request)
 {
-    switch (command) {
+    switch (request->command) {
     case USB_JSON_COMMAND_STATUS:
         saturating_increment(&processor->statistics.status_count);
         return usb_json_build_status_response(
             system_state_name(processor->state_machine->current),
+            request->request_id,
             processor->clock(),
             processor->pending_response,
             sizeof(processor->pending_response),
@@ -77,6 +82,7 @@ static bool build_command_response(usb_command_processor_t *processor,
         }
         return usb_health_response_build(&summary,
                                          processor->fault_system,
+                                         request->request_id,
                                          processor->pending_response,
                                          sizeof(processor->pending_response),
                                          &processor->pending_response_length);
@@ -85,7 +91,7 @@ static bool build_command_response(usb_command_processor_t *processor,
     case USB_JSON_COMMAND_DISARM: {
         const system_state_t previous = processor->state_machine->current;
         const system_state_event_t event =
-            command == USB_JSON_COMMAND_ARM
+            request->command == USB_JSON_COMMAND_ARM
                 ? SYSTEM_STATE_EVENT_ARM_REQUESTED
                 : SYSTEM_STATE_EVENT_DISARM_REQUESTED;
 
@@ -101,7 +107,8 @@ static bool build_command_response(usb_command_processor_t *processor,
                      system_state_name(previous),
                      system_state_name(processor->state_machine->current));
             return usb_json_build_transition_response(
-                command,
+                request->command,
+                request->request_id,
                 true,
                 system_state_name(processor->state_machine->current),
                 NULL,
@@ -112,7 +119,8 @@ static bool build_command_response(usb_command_processor_t *processor,
 
         saturating_increment(&processor->statistics.transition_rejected_count);
         return usb_json_build_transition_response(
-            command,
+            request->command,
+            request->request_id,
             false,
             system_state_name(processor->state_machine->current),
             "transition_rejected",
@@ -183,12 +191,18 @@ usb_command_process_result_t usb_command_processor_process_once(
     saturating_increment(&processor->statistics.command_count);
     if (!usb_json_parse_request((const char *)line, line_length, &request)) {
         saturating_increment(&processor->statistics.malformed_count);
-        response_built = build_error(processor, "invalid_request");
+        response_built = build_error(processor,
+                                     false,
+                                     0U,
+                                     "invalid_request");
     } else if (request.command == USB_JSON_COMMAND_UNSUPPORTED) {
         saturating_increment(&processor->statistics.unsupported_count);
-        response_built = build_error(processor, "unsupported_command");
+        response_built = build_error(processor,
+                                     true,
+                                     request.request_id,
+                                     "unsupported_command");
     } else {
-        response_built = build_command_response(processor, request.command);
+        response_built = build_command_response(processor, &request);
     }
 
     if (!response_built) {

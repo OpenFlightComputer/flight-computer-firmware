@@ -83,8 +83,12 @@ publish bounded events for main-context handling rather than mutate system
 state directly, unless a later design explicitly adds and validates a critical
 section policy.
 
-Milestone 0.12 health labels are a read-only diagnostic projection and do not
-alter this authority. In particular, `WARNING`, `DEGRADED`, and `UNKNOWN` do not
-implicitly accept or reject arm requests. Any such relationship must be added
-later as an explicit state/fault safety policy and enforced at the final
-actuator boundary.
+Health labels are a read-only diagnostic projection and do not alter lifecycle
+authority. The reviewed future arm-admission policy permits `OK`, `WARNING`,
+and `DEGRADED`, but rejects `UNKNOWN` and `CRITICAL`. An ordinary degradation
+that appears while already armed does not automatically leave `ARMED`; a
+storage failure must not change flight behavior merely because it occurred in
+flight. Critical faults still enter terminal `FAULT`, so future subsystem
+catalogues must reserve that classification for conditions whose defined safe
+response justifies it. Phase 1 must enforce these decisions independently at
+the final actuator-output boundary.

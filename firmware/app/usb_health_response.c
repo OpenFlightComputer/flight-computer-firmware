@@ -136,6 +136,7 @@ static bool format_suffix(size_t reported_fault_count,
 
 bool usb_health_response_build(const health_summary_t *summary,
                                const fault_system_t *fault_system,
+                               uint32_t request_id,
                                char *destination,
                                size_t capacity,
                                size_t *length)
@@ -162,12 +163,14 @@ bool usb_health_response_build(const health_summary_t *summary,
     destination[0] = '\0';
     append_format(
         &buffer,
-        "{\"type\":\"response\",\"command\":\"health\",\"ok\":true,"
+        "{\"type\":\"response\",\"request_id\":%lu,"
+        "\"command\":\"health\",\"ok\":true,"
         "\"health\":\"%s\",\"state\":\"%s\","
         "\"fault_data_complete\":%s,\"active_fault_count\":%lu,"
         "\"warning_count\":%lu,\"fault_count\":%lu,"
         "\"critical_count\":%lu,\"dropped_fault_count\":%lu,"
         "\"faults\":[",
+        (unsigned long)request_id,
         health_state_name(summary->state),
         system_state_name(fault_system->state_machine->current),
         summary->fault_data_complete ? "true" : "false",

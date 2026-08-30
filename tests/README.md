@@ -25,8 +25,9 @@ exhaustion, critical safety under overflow, slot reuse, invalid operations, and
 saturating statistics.
 
 The native `health_tests` target verifies overall-state precedence, severity
-counts, recoverable clearing, critical lifecycle override, incomplete-registry
-`UNKNOWN` handling, invalid records, and stable health names.
+counts, recoverable clearing, critical lifecycle override, defensive
+incomplete-registry `UNKNOWN` handling, terminal public-path overflow, invalid
+records, and stable health names.
 
 The native `logging_tests` target verifies defaults and names, filtering and
 module overrides, suppression of filtered argument evaluation, timestamps and
@@ -55,6 +56,10 @@ transport to verify status/structured-health responses, state-machine-only arm/d
 rejected transitions, malformed/unsupported errors, and pending-response
 backpressure. The STM32 USB device library, interrupt behavior, pins,
 enumeration, and physical transfer remain firmware-build or board-level checks.
+
+The native `foundation_integration_tests` target verifies complete
+state/fault/health chains for successful and degraded startup, fatal startup,
+ordinary and critical armed-runtime faults, recovery, and registry exhaustion.
 
 Future hardware-independent tests will cover DShot encoding, receiver parsing,
 mixing, and control algorithms as their milestones are approved.

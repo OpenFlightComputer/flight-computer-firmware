@@ -1,6 +1,6 @@
 # Architecture boundaries
 
-Milestone 0.12 adds structured health projection over the bounded newline-delimited USB JSON channel, non-blocking logging backend, structured fault policy, central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
+Milestone 0.13 integrates and reviews structured health, the bounded request-ID-correlated USB JSON channel, non-blocking logging backend, structured fault policy, central application state machine, cooperative scheduler, portable Task contract, monotonic clock, and hardware boundaries.
 
 ## Dependency direction
 
@@ -106,6 +106,15 @@ application USB adapter owns bounded serialization of that result and complete
 fault objects. This prevents the peripheral protocol layer from depending on
 application fault types and prevents the fault system from acquiring transport
 knowledge. See `docs/health-reporting.md` for precedence and completeness.
+
+Milestone 0.13 preserves one shared `usb-service` task as the sole main-context
+transport owner. Command and log work are bounded stages of that task rather
+than competing scheduled tasks over shared queues. Request IDs belong to the
+peripheral wire envelope and are passed to application response serializers;
+they do not enter lifecycle or fault policy. Cross-module host tests exercise
+startup and runtime state/fault/health chains, while physical execution-time,
+stack, USB, and board evidence remains tracked in
+`docs/hardware-validation-checklist.md`.
 
 ## Separation from manufacturing test
 

@@ -122,6 +122,10 @@ On this macOS installation the CLI is located inside STM32CubeProgrammer's appli
 
 ## Debugger verification
 
+Physical checks that cannot be established by a build or host test are tracked
+in `docs/hardware-validation-checklist.md`. Keep those items unchecked until a
+Flight Computer V1 and the required debug equipment are connected.
+
 Launch the Debug ELF through VS Code or another GDB client backed by the ST-Link GDB server. Halt at `main`, then continue and inspect:
 
 | Symbol | Expected value |

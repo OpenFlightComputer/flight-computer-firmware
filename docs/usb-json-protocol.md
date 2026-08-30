@@ -7,11 +7,12 @@ inspection; it is not an authenticated remote-control interface.
 
 ## Requests
 
-A request must be exactly one object with two string members. Member order is
-irrelevant, but missing, duplicate, or additional members are rejected:
+A request must be exactly one object with two string members and one unsigned
+32-bit request ID. Member order is irrelevant, but missing, duplicate,
+additional, non-integer, negative, or noncanonical numeric members are rejected:
 
 ```json
-{"type":"command","command":"status"}
+{"type":"command","command":"status","request_id":42}
 ```
 
 The supported commands are:
@@ -34,12 +35,12 @@ accepted only in `DISARMED`, while disarm is accepted in `ARMED` or `FAILSAFE`.
 Examples, each followed by one newline:
 
 ```json
-{"type":"response","command":"status","ok":true,"state":"DISARMED","uptime_us":123456}
-{"type":"response","command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
-{"type":"response","command":"arm","ok":true,"state":"ARMED"}
-{"type":"response","command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
-{"type":"error","error":"invalid_request"}
-{"type":"error","error":"unsupported_command"}
+{"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","uptime_us":123456}
+{"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
+{"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
+{"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
+{"type":"error","request_id":null,"error":"invalid_request"}
+{"type":"error","request_id":46,"error":"unsupported_command"}
 ```
 
 Milestone 0.12 derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or `CRITICAL`
@@ -48,6 +49,13 @@ contains its ID, catalogue severity/source, occurrence count, validity-aware
 timestamps, and optional context. `fault_data_complete` identifies an internal
 registry drop, while `truncated` identifies records omitted only from this
 bounded response. See `docs/health-reporting.md` for the complete policy.
+
+The firmware echoes the request ID on every response to a valid request
+envelope, including unsupported commands. It uses JSON `null` only when the
+envelope is malformed and no trustworthy ID was parsed. Log events are
+unsolicited and therefore have no request ID. Protocol version negotiation is
+deferred until independently released host software must communicate with
+older deployed firmware.
 
 ## Log events
 

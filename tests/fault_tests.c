@@ -495,6 +495,7 @@ static void counters_saturate_and_transition_failures_preserve_records(void)
                false,
                0U) == FAULT_REPORT_CAPACITY_EXCEEDED);
     assert(system.dropped_record_count == UINT32_MAX);
+    assert(state_machine.current == SYSTEM_STATE_FAULT);
 }
 
 int main(void)

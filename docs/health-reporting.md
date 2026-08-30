@@ -32,15 +32,20 @@ rule wins:
 | --- | --- |
 | Lifecycle state is `FAULT` | `CRITICAL` |
 | At least one active critical record | `CRITICAL` |
-| At least one fault record was dropped | `UNKNOWN` |
+| At least one fault record was dropped without terminal lifecycle state | `UNKNOWN` |
 | At least one active ordinary fault | `DEGRADED` |
 | At least one active warning | `WARNING` |
 | Otherwise | `OK` |
 
 Lifecycle `FAULT` overrides incomplete diagnostics because the critical safety
-outcome is known even if its record could not be retained. Otherwise a dropped
-record makes health `UNKNOWN`: claiming a lower severity would assume facts the
-registry no longer has.
+outcome is known even if its record could not be retained. Exhausting all 16
+fault slots now synchronously requests that terminal state, regardless of the
+severity of the record that could not be stored. Consequently a registry
+overflow reached through the public fault-reporting API produces `CRITICAL`,
+not `UNKNOWN`. The `UNKNOWN` branch is retained defensively for an externally
+constructed or inconsistent snapshot in which lost data is visible but the
+required lifecycle transition did not occur; normal operation must not remain
+in that condition.
 
 Occurrence count, timestamps, source, and context do not alter severity. They
 explain a record but never reclassify it. Clearing a warning or ordinary fault
@@ -54,6 +59,7 @@ The existing `health` command now returns:
 ```json
 {
   "type": "response",
+  "request_id": 42,
   "command": "health",
   "ok": true,
   "health": "DEGRADED",
@@ -98,9 +104,10 @@ Two completeness indicators intentionally describe different boundaries:
 
 ## Bounds and ordering
 
-Evaluation examines exactly 16 slots and uses no allocation. Serialization
-visits active slots in stable registry order and adds only complete fault
-objects that fit beside the mandatory response suffix. The complete output
+Evaluation examines at most the fixed 16 slots and uses no allocation. This
+scan occurs only when a `health` command is processed, not on every scheduler
+tick. Serialization visits active slots in stable registry order and adds only
+complete fault objects that fit beside the mandatory response suffix. The complete output
 must remain below the existing 768-byte USB transmit-entry capacity. If the
 next object cannot fit, it and all later objects are omitted and `truncated`
 is set. No partial JSON object is emitted.
@@ -113,6 +120,7 @@ and formatting remains in cooperative main context, never the USB interrupt.
 
 Health labels are diagnostic output, not an actuator gate. The current state
 machine continues to decide transitions, and the fault system continues to
-send `FAULT_DETECTED` synchronously for critical reports. A later rule such as
-preventing arm while degraded must be introduced as an explicit reviewed
-safety policy rather than inferred from this presentation field.
+send `FAULT_DETECTED` synchronously for critical reports and registry
+exhaustion. Before actuators exist, arm admission will explicitly allow
+`OK`, `WARNING`, and `DEGRADED` but reject `UNKNOWN` and `CRITICAL`; the final
+motor-output gate remains a separate Phase 1 safety mechanism.

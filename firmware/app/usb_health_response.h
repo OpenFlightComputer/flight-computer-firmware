@@ -9,6 +9,7 @@
 
 bool usb_health_response_build(const health_summary_t *summary,
                                const fault_system_t *fault_system,
+                               uint32_t request_id,
                                char *destination,
                                size_t capacity,
                                size_t *length);

@@ -166,12 +166,9 @@ static void update_record(fault_record_t *record,
     saturating_increment(&record->occurrence_count);
 }
 
-static bool apply_critical_state_transition(
-    fault_system_t *system,
-    const fault_definition_t *definition)
+static bool apply_fault_state_transition(fault_system_t *system)
 {
-    if ((definition->severity != FAULT_SEVERITY_CRITICAL) ||
-        (system->state_machine->current == SYSTEM_STATE_FAULT)) {
+    if (system->state_machine->current == SYSTEM_STATE_FAULT) {
         return true;
     }
 
@@ -184,6 +181,17 @@ static bool apply_critical_state_transition(
     }
 
     return true;
+}
+
+static bool apply_critical_state_transition(
+    fault_system_t *system,
+    const fault_definition_t *definition)
+{
+    if (definition->severity != FAULT_SEVERITY_CRITICAL) {
+        return true;
+    }
+
+    return apply_fault_state_transition(system);
 }
 
 fault_init_result_t fault_system_initialize(
@@ -254,6 +262,9 @@ fault_report_result_t fault_system_report(fault_system_t *system,
         if (record == NULL) {
             saturating_increment(&system->dropped_record_count);
             result = FAULT_REPORT_CAPACITY_EXCEEDED;
+            if (!apply_fault_state_transition(system)) {
+                return FAULT_REPORT_CRITICAL_TRANSITION_FAILED;
+            }
         } else {
             initialize_record(record,
                               definition,

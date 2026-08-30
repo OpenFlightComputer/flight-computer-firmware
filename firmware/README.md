@@ -2,7 +2,7 @@
 
 This directory contains the operational embedded firmware foundation.
 
-Milestone 0.12 adds structured health reporting over the USB JSON channel:
+Milestone 0.13 integrates and reviews the Phase 0 foundation:
 
 ```text
 application main
@@ -35,12 +35,17 @@ seven startup records enter the fixed logging queue
     ↓
 1,000 Hz background task frames/parses USB input outside interrupt context
     ↓
-status, structured health, arm, and disarm dispatch through bounded JSON
+    request-ID-correlated status, health, arm, and disarm through bounded JSON
     ↓
 health derives overall state and bounded details from active fault records
     ↓
-responses take priority, then one JSON log enters a two-entry USB CDC queue
+    responses take priority, then one JSON log enters a two-entry USB CDC queue
 ```
+
+One 1,000 Hz `usb-service` task remains the sole main-context owner of command
+and logging transport progression. USB callbacks only copy bytes or publish
+completion flags. Fault-registry exhaustion forces terminal `FAULT`, while an
+ordinary degradation does not automatically leave `ARMED`.
 
 `app/` contains boot/status orchestration plus health projection, command dispatch, the portable logging core, USB adapters, fault system, system state, Task registry, and cooperative scheduler. It contains no STM32 HAL calls. `peripherals/usb/` owns CDC descriptors, bounded receive/transmit state, newline framing, and the JSON wire protocol. `hardware/boards/flightcomputer_v1/` owns board identity, routed USB pins and OTG FS setup, timebase frequency selection, and initialization policy. `hardware/mcu/stm32f405/` owns F405 startup support, linker layout, HAL configuration, clock implementation, TIM5 register access, and core interrupt handlers.
 

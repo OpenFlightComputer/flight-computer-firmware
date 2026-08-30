@@ -114,10 +114,12 @@ static void status_and_health_report_current_summary(void)
     system_state_machine_t state_machine;
     fault_system_t fault_system;
     static const char status[] =
-        "{\"type\":\"response\",\"command\":\"status\",\"ok\":true,"
+        "{\"type\":\"response\",\"request_id\":10,"
+        "\"command\":\"status\",\"ok\":true,"
         "\"state\":\"DISARMED\",\"uptime_us\":123456}\n";
     static const char health[] =
-        "{\"type\":\"response\",\"command\":\"health\",\"ok\":true,"
+        "{\"type\":\"response\",\"request_id\":11,"
+        "\"command\":\"health\",\"ok\":true,"
         "\"health\":\"WARNING\",\"state\":\"DISARMED\","
         "\"fault_data_complete\":true,\"active_fault_count\":1,"
         "\"warning_count\":1,\"fault_count\":0,\"critical_count\":0,"
@@ -130,7 +132,8 @@ static void status_and_health_report_current_summary(void)
     reset_fakes();
     initialize_system(&processor, &state_machine, &fault_system);
     enter_disarmed(&state_machine);
-    queue_input("{\"type\":\"command\",\"command\":\"status\"}");
+    queue_input("{\"type\":\"command\",\"request_id\":10,"
+                "\"command\":\"status\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(captured_length == sizeof(status) - 1U);
@@ -138,7 +141,8 @@ static void status_and_health_report_current_summary(void)
 
     assert(fault_system_report(&fault_system, 1U, false, 0U) ==
            FAULT_REPORT_RECORDED);
-    queue_input("{\"type\":\"command\",\"command\":\"health\"}");
+    queue_input("{\"type\":\"command\",\"request_id\":11,"
+                "\"command\":\"health\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(captured_length == sizeof(health) - 1U);
@@ -156,16 +160,19 @@ static void arm_and_disarm_use_the_state_machine(void)
     reset_fakes();
     initialize_system(&processor, &state_machine, &fault_system);
     enter_disarmed(&state_machine);
-    queue_input("{\"type\":\"command\",\"command\":\"arm\"}");
+    queue_input("{\"type\":\"command\",\"request_id\":20,"
+                "\"command\":\"arm\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(state_machine.current == SYSTEM_STATE_ARMED);
     assert(strstr(captured_response, "\"ok\":true") != NULL);
+    assert(strstr(captured_response, "\"request_id\":20") != NULL);
     assert(processor.last_transition_valid);
     assert(processor.last_transition_result == SYSTEM_STATE_TRANSITION_OK);
     assert(logging_queue_count() == 1U);
 
-    queue_input("{\"type\":\"command\",\"command\":\"disarm\"}");
+    queue_input("{\"type\":\"command\",\"request_id\":21,"
+                "\"command\":\"disarm\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(state_machine.current == SYSTEM_STATE_DISARMED);
@@ -180,7 +187,8 @@ static void illegal_transition_is_rejected_without_state_mutation(void)
 
     reset_fakes();
     initialize_system(&processor, &state_machine, &fault_system);
-    queue_input("{\"type\":\"command\",\"command\":\"arm\"}");
+    queue_input("{\"type\":\"command\",\"request_id\":30,"
+                "\"command\":\"arm\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(state_machine.current == SYSTEM_STATE_BOOT);
@@ -200,14 +208,19 @@ static void invalid_unsupported_and_busy_responses_are_bounded(void)
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(strstr(captured_response, "invalid_request") != NULL);
-    queue_input("{\"type\":\"command\",\"command\":\"future\"}");
+    assert(strstr(captured_response, "\"request_id\":null") != NULL);
+    queue_input("{\"type\":\"command\",\"request_id\":41,"
+                "\"command\":\"future\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(strstr(captured_response, "unsupported_command") != NULL);
+    assert(strstr(captured_response, "\"request_id\":41") != NULL);
 
     write_result = USB_CDC_WRITE_BUSY;
-    queue_input("{\"type\":\"command\",\"command\":\"status\"}");
-    queue_input("{\"type\":\"command\",\"command\":\"health\"}");
+    queue_input("{\"type\":\"command\",\"request_id\":42,"
+                "\"command\":\"status\"}");
+    queue_input("{\"type\":\"command\",\"request_id\":43,"
+                "\"command\":\"health\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_PENDING);
     assert(input_count == 1U);

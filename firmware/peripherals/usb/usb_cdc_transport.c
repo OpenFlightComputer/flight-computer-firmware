@@ -25,6 +25,13 @@ typedef struct {
 _Static_assert(USB_CDC_RECEIVE_LINE_CAPACITY ==
                    NEWLINE_FRAMER_MAX_LINE_LENGTH,
                "Transport and newline framer line capacities must match");
+_Static_assert((USB_CDC_RAW_RECEIVE_CAPACITY > 1U) &&
+                   (USB_CDC_RAW_RECEIVE_CAPACITY <= UINT16_MAX),
+               "Raw receive capacity must fit its 16-bit indices");
+_Static_assert(USB_CDC_RECEIVE_LINE_QUEUE_DEPTH > 0U,
+               "Receive line queue must contain at least one entry");
+_Static_assert(USB_CDC_TRANSMIT_QUEUE_DEPTH > 0U,
+               "Transmit queue must contain at least one entry");
 
 static int8_t cdc_initialize(void);
 static int8_t cdc_deinitialize(void);
@@ -106,13 +113,11 @@ static void reset_transport_state(void)
     raw_receive_tail = 0U;
     receive_overflow_pending = false;
     newline_framer_initialize(&receive_framer);
-    received_lines[0] = (received_line_t){0};
-    received_lines[1] = (received_line_t){0};
+    memset(received_lines, 0, sizeof(received_lines));
     received_line_head = 0U;
     received_line_tail = 0U;
     received_line_count = 0U;
-    transmit_queue[0] = (transmit_entry_t){0};
-    transmit_queue[1] = (transmit_entry_t){0};
+    memset(transmit_queue, 0, sizeof(transmit_queue));
     transmit_head = 0U;
     transmit_tail = 0U;
     transmit_count = 0U;

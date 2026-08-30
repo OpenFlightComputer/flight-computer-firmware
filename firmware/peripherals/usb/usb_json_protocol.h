@@ -16,6 +16,7 @@ typedef enum {
 
 typedef struct {
     usb_json_command_t command;
+    uint32_t request_id;
 } usb_json_request_t;
 
 bool usb_json_parse_request(const char *line,
@@ -23,11 +24,14 @@ bool usb_json_parse_request(const char *line,
                             usb_json_request_t *request);
 const char *usb_json_command_name(usb_json_command_t command);
 
-bool usb_json_build_error_response(const char *error,
+bool usb_json_build_error_response(bool request_id_valid,
+                                   uint32_t request_id,
+                                   const char *error,
                                    char *destination,
                                    size_t capacity,
                                    size_t *length);
 bool usb_json_build_transition_response(usb_json_command_t command,
+                                        uint32_t request_id,
                                         bool accepted,
                                         const char *state,
                                         const char *error,
@@ -35,6 +39,7 @@ bool usb_json_build_transition_response(usb_json_command_t command,
                                         size_t capacity,
                                         size_t *length);
 bool usb_json_build_status_response(const char *state,
+                                    uint32_t request_id,
                                     uint64_t uptime_us,
                                     char *destination,
                                     size_t capacity,

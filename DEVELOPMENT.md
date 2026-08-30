@@ -6,11 +6,11 @@ Phase 0 — Firmware foundation.
 
 ## Current milestone
 
-Milestone 0.12 — structured health reporting: **implemented and awaiting owner review**.
+Milestone 0.13 — Phase 0 integration review: **implemented and awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 0.11 — USB newline-delimited JSON command foundation. Bounded receive/framing, strict status/health/arm/disarm parsing, state-machine dispatch, response backpressure, and unified JSON output are integrated and reviewed.
+Milestone 0.12 — structured health reporting. Bounded per-fault diagnostics, health derivation, and completeness indicators are integrated and reviewed.
 
 ## Current implementation status
 
@@ -80,7 +80,7 @@ Milestone 0.11 — USB newline-delimited JSON command foundation. Bounded receiv
 - Added a 256-byte maximum input line and a 64-byte receive-processing budget
   per 1 ms service release, with discard-through-newline recovery and saturating
   raw-byte, completed-line, and oversized-line drop statistics.
-- Added strict two-member JSON requests for `status`, `health`, `arm`, and
+- Added strict request-ID-bearing JSON requests for `status`, `health`, `arm`, and
   `disarm`, with exact bounded response serialization and explicit malformed
   and unsupported-command errors.
 - Added an application command processor that handles at most one command per
@@ -108,8 +108,7 @@ Milestone 0.11 — USB newline-delimited JSON command foundation. Bounded receiv
   fault registry once and derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or
   `CRITICAL` using the reviewed precedence.
 - Made lifecycle `FAULT` and active critical records override all lower health
-  outcomes; a dropped fault record yields `UNKNOWN` when critical health is not
-  already certain.
+  outcomes; defensive inconsistent snapshots can still yield `UNKNOWN`.
 - Added retained active, warning, ordinary-fault, critical, and dropped counts
   plus an explicit `fault_data_complete` result without mutating fault or state
   authorities.
@@ -125,6 +124,19 @@ Milestone 0.11 — USB newline-delimited JSON command foundation. Bounded receiv
   added no allocation, peripheral access, state mutation, or new scheduled task.
 - Added dedicated health-policy, response-serialization, and updated command
   integration tests plus `docs/health-reporting.md`.
+- Required a canonical unsigned 32-bit `request_id` on every command, echoed it
+  on every valid-envelope response, and used `null` for malformed envelopes.
+- Classified fault-registry exhaustion as a critical diagnostic-integrity
+  failure that synchronously enters terminal `FAULT`; repeated active IDs still
+  reuse their existing slots.
+- Audited USB interrupt/main ownership, retained one shared bounded service
+  task, added transport-capacity assertions, and removed reset logic coupled to
+  literal queue depths.
+- Added foundation integration tests spanning startup, armed runtime faults,
+  recovery, health projection, and overflow behavior.
+- Added the consolidated Phase 0 review and a hardware validation checklist for
+  USB overload/recovery, execution time, stack use, timebase, and lifecycle
+  checks once the boards arrive.
 
 No motor output, receiver input, sensor access, persistent flight-data logging, or flight-control behavior has been implemented. The `ARMED` lifecycle state has no actuator effect.
 
@@ -152,8 +164,9 @@ No motor output, receiver input, sensor access, persistent flight-data logging, 
 - A health response may omit later fault details to stay within one 768-byte
   transport entry; total severity counts remain complete and `truncated`
   exposes the omission.
-- Once a fault record has been dropped, non-critical overall health remains
-  `UNKNOWN` until reset because the missing severity cannot be reconstructed.
+- Fault-registry exhaustion loses record detail and is reset-latched through
+  terminal `FAULT`; `UNKNOWN` remains only a defensive inconsistent-snapshot
+  outcome, not a normal public reporting path.
 - The default USB VID/PID is explicitly development-only and must be replaced with assigned values before distributing hardware.
 - Physical USB enumeration, input/output, disconnect/reconnect, VBUS sensing, and throughput remain unverified without a connected Flight Computer V1.
 
@@ -166,7 +179,34 @@ No motor output, receiver input, sensor access, persistent flight-data logging, 
 
 ## Next step
 
-After owner review and a separately approved commit, Milestone 0.13 will perform the Phase 0 integration review: consolidate foundation contracts, verify cross-module failure and startup behavior, close documentation inconsistencies, and define the evidence required before Phase 1 actuator work.
+After owner review and a separately approved commit, Phase 0 is complete. The
+next planning step is Phase 1's DShot actuator subsystem, beginning with the
+arming admission, command timeout, output limits, failsafe response, and final
+motor-output gate before any physical output is enabled.
+
+## Milestone 0.13 verification
+
+- The host-development build runs thirteen test executables; all tests pass.
+- The new foundation integration suite covers successful and degraded startup,
+  terminal startup failure, ordinary and critical faults while armed, recovery,
+  and fault-registry exhaustion across the state, fault, and health modules.
+- USB protocol and command tests cover required IDs in arbitrary member order,
+  zero and `UINT32_MAX`, missing/duplicate/noncanonical/overflowing IDs, exact
+  correlation on every response, and `null` on malformed envelopes.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. Debug uses 52,080 bytes of Flash and reserves
+  14,736 bytes of RAM; Release uses 34,364 bytes of Flash and reserves 14,736
+  bytes of RAM.
+- Address/undefined-behavior sanitizer execution of all thirteen host suites
+  passes. clangd reports zero errors for all changed production C units, Git
+  whitespace validation passes, and the Release ELF has no unresolved symbols.
+- The reviewed code retains fixed-capacity storage and contains no runtime
+  allocation. USB callbacks remain limited to byte copying and flag updates;
+  parsing, formatting, state transitions, and transport queue progression stay
+  in cooperative main context.
+- All physical USB, overload, execution-time, stack, timebase, and board checks
+  are explicitly pending in `docs/hardware-validation-checklist.md` until the
+  required boards and debug hardware arrive.
 
 ## Milestone 0.12 verification
 
