@@ -150,6 +150,7 @@ add_executable(flight_firmware
     app/usb_command_processor.c
     app/usb_health_response.c
     app/usb_logging_backend.c
+    flight/actuators/motor_command.c
     peripherals/usb/newline_framer.c
     peripherals/usb/usb_cdc_transport.c
     peripherals/usb/usb_descriptors.c
@@ -167,6 +168,7 @@ add_executable(flight_firmware
 
 target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/app"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/actuators"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"

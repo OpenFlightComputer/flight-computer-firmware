@@ -61,6 +61,12 @@ The native `foundation_integration_tests` target verifies complete
 state/fault/health chains for successful and degraded startup, fatal startup,
 ordinary and critical armed-runtime faults, recovery, and registry exhaustion.
 
+The native `motor_command_tests` target verifies invalid initialization,
+atomic four-motor creation, normalized boundaries, exact-stop
+canonicalization, all-zero stop commands, NaN/infinity/out-of-range rejection
+without replacement, invalidation, timeout boundaries, future timestamps, and
+freshness near the 64-bit time limit.
+
 Future hardware-independent tests will cover DShot encoding, receiver parsing,
 mixing, and control algorithms as their milestones are approved.
 

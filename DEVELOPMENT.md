@@ -2,15 +2,15 @@
 
 ## Current phase
 
-Phase 0 — Firmware foundation.
+Phase 1 — DShot actuator subsystem.
 
 ## Current milestone
 
-Milestone 0.13 — Phase 0 integration review: **implemented and awaiting owner review**.
+Milestone 1.1 — motor command model: **implemented and awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 0.12 — structured health reporting. Bounded per-fault diagnostics, health derivation, and completeness indicators are integrated and reviewed.
+Milestone 0.13 — Phase 0 integration review. Request correlation, fault-registry exhaustion policy, cross-module tests, USB ownership, and deferred hardware validation are integrated and reviewed.
 
 ## Current implementation status
 
@@ -137,8 +137,28 @@ Milestone 0.12 — structured health reporting. Bounded per-fault diagnostics, h
 - Added the consolidated Phase 0 review and a hardware validation checklist for
   USB overload/recovery, execution time, stack use, timebase, and lifecycle
   checks once the boards arrive.
+- Added the hardware-independent `flight/actuators` boundary and a four-motor
+  `motor_command_t` containing normalized float throttles, a monotonic timestamp,
+  and explicit validity.
+- Added atomic command creation that validates all four values before replacing
+  the destination, rejects NaN, infinity, and values outside `[0.0f, 1.0f]`, and
+  leaves the prior timestamp unchanged after rejection.
+- Canonicalized the inclusive `0.001f` stop threshold to exact zero so tiny
+  floating-point residue cannot later become a nonzero DShot throttle.
+- Added explicit initialization/invalidation and configurable freshness checks
+  that reject zero timeouts, future timestamps, invalid commands, and elapsed
+  times beyond the inclusive timeout boundary.
+- Added compile-time requirements for IEEE-754-compatible 32-bit single
+  precision, matching the STM32F405 hard-float build, with no dynamic memory,
+  global command, transport, DShot, or hardware dependency.
+- Added comprehensive native tests and `docs/motor-command.md` covering the
+  Phase 1.1 representation, rejection, freshness, floating-point, and ownership
+  contracts.
 
-No motor output, receiver input, sensor access, persistent flight-data logging, or flight-control behavior has been implemented. The `ARMED` lifecycle state has no actuator effect.
+No motor output, receiver input, sensor access, persistent flight-data logging,
+or flight-control behavior has been implemented. `motor_command_t` is currently
+an unconnected value contract, and the `ARMED` lifecycle state still has no
+actuator effect.
 
 ## Known issues and limitations
 
@@ -169,6 +189,12 @@ No motor output, receiver input, sensor access, persistent flight-data logging, 
   outcome, not a normal public reporting path.
 - The default USB VID/PID is explicitly development-only and must be replaced with assigned values before distributing hardware.
 - Physical USB enumeration, input/output, disconnect/reconnect, VBUS sensing, and throughput remain unverified without a connected Flight Computer V1.
+- The `0.001f` normalized stop threshold is a conservative software starting
+  point. Its relationship to actual ESC startup behavior remains a propeller-free
+  Phase 1 bench-validation item.
+- Motor command storage, producer/consumer ownership, timeout enforcement,
+  lifecycle/health gating, and force-stop behavior remain deliberately absent
+  until their approved Phase 1 milestones.
 
 ## Open questions
 
@@ -179,10 +205,33 @@ No motor output, receiver input, sensor access, persistent flight-data logging, 
 
 ## Next step
 
-After owner review and a separately approved commit, Phase 0 is complete. The
-next planning step is Phase 1's DShot actuator subsystem, beginning with the
-arming admission, command timeout, output limits, failsafe response, and final
-motor-output gate before any physical output is enabled.
+After owner review and a separately approved commit, Milestone 1.2 will define
+the generic actuator/motor interface. It will establish initialization,
+submission, force-stop, and ownership contracts without adding DShot, timer,
+DMA, GPIO, USB motor commands, or physical output.
+
+## Milestone 1.1 verification
+
+- The host-development build runs fourteen test executables; all tests pass.
+- Motor command tests cover invalid initialization, all normalized boundaries,
+  atomic four-value creation, inclusive stop-threshold canonicalization,
+  all-zero valid stop, NaN/infinity/out-of-range rejection without replacement,
+  invalid arguments, invalidation, exact timeout boundaries, future timestamps,
+  and safe freshness arithmetic near `UINT64_MAX`.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. The currently unreferenced model is removed by
+  section garbage collection, so Debug remains 52,080 bytes of Flash and 14,736
+  bytes of RAM, while Release remains 34,364 bytes of Flash and 14,736 bytes of
+  RAM.
+- The module contains no STM32/HAL dependency, peripheral behavior, global
+  mutable state, runtime allocation, DShot representation, USB schema, or
+  floating-point formatting.
+- Address/undefined-behavior sanitizer execution of all fourteen host suites
+  passes, clangd reports zero errors for the production module, Git whitespace
+  validation passes, and the Release ELF has no unresolved symbols.
+- Physical verification is not applicable to this value-only milestone; the
+  stop threshold must still be validated with the ESC during the later
+  propeller-free bench milestone.
 
 ## Milestone 0.13 verification
 

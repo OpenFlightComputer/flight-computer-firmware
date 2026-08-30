@@ -2,7 +2,8 @@
 
 This directory contains the operational embedded firmware foundation.
 
-Milestone 0.13 integrates and reviews the Phase 0 foundation:
+Milestone 1.1 adds the first portable flight-layer command while retaining the
+reviewed Phase 0 foundation:
 
 ```text
 application main
@@ -47,6 +48,11 @@ and logging transport progression. USB callbacks only copy bytes or publish
 completion flags. Fault-registry exhaustion forces terminal `FAULT`, while an
 ordinary degradation does not automatically leave `ARMED`.
 
-`app/` contains boot/status orchestration plus health projection, command dispatch, the portable logging core, USB adapters, fault system, system state, Task registry, and cooperative scheduler. It contains no STM32 HAL calls. `peripherals/usb/` owns CDC descriptors, bounded receive/transmit state, newline framing, and the JSON wire protocol. `hardware/boards/flightcomputer_v1/` owns board identity, routed USB pins and OTG FS setup, timebase frequency selection, and initialization policy. `hardware/mcu/stm32f405/` owns F405 startup support, linker layout, HAL configuration, clock implementation, TIM5 register access, and core interrupt handlers.
+`flight/actuators/motor_command` defines four normalized float throttles,
+monotonic timestamp and validity metadata, exact-zero canonicalization, atomic
+validation, and timeout checks. Nothing currently publishes or consumes that
+structure, and no motor GPIO, timer, DMA, or DShot behavior is configured.
+
+`app/` contains boot/status orchestration plus health projection, command dispatch, the portable logging core, USB adapters, fault system, system state, Task registry, and cooperative scheduler. `flight/` owns hardware-independent control data and future flight behavior. Neither contains STM32 HAL calls. `peripherals/usb/` owns CDC descriptors, bounded receive/transmit state, newline framing, and the JSON wire protocol. `hardware/boards/flightcomputer_v1/` owns board identity, routed USB pins and OTG FS setup, timebase frequency selection, and initialization policy. `hardware/mcu/stm32f405/` owns F405 startup support, linker layout, HAL configuration, clock implementation, TIM5 register access, and core interrupt handlers.
 
 The USB hardware, receive/framing pattern, and JSMN parser are adapted closely from the manufacturing tester. The build intentionally excludes its session protocol, component registry, component drivers, acceptance policy, and operator workflow.

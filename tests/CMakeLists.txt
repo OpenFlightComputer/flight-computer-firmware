@@ -131,6 +131,24 @@ target_compile_options(foundation_integration_tests PRIVATE
 
 add_test(NAME foundation_integration COMMAND foundation_integration_tests)
 
+add_executable(motor_command_tests
+    motor_command_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+)
+
+target_include_directories(motor_command_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+)
+
+target_compile_options(motor_command_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME motor_command COMMAND motor_command_tests)
+
 add_executable(logging_tests
     logging_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"

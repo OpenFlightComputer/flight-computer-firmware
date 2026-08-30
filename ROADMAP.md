@@ -16,15 +16,30 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 10. USB CDC logging backend — complete.
 11. USB newline-delimited JSON command foundation — complete.
 12. Structured health reporting — complete.
-13. Integration review — implemented; awaiting owner review.
+13. Integration review — complete.
 
 Phase 0 does not control motors, decode receiver input, or use sensor data for flight.
+
+## Phase 1 — DShot actuator subsystem
+
+1. Motor command model — implemented; awaiting owner review.
+2. Generic actuator/motor interface.
+3. Hardware-independent DShot packet encoder.
+4. DShot timing representation and rate selection.
+5. TIM8/GPIO/DMA board mapping review.
+6. Final lifecycle, health, freshness, and force-stop safety gate.
+7. Single-channel timer/DMA output.
+8. Four-channel synchronized output.
+9. USB manual motor commands through the shared command model.
+10. Propeller-free ESC and motor bench validation.
+
+Phase 1 does not route receiver data to motors or implement stabilization.
 
 ## Later phases
 
 | Phase | Objective |
 | --- | --- |
-| 1 | DShot actuator subsystem controlled by safe USB bench commands |
+| 1 | DShot actuator subsystem controlled by safe USB bench commands — in progress |
 | 2 | ELRS/CRSF receiver input, normalization, freshness, and diagnostics |
 | 3 | Open-loop receiver-to-motor integration and first controlled physical response |
 | 4 | BMI270-based estimation and stabilized flight, followed by optional BMP388 use |

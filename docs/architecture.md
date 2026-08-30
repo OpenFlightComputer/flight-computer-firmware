@@ -116,6 +116,13 @@ startup and runtime state/fault/health chains, while physical execution-time,
 stack, USB, and board evidence remains tracked in
 `docs/hardware-validation-checklist.md`.
 
+Milestone 1.1 begins `flight/` with a normalized four-motor value snapshot.
+The model validates and timestamps complete commands but owns no global state,
+transport, lifecycle decision, DShot representation, or hardware output. This
+keeps future USB and control producers on one command type while leaving the
+final actuator safety gate and peripheral/hardware implementations in their
+reviewed later milestones. See `docs/motor-command.md`.
+
 ## Separation from manufacturing test
 
 The manufacturing-test application proves board capabilities through an operator-driven, single-active-component workflow. Flight firmware has different lifecycle, timing, fault, safety, and data-ownership requirements. It may reuse verified clock, linker, startup, USB, and peripheral knowledge, but it will not inherit the tester's application loop, component-test registry, session protocol, or acceptance policy.
