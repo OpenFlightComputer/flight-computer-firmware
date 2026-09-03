@@ -70,11 +70,23 @@ The tester pins STM32CubeF4 `v1.28.3` at commit `94cae6e83f00e276a11957e7833c01a
 | Allocation-free JSON parser | `firmware/manufacturing_test/protocol/third_party/jsmn.h` | Reused with its MIT notice; flight firmware defines an independent strict command envelope |
 | USB descriptors | `firmware/manufacturing_test/protocol/usb_descriptors.c` | Reused with a distinct flight-firmware product identity |
 
-The working path uses PA11/PA12 as OTG FS DM/DP on AF10, PA9 for VBUS sensing, Full-Speed CDC ACM, static ST USB class storage, a 512-byte ISR-to-main receive ring, bounded complete-line and transmit queues, and parsing/transmit scheduling outside the interrupt. This design is relevant to later flight USB and logging work because slow computer I/O never blocks inside the producer call path.
+The original working path used PA11/PA12 as OTG FS DM/DP on AF10 and PA9 for
+VBUS sensing, Full-Speed CDC ACM, static ST USB class storage, a 512-byte
+ISR-to-main receive ring, bounded complete-line and transmit queues, and
+parsing/transmit scheduling outside the interrupt. The later physical acceptance
+run found that the V1 PA9 divider prevents enumeration and must be disabled in
+the peripheral. The ownership and bounded-I/O design remains relevant because
+slow computer I/O never blocks inside the producer call path.
 
 ### Knowledge to retain without implementing now
 
-The tester also establishes current board selections and low-level implementations for BMI270 over SPI3, BMP388 over I2C2, microSD over SPI1, status LEDs, and WS2812 timer/DMA output. Milestone 0.3 records those mappings in `docs/flightcomputer-v1-hardware.md` without copying or executing sensor, storage, LED, DShot, receiver, or flight-control code.
+The tester establishes current board selections and low-level implementations
+for BMI270 over SPI3, BMP388 over I2C2, and microSD over SPI1. Physical bring-up
+also confirmed that the V1 discrete LEDs are unusable and that the accepted
+WS2812 path is DWT-timed GPIO rather than the unsuccessful timer/DMA attempt.
+`docs/flightcomputer-v1-hardware.md` records the map and
+`docs/v1-bringup-carryover.md` assigns each finding to its flight milestone
+without copying tester application policy.
 
 ### Tester architecture deliberately not reused
 

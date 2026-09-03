@@ -67,6 +67,20 @@ canonicalization, all-zero stop commands, NaN/infinity/out-of-range rejection
 without replacement, invalidation, timeout boundaries, future timestamps, and
 freshness near the 64-bit time limit.
 
+The native `motor_output_tests` target uses an injected fake backend to verify
+complete callback validation, backend and initial-stop failure handling,
+descriptor copying, command revalidation/canonicalization, distinct facade
+storage, accepted-copy lifetime, busy/error/unknown mapping, and force-stop's
+accepted-or-error contract.
+
+The native `board_usb_tests` target verifies the explicit VBUS-mode semantics
+and that Flight Computer V1 selects assume-present behavior rather than its
+defective PA9 sensing path.
+
+The native `uint64_decimal_tests` target verifies zero, decimal boundaries,
+`UINT64_MAX`, bounded zero padding, invalid arguments, and exact-capacity
+rejection without any formatted long-long I/O.
+
 Future hardware-independent tests will cover DShot encoding, receiver parsing,
 mixing, and control algorithms as their milestones are approved.
 

@@ -93,6 +93,16 @@ static void response_builders_are_exact_and_bounded(void)
                                           sizeof(output), &length));
     assert(length == sizeof(status) - 1U);
     assert(memcmp(output, status, length) == 0);
+    assert(usb_json_build_status_response("DISARMED",
+                                          UINT32_MAX,
+                                          UINT64_MAX,
+                                          output,
+                                          sizeof(output),
+                                          &length));
+    assert(strstr(output,
+                  "\"request_id\":4294967295") != NULL);
+    assert(strstr(output,
+                  "\"uptime_us\":18446744073709551615}\n") != NULL);
     assert(usb_json_build_transition_response(USB_JSON_COMMAND_ARM, 7U, true,
                                               "ARMED", NULL, output,
                                               sizeof(output), &length));

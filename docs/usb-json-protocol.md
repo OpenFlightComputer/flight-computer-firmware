@@ -94,6 +94,13 @@ transport reports an error. This preserves response order without waiting or
 allocating memory. The same 768-byte transmit-entry bound holds a worst-case
 escaped 95-character log message.
 
+The manufacturing acceptance run independently exposed both parts of this
+contract as important: output state must not advance without retained storage
+when transport admission is busy, and target newlib-nano cannot be assumed to
+format `%llu` correctly. Response retention is already implemented here. The
+shared bounded `uint64_decimal_format()` now serializes uptime, timestamps, and
+sequences without depending on target long-long printf support.
+
 ## Reused tester implementation
 
 The newline-framer algorithm, JSMN parser, raw receive ring, completed-line
@@ -108,4 +115,5 @@ Host tests cover fragmentation, CRLF, exact-size and oversized lines, recovery,
 strict parsing, response bytes, transition acceptance/rejection, pending
 response retry, and JSON log escaping. Physical enumeration, packet delivery,
 disconnect/reconnect, overflow under a real host, and interactive commands
-still require a connected Flight Computer V1.
+still require a connected Flight Computer V1 running the flight image with the
+V1 VBUS workaround.

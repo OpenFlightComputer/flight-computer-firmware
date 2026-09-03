@@ -118,6 +118,10 @@ static void worst_case_message_fits_one_transport_entry(void)
     assert(logging_drain_once() == LOGGING_DRAIN_ACCEPTED);
     assert(captured_length < USB_CDC_TRANSMIT_CAPACITY);
     assert(strstr((const char *)captured_line,
+                  "\"timestamp_us\":18446744073709551615") != NULL);
+    assert(strstr((const char *)captured_line,
+                  "\"sequence\":18446744073709551615") != NULL);
+    assert(strstr((const char *)captured_line,
                   "\"truncated\":true}\n") != NULL);
 }
 

@@ -1,12 +1,18 @@
 #include "usbd_core.h"
 #include "usbd_cdc.h"
 
+#include "board_definition.h"
 #include "stm32f4xx_hal.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
 static PCD_HandleTypeDef openflightcomputer_usb_pcd;
+
+_Static_assert(
+    (FLIGHTCOMPUTER_V1_USB_VBUS_MODE == BOARD_USB_VBUS_MODE_ASSUME_PRESENT) ||
+        (FLIGHTCOMPUTER_V1_USB_VBUS_MODE == BOARD_USB_VBUS_MODE_SENSE_INPUT),
+    "Flight Computer V1 must select a supported USB VBUS mode");
 
 static uint32_t usb_class_storage[
     (sizeof(USBD_CDC_HandleTypeDef) + sizeof(uint32_t) - 1U) / sizeof(uint32_t)
@@ -53,12 +59,14 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *pcd)
     gpio.Alternate = GPIO_AF10_OTG_FS;
     HAL_GPIO_Init(GPIOA, &gpio);
 
-    gpio.Pin = GPIO_PIN_9;
-    gpio.Mode = GPIO_MODE_INPUT;
-    gpio.Pull = GPIO_NOPULL;
-    gpio.Speed = GPIO_SPEED_FREQ_LOW;
-    gpio.Alternate = 0U;
-    HAL_GPIO_Init(GPIOA, &gpio);
+    if (board_usb_vbus_sensing_enabled(FLIGHTCOMPUTER_V1_USB_VBUS_MODE)) {
+        gpio.Pin = GPIO_PIN_9;
+        gpio.Mode = GPIO_MODE_INPUT;
+        gpio.Pull = GPIO_NOPULL;
+        gpio.Speed = GPIO_SPEED_FREQ_LOW;
+        gpio.Alternate = 0U;
+        HAL_GPIO_Init(GPIOA, &gpio);
+    }
 
     __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
 
@@ -74,7 +82,10 @@ void HAL_PCD_MspDeInit(PCD_HandleTypeDef *pcd)
 
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
     __HAL_RCC_USB_OTG_FS_CLK_DISABLE();
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_9 | GPIO_PIN_11 | GPIO_PIN_12);
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
+    if (board_usb_vbus_sensing_enabled(FLIGHTCOMPUTER_V1_USB_VBUS_MODE)) {
+        HAL_GPIO_DeInit(GPIOA, GPIO_PIN_9);
+    }
 }
 
 void HAL_PCD_SetupStageCallback(PCD_HandleTypeDef *pcd)
@@ -151,7 +162,9 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *device)
     openflightcomputer_usb_pcd.Init.phy_itface = PCD_PHY_EMBEDDED;
     openflightcomputer_usb_pcd.Init.Sof_enable = 0U;
     openflightcomputer_usb_pcd.Init.speed = PCD_SPEED_FULL;
-    openflightcomputer_usb_pcd.Init.vbus_sensing_enable = 1U;
+    openflightcomputer_usb_pcd.Init.vbus_sensing_enable =
+        board_usb_vbus_sensing_enabled(FLIGHTCOMPUTER_V1_USB_VBUS_MODE) ? 1U
+                                                                       : 0U;
 
     openflightcomputer_usb_pcd.pData = device;
     device->pData = &openflightcomputer_usb_pcd;

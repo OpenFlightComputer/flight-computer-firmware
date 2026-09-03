@@ -10,8 +10,13 @@ app -> flight -> peripherals -> hardware/boards -> hardware/mcu
 
 The arrows indicate allowed knowledge toward increasingly hardware-specific implementation. A module may call a lower layer directly when an intermediate layer adds no useful meaning.
 
+`common/` sits below every layer in this chain. It contains only small,
+allocation-free, hardware-independent utilities and may not depend upward on
+application, flight, peripheral, board, MCU, or vendor code.
+
 | Area | Owns | Does not own |
 | --- | --- | --- |
+| `common/` | Bounded generic helpers such as unsigned-64 decimal conversion | Application policy, protocols, board choices, or hardware access |
 | `app/` | Startup orchestration, scheduler integration, system state, fault coordination | Device protocols or routed pins |
 | `flight/` | Hardware-independent control input, mixing, estimation, and control policy | STM32 HAL or PCB routing |
 | `peripherals/` | Semantic transports and external-device protocols such as USB CDC, DShot, CRSF, BMI270, and BMP388 | Board pin and peripheral-instance selection |
@@ -122,6 +127,16 @@ transport, lifecycle decision, DShot representation, or hardware output. This
 keeps future USB and control producers on one command type while leaving the
 final actuator safety gate and peripheral/hardware implementations in their
 reviewed later milestones. See `docs/motor-command.md`.
+
+Milestone 1.2 adds an instance-based facade in `flight/actuators` whose injected
+backend callbacks form the downward dependency boundary. The facade copies the
+backend descriptor and passes a revalidated facade-owned complete command;
+accepted asynchronous backends must copy before returning. Force-stop is a
+separate accepted-or-error operation so it cannot be delayed by normal busy
+backpressure. A future application-owned adapter will bridge this flight type to
+the selected lower peripheral API, preventing DShot from depending upward on
+`flight/`. No production backend or safety authorization is connected. See
+`docs/motor-output.md`.
 
 ## Separation from manufacturing test
 

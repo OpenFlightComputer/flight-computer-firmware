@@ -16,6 +16,8 @@ option(
     ${CMAKE_CROSSCOMPILING}
 )
 
+add_subdirectory(firmware/common)
+
 if(OPENFLIGHTCOMPUTER_BUILD_FIRMWARE)
     add_subdirectory(firmware)
 endif()

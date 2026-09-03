@@ -10,9 +10,11 @@ bounded command responses.
 The hardware and STM32 USB behavior is adapted closely from the manufacturing
 tester. Both implementations use:
 
-- PA11/PA12 as OTG FS DM/DP on AF10 and PA9 for VBUS sensing;
+- PA11/PA12 as OTG FS DM/DP on AF10; the later physical acceptance run proved
+  that V1 must disable peripheral VBUS sensing because its PA9 divider voltage
+  is too low;
 - the 48 MHz PLLQ clock already established by board initialization;
-- the embedded Full-Speed PHY, four endpoints, no USB DMA, and VBUS sensing;
+- the embedded Full-Speed PHY, four endpoints, and no USB DMA;
 - RX FIFO `0x80` words and TX FIFOs `0x40`, `0x60`, and `0x20` words;
 - the official STM32CubeF4 USB Device CDC class;
 - static class storage in place of the library's allocation hooks;
@@ -124,11 +126,21 @@ manufacturing tester's development PID `0x4001`. CMake refuses to present the
 default identity as distribution-approved. Assigned VID/PID values are still
 required before hardware distribution.
 
+## V1 VBUS workaround
+
+The V1 board's equal 100 kOhm VBUS divider produced about 1 V at PA9. The
+manufacturing firmware failed to enumerate while OTG hardware VBUS sensing was
+enabled and enumerated after setting `vbus_sensing_enable` to `0U`. The flight
+firmware now expresses this as an explicit board capability: V1 selects
+`BOARD_USB_VBUS_MODE_ASSUME_PRESENT`, while a corrected V2 can select
+`BOARD_USB_VBUS_MODE_SENSE_INPUT`. USB transport and application code are
+independent of that choice.
+
 ## Physical verification boundary
 
 Host tests validate exact JSON backend formatting/escaping,
 accepted/busy/error mapping, retry behavior, newline framing, parsing, and
 command dispatch. Debug and Release builds validate complete STM32 USB linkage
-and the interrupt vector. Enumeration, VBUS behavior, CDC transmission and
-receive, disconnect/reconnect, and sustained physical throughput still require
-a connected Flight Computer V1 and host.
+and the interrupt vector. Flight-image enumeration with the V1 workaround, CDC
+transmission and receive, disconnect/reconnect, and sustained physical
+throughput still require a connected Flight Computer V1 and host.

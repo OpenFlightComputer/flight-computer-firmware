@@ -29,6 +29,16 @@ The review also cross-checked these public manufacturing-test sources:
 - `firmware/manufacturing_test/components/status_leds/status_led_test.c`
 - `firmware/manufacturing_test/components/rgb_led/rgb_led_test.c`
 
+## Physical acceptance evidence
+
+The later V1 manufacturing bring-up physically validated SWD programming and
+reset, the 16 MHz HSE/168 MHz system/48 MHz USB clock tree, USB CDC with the V1
+workaround below, PA1 WS2812 output, BMI270 SPI3 communication, BMP388 I2C2
+communication, and microSD detect/initialization/write/read/checksum/cleanup.
+The accepted tester state and exact carryover boundaries are recorded in
+`docs/v1-bringup-carryover.md`. This does not by itself validate those paths in
+the flight-firmware image.
+
 ## Installed hardware
 
 | Reference | Part/value | Firmware role |
@@ -49,14 +59,14 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 
 | MCU pin | Net | Direction | Semantic role | Peripheral/mode | Selection status |
 | --- | --- | --- | --- | --- | --- |
-| PA1 | `WS2812_DI` | Output | RGB LED data | TIM2_CH2 AF1; DMA1 Stream 6 Channel 3 | Implemented by tester; not initialized here |
+| PA1 | `WS2812_DI` | Output | RGB LED data | GPIO/DWT accepted; TIM2_CH2 AF1 remains a candidate | Physical GPIO waveform worked; timer/DMA attempt did not |
 | PA2 | `GPS_RX` | Output | MCU-to-GPS serial | USART2_TX AF7 | Unambiguous intended UART function |
 | PA3 | `GPS_TX` | Input | GPS-to-MCU serial | USART2_RX AF7 | Unambiguous intended UART function |
 | PA4 | `VBAT_ADC` | Analog input | Battery-voltage sense | ADC1_IN4 | Routed; conversion policy deferred |
 | PA5 | `SD_SCK` | Output | microSD SPI clock | SPI1_SCK AF5 | Implemented by tester; not initialized here |
 | PA6 | `SD_MISO` | Input | microSD data to MCU | SPI1_MISO AF5 | Implemented by tester; not initialized here |
 | PA7 | `SD_MOSI` | Output | microSD data from MCU | SPI1_MOSI AF5 | Implemented by tester; not initialized here |
-| PA9 | unnamed VBUS divider net | Input | USB VBUS sense | OTG_FS_VBUS | Active in Milestone 0.10; adapted from tester |
+| PA9 | unnamed VBUS divider net | Input | USB VBUS sense | V1 sensing unusable due divider voltage | Pin exists, but peripheral sensing must be disabled on V1 |
 | PA11 | `USB_DN` | Bidirectional | USB data minus | OTG_FS_DM AF10 | Active in Milestone 0.10; adapted from tester |
 | PA12 | `USB_DP` | Bidirectional | USB data plus | OTG_FS_DP AF10 | Active in Milestone 0.10; adapted from tester |
 | PA13 | `SWDIO` | Bidirectional | SWD data | JTMS/SWDIO AF0 | Fixed debug function |
@@ -69,10 +79,10 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 | PB9 | `GPS_PPS` | Input | GPS pulse-per-second | GPIO/EXTI or timer capture | Selection unresolved |
 | PB10 | `I2C_SCL` | Bidirectional open-drain | BMP388 clock | I2C2_SCL AF4 | Implemented by tester; not initialized here |
 | PB11 | `I2C_SDA` | Bidirectional open-drain | BMP388 data | I2C2_SDA AF4 | Implemented by tester; not initialized here |
-| PB13 | `LED_RED` | Output | Red status LED | GPIO | Implemented by tester; electrical concern remains |
-| PB14 | `LED_GREEN` | Output | Green status LED | GPIO | Implemented by tester; electrical concern remains |
+| PB13 | `LED_RED` | Output | Red status LED | GPIO | Physically confirmed inoperable on V1 |
+| PB14 | `LED_GREEN` | Output | Green status LED | GPIO | Physically confirmed inoperable on V1 |
 | PC4 | `SD_CS` | Output | microSD chip select | GPIO | Implemented by tester; not initialized here |
-| PC5 | `SD_DET` | Input | microSD card detect | GPIO/EXTI | Tester provisionally treats as active-low |
+| PC5 | `SD_DET` | Input | microSD card detect | GPIO/EXTI | Physically confirmed active-low |
 | PC6 | `ESC_M4` | Output | ESC/motor channel 4 | TIM8_CH1 AF3 candidate | Timer/DMA selection deferred to Phase 1 |
 | PC7 | `ESC_M3` | Output | ESC/motor channel 3 | TIM8_CH2 AF3 candidate | Timer/DMA selection deferred to Phase 1 |
 | PC8 | `ESC_M2` | Output | ESC/motor channel 2 | TIM8_CH3 AF3 candidate | Timer/DMA selection deferred to Phase 1 |
@@ -96,29 +106,30 @@ Most selections below are established by routing plus the manufacturing-test imp
 | --- | --- | --- |
 | System clock | 16 MHz HSE; PLLM 16, PLLN 336, PLLP 2, PLLQ 7 | PH0, PH1 |
 | Monotonic timebase | TIM5, internal 1 MHz free-running counter | No routed pin or DMA stream |
-| USB | OTG FS AF10 with VBUS sensing | PA9, PA11, PA12 |
+| USB | OTG FS AF10 on PA11/PA12; hardware VBUS sensing disabled on V1 | PA11, PA12; PA9 divider is defective for sensing |
 | microSD | SPI1 AF5 plus GPIO chip select/detect | PA5, PA6, PA7, PC4, PC5 |
 | BMI270 | SPI3 AF6 plus GPIO chip select | PB3, PB4, PB5, PD2 |
 | BMP388 | I2C2 AF4 | PB10, PB11 |
 | GPS serial | USART2 AF7 | PA2, PA3 |
-| WS2812 | TIM2_CH2 AF1; DMA1 Stream 6 Channel 3 | PA1 |
+| WS2812 | Accepted tester uses DWT-timed GPIO; timer/DMA remains unresolved | PA1 |
 | SWD | STM32 fixed SWD functions plus NRST | PA13, PA14, NRST |
 
 ## Deliberately unresolved decisions
 
 - PC10/PC11 can map to UART4 or USART3. Phase 2 will select the receiver backend after checking protocol, DMA, interrupt, and other UART requirements.
-- PC6–PC9 form a natural TIM8 channel group, but the DShot rate, timer setup, DMA mapping, and synchronization strategy belong to Phase 1 Milestones 1.4–1.5.
+- PC6–PC9 form a natural TIM8 channel group, but the DShot rate, timer setup, DMA mapping, channel order, and synchronization strategy belong to Phase 1 Milestones 1.5–1.6 and require physical validation.
 - PB9 may use a normal EXTI input or timer capture for GPS PPS. Phase 6 will choose based on timing requirements.
 - BMI270 interrupt routing and EXTI selection belong to the sensor timing milestone.
 - ADC sample timing and scaling for PA4/PB0 are not yet specified.
 
-## Hardware concerns retained for validation
+## Confirmed V1 limitations and retained validation
 
-- D4/D5 appear reversed relative to the standard KiCad LED symbol: their annotated anodes connect toward ground and cathodes toward the MCU through resistors. Treat status LED polarity and operability as unresolved electrical behavior.
-- The WS2812 is powered from 5 V and driven directly by 3.3 V. Its fitted-device threshold appears compatible, but waveform and noise margin still require physical validation.
-- PC5 card detect is provisionally active-low from the socket and pull-up topology; confirm with the physical board.
+- D4/D5 are physically confirmed inoperable on V1 because of their board connectivity. GPIO polarity inversion cannot repair them; do not use them for safety state.
+- The equal 100 kOhm VBUS divider presents only about 1 V at PA9. OTG FS did not enumerate with VBUS sensing enabled and did enumerate when it was disabled. This is a V1-only firmware workaround; correct the topology and re-enable sensing on V2.
+- The WS2812 is powered from about 4.87 V and driven directly by 3.3 V. It worked on the first board, but logic margin is not yet characterized. The accepted DWT/GPIO implementation masks interrupts for roughly 30 microseconds; its flight-time latency is not yet accepted.
+- PC5 card detect is physically confirmed active-low.
 - The hardware working tree contains owner changes. The hashes above identify the exact reviewed design files without treating the Git commit alone as complete provenance.
 
 ## Current initialization scope
 
-At boot, `board_initialize()` initializes the STM32 HAL and system clock, verifies a 168 MHz core clock, and starts internal TIM5 as the monotonic timebase. Milestone 0.10 then initializes OTG FS CDC logging using PA9, PA11, and PA12. No other routed peripheral listed above is configured. Each remaining external interface will be activated only in its approved milestone through the appropriate board and MCU capability boundary.
+At boot, `board_initialize()` initializes the STM32 HAL and system clock, verifies a 168 MHz core clock, and starts internal TIM5 as the monotonic timebase. Milestone 0.10 then initializes OTG FS CDC logging on PA11 and PA12. The V1 board definition selects assume-present VBUS behavior, so PA9 is not configured and OTG hardware VBUS sensing is disabled. A future corrected board can select sense-input behavior without changing the transport or application. No other routed peripheral listed above is configured. Each remaining external interface will be activated only in its approved milestone through the appropriate board and MCU capability boundary.

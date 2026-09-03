@@ -1,6 +1,7 @@
 #include "logging.h"
 
 #include "logging_config.h"
+#include "uint64_decimal.h"
 
 #include <limits.h>
 #include <stdarg.h>
@@ -340,6 +341,9 @@ logging_format_result_t logging_format_record(const log_record_t *record,
                                               size_t output_capacity,
                                               size_t *output_length)
 {
+    char sequence[UINT64_DECIMAL_BUFFER_CAPACITY];
+    char timestamp[UINT64_DECIMAL_BUFFER_CAPACITY];
+    size_t decimal_length;
     int written;
 
     if ((record == NULL) || (output == NULL) || (output_capacity == 0U) ||
@@ -350,20 +354,37 @@ logging_format_result_t logging_format_record(const log_record_t *record,
         return LOGGING_FORMAT_INVALID_ARGUMENT;
     }
 
+    if (!uint64_decimal_format(record->sequence,
+                               10U,
+                               sequence,
+                               sizeof(sequence),
+                               &decimal_length)) {
+        *output_length = 0U;
+        return LOGGING_FORMAT_ERROR;
+    }
+
     if (record->timestamp_valid) {
+        if (!uint64_decimal_format(record->timestamp_us,
+                                   10U,
+                                   timestamp,
+                                   sizeof(timestamp),
+                                   &decimal_length)) {
+            *output_length = 0U;
+            return LOGGING_FORMAT_ERROR;
+        }
         written = snprintf(output,
                            output_capacity,
-                           "[%010llu] #%010llu %-5s %-9s %s\n",
-                           (unsigned long long)record->timestamp_us,
-                           (unsigned long long)record->sequence,
+                           "[%s] #%s %-5s %-9s %s\n",
+                           timestamp,
+                           sequence,
                            logging_level_name(record->level),
                            logging_module_name(record->module),
                            record->message);
     } else {
         written = snprintf(output,
                            output_capacity,
-                           "[----------] #%010llu %-5s %-9s %s\n",
-                           (unsigned long long)record->sequence,
+                           "[----------] #%s %-5s %-9s %s\n",
+                           sequence,
                            logging_level_name(record->level),
                            logging_module_name(record->module),
                            record->message);

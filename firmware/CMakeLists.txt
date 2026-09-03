@@ -151,6 +151,7 @@ add_executable(flight_firmware
     app/usb_health_response.c
     app/usb_logging_backend.c
     flight/actuators/motor_command.c
+    flight/actuators/motor_output.c
     peripherals/usb/newline_framer.c
     peripherals/usb/usb_cdc_transport.c
     peripherals/usb/usb_descriptors.c
@@ -176,7 +177,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 
-target_link_libraries(flight_firmware PRIVATE stm32cube_f4)
+target_link_libraries(flight_firmware PRIVATE firmware_common stm32cube_f4)
 
 target_compile_options(flight_firmware PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-Wall>

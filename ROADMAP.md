@@ -22,16 +22,19 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
 
 ## Phase 1 — DShot actuator subsystem
 
-1. Motor command model — implemented; awaiting owner review.
-2. Generic actuator/motor interface.
-3. Hardware-independent DShot packet encoder.
-4. DShot timing representation and rate selection.
-5. TIM8/GPIO/DMA board mapping review.
-6. Final lifecycle, health, freshness, and force-stop safety gate.
-7. Single-channel timer/DMA output.
-8. Four-channel synchronized output.
-9. USB manual motor commands through the shared command model.
-10. Propeller-free ESC and motor bench validation.
+1. Motor command model — complete.
+2. Generic actuator/motor interface — implemented; awaiting owner review.
+3. V1 bring-up carryover and flight-firmware smoke test — in progress: the
+   board-selected VBUS mode and bounded 64-bit formatting are implemented;
+   build traceability and physical foundation-image validation remain.
+4. Hardware-independent DShot packet encoder.
+5. TIM8/GPIO/DMA board mapping review against the physical V1.
+6. DShot timing representation and rate selection.
+7. Final lifecycle, health, freshness, and force-stop safety gate.
+8. Single-channel timer/DMA output.
+9. Four-channel synchronized output.
+10. USB manual motor commands through the shared command model.
+11. Propeller-free ESC and motor bench validation.
 
 Phase 1 does not route receiver data to motors or implement stabilization.
 
@@ -56,6 +59,16 @@ is not required for first flight and is not part of the current deterministic
 lifecycle state machine.
 
 Simulation, GUI configuration, autonomous navigation, computer vision, a bootloader, and any RTOS migration are later evidence-driven work rather than part of the current foundation.
+
+The manufacturing acceptance run provides implementation evidence that future
+milestones must carry over deliberately: BMI270 SPI3 and BMP388 I2C2 settings,
+sensor timestamps/freshness and recovery policy, active-low microSD detect and
+the proven two-speed SPI initialization sequence, and bounded/non-blocking
+storage. The V1 discrete red/green LEDs are unusable and must not become safety
+indicators. WS2812 output is restricted to non-flight operation until its
+approximately 30 microsecond interrupt-masking implementation is accepted by
+timing measurement or replaced by a proven timer/DMA backend. Details and
+evidence are tracked in `docs/v1-bringup-carryover.md`.
 
 Once independently versioned host software such as a GUI must communicate with
 older deployed firmware, define protocol-version identifiers, compatibility

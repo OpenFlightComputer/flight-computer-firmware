@@ -6,11 +6,16 @@ Phase 1 — DShot actuator subsystem.
 
 ## Current milestone
 
-Milestone 1.1 — motor command model: **implemented and awaiting owner review**.
+Milestone 1.3 — V1 bring-up carryover and flight-firmware smoke test:
+**software compatibility fixes implemented; build traceability and physical
+validation remain**. Milestone 1.2 is also implemented in the current review
+set and has not yet been committed.
 
 ## Last completed milestone
 
-Milestone 0.13 — Phase 0 integration review. Request correlation, fault-registry exhaustion policy, cross-module tests, USB ownership, and deferred hardware validation are integrated and reviewed.
+Milestone 1.1 — motor command model. Atomic normalized four-motor commands,
+floating-point validation, exact-stop canonicalization, invalidation, and
+freshness checks are integrated and reviewed.
 
 ## Current implementation status
 
@@ -136,7 +141,7 @@ Milestone 0.13 — Phase 0 integration review. Request correlation, fault-regist
   recovery, health projection, and overflow behavior.
 - Added the consolidated Phase 0 review and a hardware validation checklist for
   USB overload/recovery, execution time, stack use, timebase, and lifecycle
-  checks once the boards arrive.
+  checks on the flight image. Boards are now available; the checks remain open.
 - Added the hardware-independent `flight/actuators` boundary and a four-motor
   `motor_command_t` containing normalized float throttles, a monotonic timestamp,
   and explicit validity.
@@ -154,19 +159,65 @@ Milestone 0.13 — Phase 0 integration review. Request correlation, fault-regist
 - Added comprehensive native tests and `docs/motor-command.md` covering the
   Phase 1.1 representation, rejection, freshness, floating-point, and ownership
   contracts.
+- Added an instance-based `motor_output_t` facade with injected initialize,
+  complete-command submit, and force-stop backend callbacks, without choosing a
+  physical output technology.
+- Required backend initialization followed by an independently accepted initial
+  force-stop before the facade becomes usable; failures and unknown results
+  leave it uninitialized.
+- Copied the successfully initialized backend descriptor while retaining only
+  its explicitly lifetime-bound opaque context pointer.
+- Revalidated each public command into facade-owned canonical storage before
+  submission, so the backend never receives the caller's pointer and manually
+  modified NaN, infinity, range, or near-zero values cannot bypass the command
+  contract.
+- Defined accepted submission to require a synchronous backend-owned copy,
+  while busy/error results retain nothing. Complete four-motor snapshots avoid
+  partially updated motor sets.
+- Kept force-stop separate from `motor_command_t` with accepted-or-error backend
+  semantics: it cannot report normal backpressure and must override pending
+  demand within each future backend.
+- Added fake-backend host tests and `docs/motor-output.md` covering initialization,
+  descriptor/context lifetime, caller/backend storage ownership, result mapping,
+  complete-command submission, and force-stop limits.
+- Kept the future lower DShot peripheral independent of flight types: an
+  application-owned adapter will implement this backend contract while calling
+  the selected peripheral API.
+- Incorporated the completed V1 manufacturing acceptance evidence into the
+  roadmap without treating tester success as flight-image validation.
+- Identified two mandatory Milestone 1.3 compatibility fixes: disable broken
+  V1 hardware VBUS sensing and replace every embedded `%llu` path with bounded
+  manual unsigned-64 decimal conversion.
+- Added an explicit board-level USB VBUS mode. V1 selects `ASSUME_PRESENT`, so
+  PA9 is neither initialized nor deinitialized and the OTG peripheral receives
+  `vbus_sensing_enable = 0U`; a corrected V2 can select `SENSE_INPUT` without
+  changing USB transport or application code.
+- Added the allocation-free shared `uint64_decimal_format()` utility with an
+  optional bounded zero-padded width and migrated status uptime, health fault
+  timestamps, USB log timestamps/sequences, and canonical text logs away from
+  long-long printf formatting.
+- Recorded physically proven clocks, USB, sensor, microSD, and WS2812 behavior;
+  confirmed unusable discrete LEDs; unresolved motor/receiver routing; and the
+  phase that owns each future carryover in `docs/v1-bringup-carryover.md`.
 
 No motor output, receiver input, sensor access, persistent flight-data logging,
-or flight-control behavior has been implemented. `motor_command_t` is currently
-an unconnected value contract, and the `ARMED` lifecycle state still has no
-actuator effect.
+or flight-control behavior has been implemented. `motor_command_t` and the
+generic output facade remain unconnected contracts with no production backend,
+and the `ARMED` lifecycle state still has no actuator effect.
 
 ## Known issues and limitations
 
-- No ST-Link was connected during Milestone 0.2, as confirmed by STM32CubeProgrammer 2.23.0. SWD programming, reset, HSE startup, and debugger-visible runtime values therefore remain physical-board checks.
-- The hardware repository has owner changes in its working tree. They were inspected read-only and remain untouched.
+- Milestone 0.2 had no board evidence, but the later manufacturing acceptance
+  run has now proven SWD programming/reset and the HSE/PLL clock tree. The
+  flight image itself still needs the Milestone 1.3 smoke test.
+- The hardware repository was not available in the current workspace for this
+  plan update. The prior reviewed hashes remain the design baseline; physical
+  findings and tester commits provide the new evidence.
 - The cooperative scheduler intentionally busy-polls when no task is ready. A future evidence-driven power/idle policy may sleep, but sleeping is not required for the current flight-control foundation.
 - No GPIO or routed peripheral listed in the V1 hardware map is initialized by Milestone 0.4. TIM5 runs internally without timer pins or DMA.
-- Physical verification of the 1 MHz TIM5 rate and continuous operation through a real 71.58-minute hardware wrap remains pending because no board/ST-Link session was available during implementation.
+- Physical verification of the flight image's 1 MHz TIM5 rate and continuous
+  operation through a real or accelerated 71.58-minute hardware wrap remains
+  pending.
 - Correct 64-bit extension assumes global interrupts are not continuously disabled for a complete 71.58-minute TIM5 wrap period; ordinary bounded critical sections are many orders of magnitude shorter.
 - Receiver UART, motor timer/DMA, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
@@ -188,27 +239,78 @@ actuator effect.
   terminal `FAULT`; `UNKNOWN` remains only a defensive inconsistent-snapshot
   outcome, not a normal public reporting path.
 - The default USB VID/PID is explicitly development-only and must be replaced with assigned values before distributing hardware.
-- Physical USB enumeration, input/output, disconnect/reconnect, VBUS sensing, and throughput remain unverified without a connected Flight Computer V1.
+- The tester proved USB enumeration only after disabling the defective V1 VBUS
+  sense path. The flight source now selects that behavior through a board mode
+  and no longer uses long-long printf formatting, but flight-image USB,
+  disconnect/reconnect, and throughput validation remain pending.
 - The `0.001f` normalized stop threshold is a conservative software starting
   point. Its relationship to actual ESC startup behavior remains a propeller-free
   Phase 1 bench-validation item.
-- Motor command storage, producer/consumer ownership, timeout enforcement,
-  lifecycle/health gating, and force-stop behavior remain deliberately absent
-  until their approved Phase 1 milestones.
+- Latest motor command storage, producer/consumer scheduling, timeout
+  enforcement, lifecycle/health gating, and a real force-stop backend remain
+  deliberately absent until their approved Phase 1 milestones.
+- A backend descriptor is copied, but its non-null context object is not; that
+  context must have static or otherwise sufficient lifetime. Accepted submission
+  likewise promises only an internal copy, not immediate physical application.
 
 ## Open questions
 
 - Choose an open-source license before declaring the public source licensed for reuse.
 - Decide later whether the exact GCC `15.3.1` reproducibility check should become a documented compatible version range; Milestone 0.2 deliberately matches the proven tester toolchain.
-- Complete the documented SWD flash/debug checks when the board and ST-Link are connected.
-- Confirm the documented LED polarity, WS2812 logic margin, and microSD card-detect polarity during physical validation.
+- Complete the documented flight-image SWD, timebase, USB, and lifecycle smoke
+  tests on the now-available board and ST-Link.
+- Measure WS2812 logic margin and interrupt-latency impact before any in-flight
+  use. Discrete LED inoperability and active-low microSD detect are confirmed.
 
 ## Next step
 
-After owner review and a separately approved commit, Milestone 1.2 will define
-the generic actuator/motor interface. It will establish initialization,
-submission, force-stop, and ownership contracts without adding DShot, timer,
-DMA, GPIO, USB motor commands, or physical output.
+Complete Milestone 1.3 by adding dirty-aware build traceability, auditing
+response retention on target, and executing the documented flight-image smoke
+test. The hardware-independent DShot packet encoder remains Milestone 1.4.
+
+## Milestone 1.3 software verification
+
+- The normal and address/undefined-behavior sanitizer host builds each run 17
+  test executables; all tests pass.
+- Dedicated tests prove both USB VBUS modes, the V1 assume-present selection,
+  decimal conversion from zero through `UINT64_MAX`, zero padding, invalid
+  arguments, and exact-capacity rejection.
+- Existing logging, status, health, and command tests pass after migration;
+  focused assertions cover exact maximum 64-bit uptime, timestamps, and
+  sequences.
+- No project-owned production source contains a long-long printf conversion or
+  `unsigned long long` formatting cast. The pinned newlib-nano is no longer
+  responsible for serializing 64-bit diagnostics.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. Debug uses 52,616 bytes of Flash and 14,736 bytes
+  of RAM; Release uses 34,952 bytes of Flash and 14,736 bytes of RAM.
+- The Release ELF has no unresolved symbols, clangd reports zero errors for the
+  new common formatter and changed board USB port, and Git whitespace
+  validation passes.
+- Physical USB enumeration and exact target-output inspection remain pending;
+  host and link results are not recorded as board evidence.
+
+## Milestone 1.2 verification
+
+- The host-development build runs fifteen test executables; all tests pass.
+- Motor-output tests cover missing callbacks, backend initialization failure,
+  initial force-stop failure, fail-closed unknown results, successful readiness,
+  copied descriptor lifetime, invalid/uninitialized calls, caller-independent
+  canonical storage, manually corrupted commands, backend busy/error mapping,
+  and force-stop's lack of a busy outcome.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. The unconnected facade is removed by section
+  garbage collection, so Debug remains 52,080 bytes of Flash and 14,736 bytes
+  of RAM, while Release remains 34,364 bytes of Flash and 14,736 bytes of RAM.
+- The facade contains no STM32/HAL dependency, production backend, peripheral
+  behavior, global mutable state, runtime allocation, DShot representation, USB
+  schema, state/health lookup, or timeout enforcement.
+- Address/undefined-behavior sanitizer execution of all fifteen host suites
+  passes, clangd reports zero errors for both actuator production modules, Git
+  whitespace validation passes, and the Release ELF has no unresolved symbols.
+- Physical verification is not applicable to this interface-only milestone;
+  each future real backend must separately prove its copy, pending-demand
+  override, timing, and electrical stop behavior.
 
 ## Milestone 1.1 verification
 

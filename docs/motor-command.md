@@ -78,7 +78,7 @@ STM32F405 Cortex-M4F single-precision FPU and hard-float ABI. Constants use the
 `f` suffix, and `isfinite()` is evaluated before range comparisons so NaN cannot
 pass through the usual comparison behavior.
 
-The model deliberately contains no USB number parser. Milestone 1.9 may choose
+The model deliberately contains no USB number parser. Milestone 1.10 may choose
 a decimal or fixed-unit wire representation and must translate it through this
 same creation function.
 

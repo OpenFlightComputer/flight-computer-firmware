@@ -1,6 +1,7 @@
 #include "usb_logging_backend.h"
 
 #include "logging_config.h"
+#include "uint64_decimal.h"
 #include "usb_cdc_transport.h"
 
 #include <stdarg.h>
@@ -35,6 +36,22 @@ static void append_bytes(json_buffer_t *buffer,
 static void append_literal(json_buffer_t *buffer, const char *text)
 {
     append_bytes(buffer, text, strlen(text));
+}
+
+static void append_uint64(json_buffer_t *buffer, uint64_t value)
+{
+    char decimal[UINT64_DECIMAL_BUFFER_CAPACITY];
+    size_t length;
+
+    if (!uint64_decimal_format(value,
+                               0U,
+                               decimal,
+                               sizeof(decimal),
+                               &length)) {
+        buffer->valid = false;
+        return;
+    }
+    append_bytes(buffer, decimal, length);
 }
 
 static void append_format(json_buffer_t *buffer, const char *format, ...)
@@ -125,16 +142,14 @@ static bool format_record_as_json(const log_record_t *record,
     line[0] = '\0';
     append_literal(&buffer, "{\"type\":\"log\",\"timestamp_us\":");
     if (record->timestamp_valid) {
-        append_format(&buffer,
-                      "%llu",
-                      (unsigned long long)record->timestamp_us);
+        append_uint64(&buffer, record->timestamp_us);
     } else {
         append_literal(&buffer, "null");
     }
+    append_literal(&buffer, ",\"sequence\":");
+    append_uint64(&buffer, record->sequence);
     append_format(&buffer,
-                  ",\"sequence\":%llu,\"level\":\"%s\","
-                  "\"module\":\"%s\",\"message\":\"",
-                  (unsigned long long)record->sequence,
+                  ",\"level\":\"%s\",\"module\":\"%s\",\"message\":\"",
                   logging_level_name(record->level),
                   logging_module_name(record->module));
 

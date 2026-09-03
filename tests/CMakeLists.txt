@@ -149,6 +149,58 @@ target_compile_options(motor_command_tests PRIVATE
 
 add_test(NAME motor_command COMMAND motor_command_tests)
 
+add_executable(motor_output_tests
+    motor_output_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_output.c"
+)
+
+target_include_directories(motor_output_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+)
+
+target_compile_options(motor_output_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME motor_output COMMAND motor_output_tests)
+
+add_executable(board_usb_tests
+    board_usb_tests.c
+)
+
+target_include_directories(board_usb_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/hardware"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
+)
+
+target_compile_options(board_usb_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME board_usb COMMAND board_usb_tests)
+
+add_executable(uint64_decimal_tests
+    uint64_decimal_tests.c
+)
+
+target_link_libraries(uint64_decimal_tests PRIVATE firmware_common)
+
+target_compile_options(uint64_decimal_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME uint64_decimal COMMAND uint64_decimal_tests)
+
 add_executable(logging_tests
     logging_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"
@@ -158,6 +210,8 @@ add_executable(logging_tests
 target_include_directories(logging_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
 )
+
+target_link_libraries(logging_tests PRIVATE firmware_common)
 
 target_compile_options(logging_tests PRIVATE
     -Wall
@@ -179,6 +233,8 @@ target_include_directories(usb_logging_backend_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
+
+target_link_libraries(usb_logging_backend_tests PRIVATE firmware_common)
 
 target_compile_options(usb_logging_backend_tests PRIVATE
     -Wall
@@ -216,6 +272,8 @@ target_include_directories(usb_json_protocol_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
 
+target_link_libraries(usb_json_protocol_tests PRIVATE firmware_common)
+
 target_compile_options(usb_json_protocol_tests PRIVATE
     -Wall
     -Wextra
@@ -236,6 +294,8 @@ add_executable(usb_health_response_tests
 target_include_directories(usb_health_response_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
 )
+
+target_link_libraries(usb_health_response_tests PRIVATE firmware_common)
 
 target_compile_options(usb_health_response_tests PRIVATE
     -Wall
@@ -262,6 +322,8 @@ target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
+
+target_link_libraries(usb_command_processor_tests PRIVATE firmware_common)
 
 target_compile_options(usb_command_processor_tests PRIVATE
     -Wall

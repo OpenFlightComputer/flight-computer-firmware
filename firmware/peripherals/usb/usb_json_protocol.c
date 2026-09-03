@@ -1,5 +1,7 @@
 #include "usb_json_protocol.h"
 
+#include "uint64_decimal.h"
+
 #define JSMN_STATIC
 #include "third_party/jsmn.h"
 
@@ -233,10 +235,21 @@ bool usb_json_build_status_response(const char *state,
                                     size_t capacity,
                                     size_t *length)
 {
+    char uptime[UINT64_DECIMAL_BUFFER_CAPACITY];
+    size_t uptime_length;
     int written;
 
     if ((state == NULL) || (destination == NULL) || (capacity == 0U) ||
         (length == NULL)) {
+        return false;
+    }
+
+    if (!uint64_decimal_format(uptime_us,
+                               0U,
+                               uptime,
+                               sizeof(uptime),
+                               &uptime_length)) {
+        *length = 0U;
         return false;
     }
 
@@ -245,9 +258,9 @@ bool usb_json_build_status_response(const char *state,
                        "{\"type\":\"response\",\"request_id\":%lu,"
                        "\"command\":\"status\","
                        "\"ok\":true,\"state\":\"%s\","
-                       "\"uptime_us\":%llu}\n",
+                       "\"uptime_us\":%s}\n",
                        (unsigned long)request_id,
                        state,
-                       (unsigned long long)uptime_us);
+                       uptime);
     return finish_response(written, capacity, length);
 }

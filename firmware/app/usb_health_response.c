@@ -1,6 +1,7 @@
 #include "usb_health_response.h"
 
 #include "system_state.h"
+#include "uint64_decimal.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -28,6 +29,22 @@ static void append_bytes(json_buffer_t *buffer,
     memcpy(&buffer->data[buffer->length], data, length);
     buffer->length += length;
     buffer->data[buffer->length] = '\0';
+}
+
+static void append_uint64(json_buffer_t *buffer, uint64_t value)
+{
+    char decimal[UINT64_DECIMAL_BUFFER_CAPACITY];
+    size_t length;
+
+    if (!uint64_decimal_format(value,
+                               0U,
+                               decimal,
+                               sizeof(decimal),
+                               &length)) {
+        buffer->valid = false;
+        return;
+    }
+    append_bytes(buffer, decimal, length);
 }
 
 static void append_format(json_buffer_t *buffer, const char *format, ...)
@@ -81,17 +98,13 @@ static bool format_fault(const fault_record_t *record,
                   fault_source_name(record->source),
                   (unsigned long)record->occurrence_count);
     if (record->first_timestamp_valid) {
-        append_format(&buffer,
-                      "%llu",
-                      (unsigned long long)record->first_timestamp_us);
+        append_uint64(&buffer, record->first_timestamp_us);
     } else {
         append_bytes(&buffer, "null", 4U);
     }
     append_bytes(&buffer, ",\"last_timestamp_us\":", 21U);
     if (record->last_timestamp_valid) {
-        append_format(&buffer,
-                      "%llu",
-                      (unsigned long long)record->last_timestamp_us);
+        append_uint64(&buffer, record->last_timestamp_us);
     } else {
         append_bytes(&buffer, "null", 4U);
     }

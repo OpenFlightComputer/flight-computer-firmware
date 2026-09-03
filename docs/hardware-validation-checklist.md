@@ -1,22 +1,27 @@
 # Hardware validation checklist
 
-These checks are intentionally pending until a Flight Computer V1 and required
-debug hardware are available. A host test or successful firmware link must not
-be recorded as physical evidence for any item below.
+The V1 manufacturing tester has now physically accepted SWD/reset, clocks, USB
+with a board workaround, WS2812, BMI270, BMP388, and microSD on a real board.
+That evidence is recorded in `docs/v1-bringup-carryover.md`. The checks below
+remain flight-firmware checks: tester success, a host test, or a successful
+firmware link must not be recorded as proof that the flight image works.
 
 ## Basic boot and timebase
 
 - [ ] Program Debug and Release images over SWD and verify reset reaches
   `BOOT_STATUS_RUNNING`.
 - [ ] Confirm HSE/PLL startup and the 168 MHz core clock on hardware.
+- [ ] Confirm the embedded dirty-aware build identity matches the flashed image.
 - [ ] Measure the TIM5 counter rate as 1 MHz against external time.
 - [ ] Exercise or accelerate a TIM5 32-bit wrap and confirm monotonic 64-bit
   time across the interrupt boundary.
 
 ## USB enumeration and protocol
 
-- [ ] Verify the development VID/PID, descriptors, VBUS sensing, and CDC device
-  enumeration on the target hosts.
+- [ ] Verify the development VID/PID, descriptors, V1-disabled VBUS sensing,
+  and CDC device enumeration on the target hosts.
+- [ ] Verify status, health, and log JSON contain exact unsigned 64-bit decimal
+  values without relying on target-library `%llu` support.
 - [ ] Send fragmented, coalesced, LF, and CRLF commands and verify exactly one
   response with the matching request ID.
 - [ ] Verify malformed input returns `request_id:null` and a valid unsupported
@@ -47,7 +52,8 @@ be recorded as physical evidence for any item below.
 - [ ] Confirm no scheduler overrun or unacceptable delay to higher-priority
   ready tasks under sustained USB traffic.
 - [ ] Instrument stack high-water usage on the MCU, including nano-printf
-  internals, interrupts, worst-case health serialization, and log formatting.
+  internals, interrupts, worst-case health serialization, manual 64-bit decimal
+  conversion, and log formatting.
 - [ ] Confirm the reserved minimum stack and actual RAM separation retain an
   evidence-based safety margin.
 
@@ -63,8 +69,14 @@ be recorded as physical evidence for any item below.
   enters `FAULT`, and reports `CRITICAL` rather than continuing normally with
   incomplete diagnostics.
 
-## Deferred board observations
+## Manufacturing evidence to preserve
 
-- [ ] Confirm the documented discrete LED polarity/connectivity.
-- [ ] Confirm WS2812 logic-level margin.
-- [ ] Confirm microSD card-detect polarity when the storage milestone begins.
+- [x] D4/D5 discrete LEDs were confirmed inoperable on V1. They must not carry
+  boot, health, arm, or fault meaning.
+- [x] PC5 microSD card detect was confirmed active-low.
+- [x] PA1 WS2812 GRB/MSB-first output worked on the first board using DWT-timed
+  GPIO.
+- [ ] Measure WS2812 3.3 V-to-5 V logic margin and the scheduling impact of its
+  roughly 30 microsecond interrupt-masked update before allowing in-flight use.
+- [ ] Validate PC6-PC9 TIM8 motor routing, channel order, waveform, and DMA on
+  hardware during Phase 1; the tester did not validate DShot.

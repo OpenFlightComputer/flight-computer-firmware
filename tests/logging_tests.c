@@ -205,6 +205,16 @@ static void formats_canonical_lines(void)
     assert(strcmp(output,
                   "[0000008121] #0000000042 DEBUG SCHEDULER run\n") == 0);
 
+    record.timestamp_us = UINT64_MAX;
+    record.sequence = UINT64_MAX;
+    assert(logging_format_record(&record,
+                                 output,
+                                 sizeof(output),
+                                 &output_length) == LOGGING_FORMAT_OK);
+    assert(strcmp(output,
+                  "[18446744073709551615] #18446744073709551615 DEBUG "
+                  "SCHEDULER run\n") == 0);
+
     assert(logging_format_record(&record,
                                  small_output,
                                  sizeof(small_output),
