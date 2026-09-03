@@ -23,7 +23,7 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
 ## Phase 1 — DShot actuator subsystem
 
 1. Motor command model — complete.
-2. Generic actuator/motor interface — implemented; awaiting owner review.
+2. Generic actuator/motor interface — complete.
 3. V1 bring-up carryover and flight-firmware smoke test — in progress: the
    board-selected VBUS mode and bounded 64-bit formatting are implemented;
    build traceability and physical foundation-image validation remain.

@@ -8,14 +8,13 @@ Phase 1 — DShot actuator subsystem.
 
 Milestone 1.3 — V1 bring-up carryover and flight-firmware smoke test:
 **software compatibility fixes implemented; build traceability and physical
-validation remain**. Milestone 1.2 is also implemented in the current review
-set and has not yet been committed.
+validation remain**.
 
 ## Last completed milestone
 
-Milestone 1.1 — motor command model. Atomic normalized four-motor commands,
-floating-point validation, exact-stop canonicalization, invalidation, and
-freshness checks are integrated and reviewed.
+Milestone 1.2 — generic actuator/motor interface. Backend-independent
+initialization, complete-command submission, force-stop behavior, and ownership
+contracts are integrated and reviewed.
 
 ## Current implementation status
 
