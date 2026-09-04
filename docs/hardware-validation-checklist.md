@@ -84,6 +84,9 @@ firmware link must not be recorded as proof that the flight image works.
 - [x] PC5 microSD card detect was confirmed active-low.
 - [x] PA1 WS2812 GRB/MSB-first output worked on the first board using DWT-timed
   GPIO.
+- [ ] Confirm the flight image drives PA1 low without an enable glitch, emits
+  one all-zero startup frame, and leaves the RGB LED off after both a cold
+  power cycle and an MCU-only reset.
 - [ ] Measure WS2812 3.3 V-to-5 V logic margin and the scheduling impact of its
   roughly 30 microsecond interrupt-masked update before allowing in-flight use.
 - [ ] Validate PC6-PC9 TIM8 motor routing, channel order, waveform, and DMA on

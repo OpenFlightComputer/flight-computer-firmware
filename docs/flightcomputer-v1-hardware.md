@@ -59,7 +59,7 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 
 | MCU pin | Net | Direction | Semantic role | Peripheral/mode | Selection status |
 | --- | --- | --- | --- | --- | --- |
-| PA1 | `WS2812_DI` | Output | RGB LED data | GPIO/DWT accepted; TIM2_CH2 AF1 remains a candidate | Physical GPIO waveform worked; timer/DMA attempt did not |
+| PA1 | `WS2812_DI` | Output | RGB LED data | Boot-safe GPIO low plus one DWT-timed all-zero frame; TIM2_CH2 AF1 remains a candidate | Physical GPIO waveform worked; timer/DMA attempt did not |
 | PA2 | `GPS_RX` | Output | MCU-to-GPS serial | USART2_TX AF7 | Unambiguous intended UART function |
 | PA3 | `GPS_TX` | Input | GPS-to-MCU serial | USART2_RX AF7 | Unambiguous intended UART function |
 | PA4 | `VBAT_ADC` | Analog input | Battery-voltage sense | ADC1_IN4 | Routed; conversion policy deferred |
@@ -132,4 +132,16 @@ Most selections below are established by routing plus the manufacturing-test imp
 
 ## Current initialization scope
 
-At boot, `board_initialize()` initializes the STM32 HAL and system clock, verifies a 168 MHz core clock, and starts internal TIM5 as the monotonic timebase. Milestone 0.10 then initializes OTG FS CDC logging on PA11 and PA12. The V1 board definition selects assume-present VBUS behavior, so PA9 is not configured and OTG hardware VBUS sensing is disabled. A future corrected board can select sense-input behavior without changing the transport or application. No other routed peripheral listed above is configured. Each remaining external interface will be activated only in its approved milestone through the appropriate board and MCU capability boundary.
+At boot, `board_initialize()` initializes the STM32 HAL and system clock,
+verifies a 168 MHz core clock, forces the PA1 WS2812 to a deterministic off
+state, and starts internal TIM5 as the monotonic timebase. Safe-off preloads the
+GPIO output latch low before enabling output mode, sends one all-zero GRB frame
+to clear state retained across MCU-only resets, and keeps PA1 low. It uses the
+tester-proven DWT/GPIO waveform once before the scheduler and masks interrupts
+for approximately 30 microseconds; it does not assign status meaning to the
+LED. Milestone 0.10 then initializes OTG FS CDC logging on PA11 and PA12. The
+V1 board definition selects assume-present VBUS behavior, so PA9 is not
+configured and OTG hardware VBUS sensing is disabled. A future corrected board
+can select sense-input behavior without changing the transport or application.
+Each remaining external interface will be activated only in its approved
+milestone through the appropriate board and MCU capability boundary.

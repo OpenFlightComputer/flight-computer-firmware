@@ -210,6 +210,11 @@ contracts are integrated and reviewed.
   services. The CLI can build or flash either profile or a supplied ELF,
   inspect status, monitor JSON, and automate status/health smoke checks without
   tying those capabilities to terminal presentation.
+- Added V1 boot-safe WS2812 handling after a physical reconnect exposed random
+  green illumination from the previously undriven PA1 data line. Board startup
+  now preloads PA1 low, emits one tester-proven all-zero GRB frame to clear
+  retained LED state, and leaves the line low; it adds no status semantics or
+  general RGB API.
 
 No motor output, receiver input, sensor access, persistent flight-data logging,
 or flight-control behavior has been implemented. `motor_command_t` and the
@@ -303,9 +308,9 @@ hardware-independent DShot packet encoder remains Milestone 1.4.
   `unsigned long long` formatting cast. The pinned newlib-nano is no longer
   responsible for serializing 64-bit diagnostics.
 - Debug and Release firmware configurations build with warnings treated as
-  errors using Arm GCC 15.3.1. With embedded identity and status fields, Debug
-  uses 52,848 bytes of Flash and 14,744 bytes of RAM; Release uses 35,128 bytes
-  of Flash and 14,744 bytes of RAM.
+  errors using Arm GCC 15.3.1. With embedded identity, status fields, and the
+  boot-only RGB safe-off frame, Debug uses 53,252 bytes of Flash and 14,744
+  bytes of RAM; Release uses 35,408 bytes of Flash and 14,744 bytes of RAM.
 - The Release ELF has no unresolved symbols, clangd reports zero errors for the
   new common formatter and changed board USB port, and Git whitespace
   validation passes.

@@ -173,6 +173,7 @@ add_executable(flight_firmware
     peripherals/usb/usb_descriptors.c
     peripherals/usb/usb_json_protocol.c
     hardware/boards/flightcomputer_v1/board.c
+    hardware/boards/flightcomputer_v1/rgb_led_safe_state.c
     hardware/boards/flightcomputer_v1/time.c
     hardware/boards/flightcomputer_v1/usb_device_port.c
     hardware/mcu/stm32f405/mcu.c
