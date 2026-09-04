@@ -91,6 +91,11 @@ firmware link must not be recorded as proof that the flight image works.
   roughly 30 microsecond interrupt-masked update before allowing in-flight use.
 - [ ] Validate PC6-PC9 TIM8 motor routing, channel order, waveform, and DMA on
   hardware during Phase 1; the tester did not validate DShot.
+- [ ] With propellers removed, validate DShot300 first against the SpeedyBee
+  BLS 60A 30x30 4-in-1 ESC (stock BLHeli_S J-H-40): inspect one PC6-PC9
+  waveform if practical, confirm ESC recognition, identify S1-S4/motor order,
+  then exercise synchronized four-channel output. Keep the telemetry request
+  clear because the stock ESC has no separate telemetry output.
 
 ## Flight-image evidence log
 

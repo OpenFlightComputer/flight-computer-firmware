@@ -205,6 +205,24 @@ target_compile_options(dshot_encoder_tests PRIVATE
 
 add_test(NAME dshot_encoder COMMAND dshot_encoder_tests)
 
+add_executable(dshot_timing_tests
+    dshot_timing_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot/dshot_timing.c"
+)
+
+target_include_directories(dshot_timing_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot"
+)
+
+target_compile_options(dshot_timing_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME dshot_timing COMMAND dshot_timing_tests)
+
 add_executable(board_motor_output_map_tests
     board_motor_output_map_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1/motor_output_map.c"

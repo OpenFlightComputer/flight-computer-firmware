@@ -170,6 +170,7 @@ add_executable(flight_firmware
     flight/actuators/motor_mapping.c
     flight/actuators/motor_output.c
     peripherals/dshot/dshot_encoder.c
+    peripherals/dshot/dshot_timing.c
     peripherals/usb/newline_framer.c
     peripherals/usb/usb_cdc_transport.c
     peripherals/usb/usb_descriptors.c

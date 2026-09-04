@@ -34,10 +34,12 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
    validation.
 4. Hardware-independent DShot packet encoder — complete; all values and
    telemetry states are exhaustively host-tested.
-5. TIM8/GPIO/DMA board mapping review against the physical V1 — implementation
-   complete and awaiting review; fixed routes, grouped DMA resources, and a
-   safely configurable logical assignment are host-tested.
-6. DShot timing representation and rate selection.
+5. TIM8/GPIO/DMA board mapping review against the physical V1 — complete;
+   fixed routes, grouped DMA resources, and a safely configurable logical
+   assignment are host-tested.
+6. DShot timing representation and rate selection — DShot300 selected for the
+   initial SpeedyBee BLS 60A/J-H-40 ESC; implementation and host verification
+   complete and awaiting review.
 7. Final lifecycle, health, freshness, and force-stop safety gate.
 8. Single-channel timer/DMA output.
 9. Four-channel synchronized output.
@@ -45,6 +47,10 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
 11. Propeller-free ESC and motor bench validation.
 
 Phase 1 does not route receiver data to motors or implement stabilization.
+
+After DShot300 is physically reliable, add DShot600 as an optional timing
+profile. It is supported by the selected SpeedyBee ESC, but it is not a
+first-flight prerequisite and must not be selectable until separately tested.
 
 ## Later phases
 

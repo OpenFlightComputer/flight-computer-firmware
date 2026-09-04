@@ -1,9 +1,9 @@
 # Motor output mapping
 
-Milestone 1.5 resolves the Flight Computer V1 motor-output resources and adds
-a separate configurable logical-to-physical assignment. It intentionally does
-not configure GPIO, start TIM8 or DMA, choose a DShot rate, build timing
-buffers, send ESC commands, or energize a motor.
+Milestone 1.5 resolved the Flight Computer V1 motor-output resources and added
+a separate configurable logical-to-physical assignment. Milestone 1.6 has now
+selected DShot300 and added a pure timing-buffer representation, but still does
+not configure GPIO, start TIM8 or DMA, send ESC commands, or energize a motor.
 
 ## Fixed physical V1 routing
 
@@ -31,9 +31,9 @@ that PC6, PC7, PC8, and PC9 select TIM8_CH1 through TIM8_CH4 with AF3:
   <https://www.st.com/resource/en/reference_manual/rm0090-stm32f407-advanced-armbased-32bit-mcus-stmicroelectronics.pdf>
 
 The board clock tree divides APB2 by two, producing an 84 MHz peripheral
-clock. STM32 timer clock doubling therefore supplies TIM8 with 168 MHz. The
-rate and timer prescaler/period derived from that clock belong to Milestone
-1.6.
+clock. STM32 timer clock doubling therefore supplies TIM8 with 168 MHz.
+Milestone 1.6 derives 560 timer ticks per DShot300 bit from this clock. See
+`docs/dshot-timing.md` for the compare values and interleaved buffer order.
 
 ## Selected grouped DMA path
 

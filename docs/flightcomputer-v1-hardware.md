@@ -117,7 +117,11 @@ Most selections below are established by routing plus the manufacturing-test imp
 ## Deliberately unresolved decisions
 
 - PC10/PC11 can map to UART4 or USART3. Phase 2 will select the receiver backend after checking protocol, DMA, interrupt, and other UART requirements.
-- PC6–PC9 use TIM8 channels 1–4 with AF3. The future backend will update CCR1–CCR4 together using TIM8 update on DMA2 Stream 1/Channel 7. DShot rate, timer register setup, and timing-buffer behavior remain Milestone 1.6 work, and the complete route still requires physical validation.
+- PC6–PC9 use TIM8 channels 1–4 with AF3. DShot300 is selected for initial
+  SpeedyBee BLS 60A ESC testing, and the pure buffer uses 560 timer ticks per
+  bit with compare values 210/420. The future backend will update CCR1–CCR4
+  together using TIM8 update on DMA2 Stream 1/Channel 7. Timer/DMA register
+  activation and the complete route still require physical validation.
 - PB9 may use a normal EXTI input or timer capture for GPS PPS. Phase 6 will choose based on timing requirements.
 - BMI270 interrupt routing and EXTI selection belong to the sensor timing milestone.
 - ADC sample timing and scaling for PA4/PB0 are not yet specified.

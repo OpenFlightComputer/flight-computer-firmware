@@ -6,14 +6,14 @@ Phase 1 — DShot actuator subsystem.
 
 ## Current milestone
 
-Milestone 1.5 — TIM8/GPIO/DMA board mapping:
+Milestone 1.6 — DShot300 timing and interleaved DMA-buffer representation:
 **implementation and host verification complete; awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 1.4 — hardware-independent DShot packet encoder. Stop/throttle and
-special-command paths are separated, frame creation is exhaustively host-tested,
-and the reviewed implementation is integrated.
+Milestone 1.5 — TIM8/GPIO/DMA board mapping. Fixed physical routes, grouped
+DMA resources, and the safely configurable logical assignment are documented,
+host-tested, reviewed, committed, and integrated.
 
 ## Current implementation status
 
@@ -226,6 +226,17 @@ and the reviewed implementation is integrated.
 - Selected one TIM8-update timer DMA burst using DMA2 Stream 1/Channel 7 to
   update CCR1 through CCR4 together, rather than consuming four independent
   streams. No GPIO, TIM8, DMA, or motor output is initialized yet.
+- Recorded the SpeedyBee BLS 60A 30x30 4-in-1 ESC with stock BLHeli_S J-H-40
+  as the initial propeller-free validation target. It supports DShot300/600;
+  initial output uses ordinary DShot300 with no telemetry request.
+- Added a validated DShot300 timing profile for the V1 168 MHz TIM8 clock:
+  560 ticks per bit, 210 ticks high for zero, and 420 ticks high for one.
+- Added a pure 18-by-4 interleaved compare buffer: 16 MSB-first frame rows
+  followed by two all-low rows, with lanes explicitly ordered CCR1 through
+  CCR4 (`ESC_M4` through `ESC_M1`). No GPIO, TIM8, DMA, or motor output is
+  initialized yet.
+- Kept DShot600 as a later roadmap profile after DShot300 physical validation;
+  it is intentionally rejected by the current API.
 - Added a hardware-independent logical-to-physical motor permutation with an
   identity default, complete permutation validation, atomic replacement, and
   explicit requirements that the caller confirm both `DISARMED` lifecycle and
@@ -317,11 +328,36 @@ effect.
 
 ## Next step
 
-Review Milestone 1.5, then begin Milestone 1.6 by selecting the DShot rate and
-implementing a pure frame-to-interleaved-duty-buffer representation from the
-recorded 168 MHz TIM8 clock and CCR1-through-CCR4 burst order. GPIO, TIM8, and
-DMA register activation remains outside 1.6. The outstanding foundation stress
-checks remain flight prerequisites in `docs/hardware-validation-checklist.md`.
+Review Milestone 1.6, then begin Milestone 1.7 by implementing the final
+lifecycle, health, command-freshness, and force-stop safety gate before any
+timer output is activated. Staged single-channel TIM8/GPIO/DMA activation
+follows in Milestone 1.8. DShot600 remains a roadmap extension after DShot300
+works reliably. The outstanding foundation stress checks remain flight
+prerequisites in `docs/hardware-validation-checklist.md`.
+
+## Milestone 1.6 verification
+
+- The normal and address/undefined-behavior sanitizer builds each run all 21
+  host test executables successfully.
+- DShot timing tests prove the exact 168 MHz DShot300 profile: 560 timer ticks
+  per bit, a 210-tick zero high, and a 420-tick one high.
+- Tests cover all 16 bit positions in all four timer lanes, MSB-first output,
+  the exact documented 25%/50% mixed frame, two trailing all-low slots, source
+  and destination overlap, invalid pointers, unsupported rates/clocks,
+  corrupted profiles, and failure preservation.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. Debug uses 53,252 bytes of Flash and reserves
+  14,744 bytes of RAM; Release uses 35,408 bytes of Flash and reserves 14,744
+  bytes of RAM.
+- The implementation is pure bounded C with no allocation, mutable global,
+  normalized-throttle conversion, state/fault access, HAL/register access,
+  interrupts, GPIO, TIM8 activation, DMA activation, or physical motor output.
+- The SpeedyBee BLS 60A/J-H-40 is recorded as the initial propeller-free test
+  ESC. Its supported DShot600 mode remains deliberately unavailable until a
+  later separately reviewed and physically validated roadmap extension.
+- No physical verification is claimed. Timer preload/DMA pipeline behavior,
+  waveform timing and voltage, ESC recognition, output ordering, direction,
+  and repeated transfers remain staged hardware tests.
 
 ## Milestone 1.5 verification
 

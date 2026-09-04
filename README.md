@@ -43,12 +43,12 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 ## Current status
 
-Phase 1, Milestone 1.5 records the fixed Flight Computer V1 motor routes and
-selects one TIM8-update DMA burst for future synchronized output. A separate
-validated logical-to-physical permutation can be changed only when the caller
-confirms `DISARMED` state and stopped outputs. The preceding DShot encoder
-remains exhaustively host-tested. No GPIO, TIM8, DMA, or physical motor output
-is configured yet.
+Phase 1, Milestone 1.6 selects DShot300 for the initial SpeedyBee BLS 60A ESC
+and converts complete frames into an exact, host-tested four-lane TIM8 compare
+buffer. The preceding fixed V1 routes, synchronized TIM8-update DMA selection,
+logical-to-physical permutation, and packet encoder remain in force. DShot600
+is a later roadmap profile. No GPIO, TIM8, DMA, or physical motor output is
+configured yet.
 
 Milestone 1.3 completed its planned implementation and initial physical V1
 bring-up evidence. VBUS behavior is an explicit board capability: V1 assumes

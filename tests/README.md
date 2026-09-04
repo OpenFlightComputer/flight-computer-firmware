@@ -84,6 +84,13 @@ values with telemetry both clear and set, independently verifies the checksum
 and recovered fields, and enforces the public stop/throttle versus command
 separation. It proves frame construction only, not a physical waveform.
 
+The native `dshot_timing_tests` target verifies the exact V1 DShot300 timing,
+MSB-first compare conversion, every bit and timer lane, four-lane interleaving,
+the documented mixed 25%/50% CCR table, trailing-low slots, unsupported
+DShot600 rejection, corrupted-profile rejection, overlapping source/destination
+storage, and atomic failure behavior. It proves buffer representation only,
+not timer/DMA or physical output.
+
 The native `board_motor_output_map_tests` target verifies the fixed V1
 `ESC_M1` through `ESC_M4` mapping to PC9 through PC6 and TIM8_CH4 through CH1,
 plus the selected 168 MHz TIM8 update DMA2 Stream 1/Channel 7 four-register

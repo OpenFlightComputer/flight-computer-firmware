@@ -9,5 +9,8 @@ newline framing, and the strict JSON wire protocol. Flight Computer V1 board
 support supplies the proven OTG FS pins and low-level STM USB port.
 
 The `dshot/` implementation owns the hardware-independent outbound DShot frame
-format. It does not own normalized throttle conversion, actuator authorization,
-timer/DMA output, or ESC command policy.
+format and pure frame-to-timer-duty representation. The current timing profile
+is DShot300 only; it builds an interleaved four-lane buffer without configuring
+or starting timer/DMA hardware. It does not own normalized throttle conversion,
+actuator authorization, physical routing, DMA-buffer lifetime, or ESC command
+policy.
