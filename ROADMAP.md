@@ -32,9 +32,11 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
    deterministic boot-off frame after an undriven input caused random green
    illumination; remaining stress/boundary checks stay tracked as pre-flight
    validation.
-4. Hardware-independent DShot packet encoder — implementation complete and
-   awaiting review; all values and telemetry states are exhaustively host-tested.
-5. TIM8/GPIO/DMA board mapping review against the physical V1.
+4. Hardware-independent DShot packet encoder — complete; all values and
+   telemetry states are exhaustively host-tested.
+5. TIM8/GPIO/DMA board mapping review against the physical V1 — implementation
+   complete and awaiting review; fixed routes, grouped DMA resources, and a
+   safely configurable logical assignment are host-tested.
 6. DShot timing representation and rate selection.
 7. Final lifecycle, health, freshness, and force-stop safety gate.
 8. Single-channel timer/DMA output.

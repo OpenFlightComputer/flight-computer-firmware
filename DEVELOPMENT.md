@@ -6,16 +6,14 @@ Phase 1 — DShot actuator subsystem.
 
 ## Current milestone
 
-Milestone 1.4 — hardware-independent DShot packet encoder:
+Milestone 1.5 — TIM8/GPIO/DMA board mapping:
 **implementation and host verification complete; awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 1.3 — V1 bring-up carryover and initial flight-firmware smoke test.
-The compatibility changes, build identity, host automation, Debug-image smoke,
-and deterministic RGB startup state are integrated and reviewed. Remaining
-stress and boundary measurements stay explicit in the hardware checklist and
-must be closed before flight; progression does not count them as passed.
+Milestone 1.4 — hardware-independent DShot packet encoder. Stop/throttle and
+special-command paths are separated, frame creation is exhaustively host-tested,
+and the reviewed implementation is integrated.
 
 ## Current implementation status
 
@@ -222,11 +220,30 @@ must be closed before flight; progression does not count them as passed.
 - Made throttle encoding accept only stop `0` or `48..2047`; reserved commands
   `1..47` require the explicit command API. Invalid inputs leave prior output
   unchanged, while command repetition and authorization remain future policy.
+- Recorded the immutable V1 motor routes as `ESC_M1`/PC9/TIM8_CH4 through
+  `ESC_M4`/PC6/TIM8_CH1, with AF3 selected for every pin and a 168 MHz TIM8
+  input derived from the existing APB2 clock tree.
+- Selected one TIM8-update timer DMA burst using DMA2 Stream 1/Channel 7 to
+  update CCR1 through CCR4 together, rather than consuming four independent
+  streams. No GPIO, TIM8, DMA, or motor output is initialized yet.
+- Added a hardware-independent logical-to-physical motor permutation with an
+  identity default, complete permutation validation, atomic replacement, and
+  explicit requirements that the caller confirm both `DISARMED` lifecycle and
+  accepted physical force-stop before reconfiguration.
+- Added complete-command mapping through temporary local storage, including
+  safe in-place use and canonical command revalidation. Runtime persistence,
+  aircraft position names, expected CW/CCW direction, and ESC direction
+  programming remain deliberately deferred.
+- Added focused host suites for both configurable logical mapping and fixed V1
+  resource facts, plus `docs/motor-output-mapping.md` covering evidence,
+  ownership, DMA choice, resource conflicts, safety boundaries, and physical
+  validation.
 
 No motor output, receiver input, sensor access, persistent flight-data logging,
-or flight-control behavior has been implemented. `motor_command_t` and the
-generic output facade remain unconnected contracts with no production backend,
-and the `ARMED` lifecycle state still has no actuator effect.
+or flight-control behavior has been implemented. `motor_command_t`, the motor
+mapping, and the generic output facade remain unconnected contracts with no
+production backend, and the `ARMED` lifecycle state still has no actuator
+effect.
 
 ## Known issues and limitations
 
@@ -243,7 +260,7 @@ and the `ARMED` lifecycle state still has no actuator effect.
   operation through a real or accelerated 71.58-minute hardware wrap remains
   pending.
 - Correct 64-bit extension assumes global interrupts are not continuously disabled for a complete 71.58-minute TIM5 wrap period; ordinary bounded critical sections are many orders of magnitude shorter.
-- Receiver UART, motor timer/DMA, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
+- Receiver UART, motor timing/register implementation, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
 - Ready-batch fairness prevents selection starvation only when callbacks return. A non-returning callback blocks every task, and CPU overload still causes recorded missed releases.
 - USB is now an explicit development/bench arm-request source, but it is unauthenticated and changes only lifecycle state. Actuator authorization and final output gating must be defined before later motor commands can affect hardware.
@@ -276,6 +293,18 @@ and the `ARMED` lifecycle state still has no actuator effect.
 - A backend descriptor is copied, but its non-null context object is not; that
   context must have static or otherwise sufficient lifetime. Accepted submission
   likewise promises only an internal copy, not immediate physical application.
+- `motor_mapping_configure()` cannot independently inspect application state or
+  hardware. Its future owner must pass `system_disarmed` only from actual
+  `SYSTEM_STATE_DISARMED` and `outputs_stopped` only after force-stop has been
+  accepted; the mapping module rejects false conditions but cannot detect a
+  dishonest caller.
+- Logical aircraft positions, mixer convention, expected CW/CCW directions,
+  ESC-stored direction, and configuration persistence are not selected. No ESC
+  direction command may be exposed as an ordinary runtime motor command.
+- The selected V1 motor routes and DMA resources are documentation and
+  host-tested data, not proof of PCB continuity, GPIO AF register behavior,
+  TIM8/DMA execution, electrical waveform quality, ESC acceptance, physical
+  motor order, or direction.
 
 ## Open questions
 
@@ -288,10 +317,37 @@ and the `ARMED` lifecycle state still has no actuator effect.
 
 ## Next step
 
-Review Milestone 1.4, then begin Milestone 1.5 by resolving and documenting the
-physical V1 motor outputs against schematic/manufacturing evidence before any
-TIM8, GPIO, or DMA implementation. The outstanding foundation stress checks
-remain flight prerequisites in `docs/hardware-validation-checklist.md`.
+Review Milestone 1.5, then begin Milestone 1.6 by selecting the DShot rate and
+implementing a pure frame-to-interleaved-duty-buffer representation from the
+recorded 168 MHz TIM8 clock and CCR1-through-CCR4 burst order. GPIO, TIM8, and
+DMA register activation remains outside 1.6. The outstanding foundation stress
+checks remain flight prerequisites in `docs/hardware-validation-checklist.md`.
+
+## Milestone 1.5 verification
+
+- The normal and address/undefined-behavior sanitizer builds each run all 20
+  host test executables successfully.
+- Board-map tests prove physical output indices zero through three retain the
+  exact `ESC_M1`/PC9/CH4 through `ESC_M4`/PC6/CH1 order, AF3, TIM8, 168 MHz
+  timer clock, DMA2 Stream 1/Channel 7, and four-register CCR1-first burst.
+- Motor-mapping tests exhaustively classify all 256 in-range assignments
+  (exactly 24 permutations), and prove identity initialization, every
+  unsafe-state combination, out-of-range rejection, atomic preservation,
+  complete command reordering, in-place operation, and corrupted
+  mapping/command rejection.
+- The fixed route agrees with the retained manufacturing-test board definition
+  and STM32F405 datasheet AF table. RM0090 confirms the selected TIM8 update DMA
+  request and timer DMA-burst mechanism; no individual-channel stream is
+  reserved.
+- Resource review found no conflict with current TIM5, USB, or WS2812 use. The
+  single-stream choice preserves DMA2 streams needed by future SPI1 and ADC
+  implementations, whose final allocations remain their own milestones.
+- Debug and Release firmware configurations build with warnings treated as
+  errors. The unconnected mapping data and logic are eligible for section
+  garbage collection and produce no runtime hardware behavior.
+- No physical verification is claimed. Pin muxing, output enable, burst
+  pipeline, waveform timing, electrical levels, ESC recognition, output order,
+  and direction remain staged propeller-free checks.
 
 ## Milestone 1.4 verification
 

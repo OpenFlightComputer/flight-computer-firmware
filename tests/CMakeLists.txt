@@ -149,6 +149,25 @@ target_compile_options(motor_command_tests PRIVATE
 
 add_test(NAME motor_command COMMAND motor_command_tests)
 
+add_executable(motor_mapping_tests
+    motor_mapping_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_mapping.c"
+)
+
+target_include_directories(motor_mapping_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+)
+
+target_compile_options(motor_mapping_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME motor_mapping COMMAND motor_mapping_tests)
+
 add_executable(motor_output_tests
     motor_output_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
@@ -185,6 +204,25 @@ target_compile_options(dshot_encoder_tests PRIVATE
 )
 
 add_test(NAME dshot_encoder COMMAND dshot_encoder_tests)
+
+add_executable(board_motor_output_map_tests
+    board_motor_output_map_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1/motor_output_map.c"
+)
+
+target_include_directories(board_motor_output_map_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/hardware"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
+)
+
+target_compile_options(board_motor_output_map_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME board_motor_output_map COMMAND board_motor_output_map_tests)
 
 add_executable(board_usb_tests
     board_usb_tests.c

@@ -83,10 +83,10 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 | PB14 | `LED_GREEN` | Output | Green status LED | GPIO | Physically confirmed inoperable on V1 |
 | PC4 | `SD_CS` | Output | microSD chip select | GPIO | Implemented by tester; not initialized here |
 | PC5 | `SD_DET` | Input | microSD card detect | GPIO/EXTI | Physically confirmed active-low |
-| PC6 | `ESC_M4` | Output | ESC/motor channel 4 | TIM8_CH1 AF3 candidate | Timer/DMA selection deferred to Phase 1 |
-| PC7 | `ESC_M3` | Output | ESC/motor channel 3 | TIM8_CH2 AF3 candidate | Timer/DMA selection deferred to Phase 1 |
-| PC8 | `ESC_M2` | Output | ESC/motor channel 2 | TIM8_CH3 AF3 candidate | Timer/DMA selection deferred to Phase 1 |
-| PC9 | `ESC_M1` | Output | ESC/motor channel 1 | TIM8_CH4 AF3 candidate | Timer/DMA selection deferred to Phase 1 |
+| PC6 | `ESC_M4` | Output | Physical ESC output 4 | TIM8_CH1 AF3 selected | Route and grouped DMA choice recorded; not initialized |
+| PC7 | `ESC_M3` | Output | Physical ESC output 3 | TIM8_CH2 AF3 selected | Route and grouped DMA choice recorded; not initialized |
+| PC8 | `ESC_M2` | Output | Physical ESC output 2 | TIM8_CH3 AF3 selected | Route and grouped DMA choice recorded; not initialized |
+| PC9 | `ESC_M1` | Output | Physical ESC output 1 | TIM8_CH4 AF3 selected | Route and grouped DMA choice recorded; not initialized |
 | PC10 | `RP1_RX` | Output | MCU-to-receiver/telemetry serial | UART4_TX AF8 or USART3_TX AF7 | UART selection unresolved |
 | PC11 | `RP1_TX` | Input | Receiver/telemetry serial to MCU | UART4_RX AF8 or USART3_RX AF7 | UART selection unresolved |
 | PC12 | `IMU_INT1` | Input | BMI270 interrupt 1 | GPIO/EXTI | EXTI configuration deferred |
@@ -117,7 +117,7 @@ Most selections below are established by routing plus the manufacturing-test imp
 ## Deliberately unresolved decisions
 
 - PC10/PC11 can map to UART4 or USART3. Phase 2 will select the receiver backend after checking protocol, DMA, interrupt, and other UART requirements.
-- PC6–PC9 form a natural TIM8 channel group, but the DShot rate, timer setup, DMA mapping, channel order, and synchronization strategy belong to Phase 1 Milestones 1.5–1.6 and require physical validation.
+- PC6–PC9 use TIM8 channels 1–4 with AF3. The future backend will update CCR1–CCR4 together using TIM8 update on DMA2 Stream 1/Channel 7. DShot rate, timer register setup, and timing-buffer behavior remain Milestone 1.6 work, and the complete route still requires physical validation.
 - PB9 may use a normal EXTI input or timer capture for GPS PPS. Phase 6 will choose based on timing requirements.
 - BMI270 interrupt routing and EXTI selection belong to the sensor timing milestone.
 - ADC sample timing and scaling for PA4/PB0 are not yet specified.

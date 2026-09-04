@@ -36,10 +36,11 @@ all timestamped diagnostics.
 
 ### Phase 1 — actuators
 
-- PC6, PC7, PC8, and PC9 remain TIM8 CH1 through CH4 AF3 candidates; the
-  tester did not physically validate DShot output. Review authoritative routing,
-  DMA availability, channel ordering (`ESC_M4` through `ESC_M1`), and timer
-  synchronization before choosing a rate.
+- PC6, PC7, PC8, and PC9 are selected as TIM8 CH1 through CH4 AF3. Milestone
+  1.5 recorded the reverse `ESC_M4` through `ESC_M1` ordering and selected one
+  TIM8-update DMA2 Stream 1/Channel 7 burst into CCR1 through CCR4. The tester
+  did not physically validate DShot output; rate, waveform, and end-to-end
+  routing still require their owning implementation and bench milestones.
 - The generic output facade and command model remain valid; no manufacturing-
   tester motor policy should be copied into them.
 - Verify each physical channel with propellers removed, including exact stop,
