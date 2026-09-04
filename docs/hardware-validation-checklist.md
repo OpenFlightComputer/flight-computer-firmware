@@ -8,28 +8,35 @@ firmware link must not be recorded as proof that the flight image works.
 
 ## Basic boot and timebase
 
-- [ ] Program Debug and Release images over SWD and verify reset reaches
+- [x] Program the Debug image over SWD, verify it, reset, and confirm
   `BOOT_STATUS_RUNNING`.
-- [ ] Confirm HSE/PLL startup and the 168 MHz core clock on hardware.
-- [ ] Confirm the embedded dirty-aware build identity matches the flashed image.
-- [ ] Measure the TIM5 counter rate as 1 MHz against external time.
+- [ ] Program and smoke-test the Release image over SWD.
+- [x] Confirm HSE/PLL startup and the 168 MHz core clock on the Debug image.
+- [ ] Use `./ofc smoke` to confirm the embedded dirty-aware build identity
+  matches the freshly built and flashed Release image.
+- [x] Measure the TIM5-derived uptime against host monotonic time; a 2.009334 s
+  host interval produced 2.006966 s of firmware time (ratio 0.99882).
 - [ ] Exercise or accelerate a TIM5 32-bit wrap and confirm monotonic 64-bit
   time across the interrupt boundary.
 
 ## USB enumeration and protocol
 
-- [ ] Verify the development VID/PID, descriptors, V1-disabled VBUS sensing,
-  and CDC device enumeration on the target hosts.
-- [ ] Verify status, health, and log JSON contain exact unsigned 64-bit decimal
-  values without relying on target-library `%llu` support.
-- [ ] Send fragmented, coalesced, LF, and CRLF commands and verify exactly one
+- [x] Verify development identity `CAFE:4002`, the flight-firmware product
+  descriptor, V1-disabled VBUS sensing, and CDC enumeration on macOS.
+- [x] Verify ordinary status uptime and log timestamp/sequence fields are valid
+  target-generated JSON integers without target-library `%llu` support.
+- [ ] Force `UINT64_MAX` through a target status/log/health output path and
+  inspect its exact decimal bytes.
+- [x] Send fragmented, coalesced, LF, and CRLF commands and verify exactly one
   response with the matching request ID.
-- [ ] Verify malformed input returns `request_id:null` and a valid unsupported
-  command echoes its numeric request ID.
-- [ ] Interleave commands and logs and confirm the host can demultiplex them by
+- [x] Verify malformed input returns `request_id:null` and recovers normally.
+- [x] Verify a valid unsupported command echoes its numeric request ID.
+- [x] Interleave commands and logs and confirm the host can demultiplex them by
   `type` without assuming that a response is the next physical line.
-- [ ] Disconnect and reconnect during idle, receive, queued transmit, and active
-  transmit; confirm bounded recovery without a stuck queue.
+- [x] Close and reopen the host serial connection and confirm uptime advances
+  without an MCU reset.
+- [ ] Physically disconnect and reconnect during idle, receive, queued transmit,
+  and active transmit; confirm bounded recovery without a stuck queue.
 
 ## USB overload and interrupt/main ownership
 
@@ -59,7 +66,8 @@ firmware link must not be recorded as proof that the flight image works.
 
 ## Fault, health, and lifecycle
 
-- [ ] Confirm successful startup reports `DISARMED` and health `OK`.
+- [x] Confirm successful startup reports `DISARMED`, health `OK`, zero active
+  faults, and zero dropped fault records.
 - [ ] Inject each feasible non-critical USB failure and confirm startup remains
   `DISARMED` with `DEGRADED` health.
 - [ ] Inject representative critical startup failures and confirm the fault
@@ -80,3 +88,22 @@ firmware link must not be recorded as proof that the flight image works.
   roughly 30 microsecond interrupt-masked update before allowing in-flight use.
 - [ ] Validate PC6-PC9 TIM8 motor routing, channel order, waveform, and DMA on
   hardware during Phase 1; the tester did not validate DShot.
+
+## Flight-image evidence log
+
+### 2026-09-03 — Debug image at commit `5db525a`
+
+- ST-Link `B55B5A1A00000000F1EBF501`, firmware V2J46S7, target voltage 3.26 V.
+- STM32F405 device ID `0x413`, revision Y; program/read-back verification and
+  hardware reset succeeded at approximately 950 kHz SWD.
+- USB enumerated at `/dev/cu.usbmodem101` as `CAFE:4002`, manufacturer
+  `OpenFlightComputer`, product `OpenFlightComputer Flight Firmware`.
+- SWD RAM/register inspection found boot status `3`, USB initialization result
+  `0`, `SystemCoreClock=168000000`, TIM5 enabled, update interrupt enabled,
+  `PSC=83`, and `ARR=0xffffffff`.
+- At the same snapshot, fast/medium/slow task counts were 105740/10574/1058 and
+  USB service count was 105740, matching the intended 1000/100/10 Hz ratios.
+- Correlated status and health responses reported `DISARMED`, `OK`, zero active
+  faults, complete fault data, and zero dropped records. Fragmented, CRLF,
+  coalesced, malformed/unsupported-command handling, log/response interleaving,
+  and host close/reopen checks passed.

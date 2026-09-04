@@ -7,8 +7,9 @@ Phase 1 — DShot actuator subsystem.
 ## Current milestone
 
 Milestone 1.3 — V1 bring-up carryover and flight-firmware smoke test:
-**software compatibility fixes implemented; build traceability and physical
-validation remain**.
+**software compatibility fixes and initial Debug-image smoke test complete;
+build traceability and reusable host automation implemented; remaining physical
+stress/boundary checks remain**.
 
 ## Last completed milestone
 
@@ -198,6 +199,17 @@ contracts are integrated and reviewed.
 - Recorded physically proven clocks, USB, sensor, microSD, and WS2812 behavior;
   confirmed unusable discrete LEDs; unresolved motor/receiver routing; and the
   phase that owns each future carryover in `docs/v1-bringup-carryover.md`.
+- Programmed and read-back verified the Debug image from clean commit `5db525a`
+  on a V1 STM32F405, then confirmed running `DISARMED`/`OK` state, `CAFE:4002`
+  enumeration, JSON framing/correlation, host close/reopen, 168 MHz core state,
+  TIM5 configuration/rate, and expected diagnostic task ratios.
+- Added build-time firmware identity with separate semantic version and
+  dirty-aware Git build ID, retained in the ELF, startup log, and status JSON.
+- Added the reusable `./ofc` host application with independent build,
+  programmer, USB, correlated-protocol, JSON-reporting, and non-arming smoke
+  services. The CLI can build or flash either profile or a supplied ELF,
+  inspect status, monitor JSON, and automate status/health smoke checks without
+  tying those capabilities to terminal presentation.
 
 No motor output, receiver input, sensor access, persistent flight-data logging,
 or flight-control behavior has been implemented. `motor_command_t` and the
@@ -263,12 +275,22 @@ and the `ARMED` lifecycle state still has no actuator effect.
 
 ## Next step
 
-Complete Milestone 1.3 by adding dirty-aware build traceability, auditing
-response retention on target, and executing the documented flight-image smoke
-test. The hardware-independent DShot packet encoder remains Milestone 1.4.
+Complete Milestone 1.3 by using `./ofc` to flash and smoke-test a traceable
+Release image, then close the remaining physical checklist items: true cable
+reconnection, target-forced maximum 64-bit output, accelerated TIM5 wrap,
+overload/timing/stack evidence, and injected fault behavior. The
+hardware-independent DShot packet encoder remains Milestone 1.4.
 
 ## Milestone 1.3 software verification
 
+- The Python host package runs 16 focused tests covering command parsing,
+  partial USB framing, VID/PID discovery, log/response demultiplexing, request
+  correlation, firmware presets and identity extraction, probe selection,
+  non-arming smoke behavior, and JSON reporting.
+- A Debug build generated `firmware_version=0.1.0`, the expected
+  `5db525a-dirty` worktree build ID, and `v0.1.0+git.5db525a.dirty`; all three
+  strings are retained in the ELF. A clean post-commit build must be physically
+  matched to its running status response before the checklist closes.
 - The normal and address/undefined-behavior sanitizer host builds each run 17
   test executables; all tests pass.
 - Dedicated tests prove both USB VBUS modes, the V1 assume-present selection,
@@ -281,8 +303,9 @@ test. The hardware-independent DShot packet encoder remains Milestone 1.4.
   `unsigned long long` formatting cast. The pinned newlib-nano is no longer
   responsible for serializing 64-bit diagnostics.
 - Debug and Release firmware configurations build with warnings treated as
-  errors using Arm GCC 15.3.1. Debug uses 52,616 bytes of Flash and 14,736 bytes
-  of RAM; Release uses 34,952 bytes of Flash and 14,736 bytes of RAM.
+  errors using Arm GCC 15.3.1. With embedded identity and status fields, Debug
+  uses 52,848 bytes of Flash and 14,744 bytes of RAM; Release uses 35,128 bytes
+  of Flash and 14,744 bytes of RAM.
 - The Release ELF has no unresolved symbols, clangd reports zero errors for the
   new common formatter and changed board USB port, and Git whitespace
   validation passes.

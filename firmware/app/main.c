@@ -2,6 +2,7 @@
 #include "board.h"
 #include "fault.h"
 #include "fault_catalog.h"
+#include "firmware_identity.h"
 #include "logging.h"
 #include "scheduler.h"
 #include "system_state.h"
@@ -215,7 +216,9 @@ int main(void)
     bool usb_service_available = false;
 
     logging_initialize();
-    LOG_INFO(LOG_MODULE_SYSTEM, "OpenFlightComputer booting");
+    LOG_INFO(LOG_MODULE_SYSTEM,
+             "OpenFlightComputer %s booting",
+             firmware_version_string);
 
     system_state_machine_initialize(&firmware_system_state_machine);
     fault_definitions = firmware_fault_catalog(&fault_definition_count);
@@ -284,7 +287,9 @@ int main(void)
                     &firmware_usb_command_processor,
                     &firmware_system_state_machine,
                     &firmware_fault_system,
-                    time_us) == USB_COMMAND_INIT_OK) {
+                    time_us,
+                    firmware_version,
+                    firmware_build_id) == USB_COMMAND_INIT_OK) {
                 usb_service_available = true;
                 LOG_INFO(LOG_MODULE_USB, "CDC JSON service initialized");
             } else {

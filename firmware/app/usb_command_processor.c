@@ -69,6 +69,8 @@ static bool build_command_response(usb_command_processor_t *processor,
             system_state_name(processor->state_machine->current),
             request->request_id,
             processor->clock(),
+            processor->firmware_version,
+            processor->build_id,
             processor->pending_response,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
@@ -140,11 +142,14 @@ usb_command_init_result_t usb_command_processor_initialize(
     usb_command_processor_t *processor,
     system_state_machine_t *state_machine,
     fault_system_t *fault_system,
-    usb_command_clock_t clock)
+    usb_command_clock_t clock,
+    const char *firmware_version,
+    const char *build_id)
 {
     if ((processor == NULL) || (state_machine == NULL) ||
         !state_machine->initialized || (fault_system == NULL) ||
-        !fault_system->initialized || (clock == NULL)) {
+        !fault_system->initialized || (clock == NULL) ||
+        (firmware_version == NULL) || (build_id == NULL)) {
         return USB_COMMAND_INIT_INVALID_ARGUMENT;
     }
 
@@ -152,6 +157,8 @@ usb_command_init_result_t usb_command_processor_initialize(
         .state_machine = state_machine,
         .fault_system = fault_system,
         .clock = clock,
+        .firmware_version = firmware_version,
+        .build_id = build_id,
         .initialized = true,
     };
     return USB_COMMAND_INIT_OK;
@@ -170,7 +177,9 @@ usb_command_process_result_t usb_command_processor_process_once(
         (processor->state_machine == NULL) ||
         !processor->state_machine->initialized ||
         (processor->fault_system == NULL) ||
-        !processor->fault_system->initialized || (processor->clock == NULL)) {
+        !processor->fault_system->initialized || (processor->clock == NULL) ||
+        (processor->firmware_version == NULL) ||
+        (processor->build_id == NULL)) {
         return USB_COMMAND_PROCESS_INVALID_STATE;
     }
 

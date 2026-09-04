@@ -37,6 +37,8 @@ typedef struct {
     system_state_machine_t *state_machine;
     fault_system_t *fault_system;
     usb_command_clock_t clock;
+    const char *firmware_version;
+    const char *build_id;
     char pending_response[USB_CDC_TRANSMIT_CAPACITY];
     size_t pending_response_length;
     usb_command_statistics_t statistics;
@@ -55,7 +57,9 @@ usb_command_init_result_t usb_command_processor_initialize(
     usb_command_processor_t *processor,
     system_state_machine_t *state_machine,
     fault_system_t *fault_system,
-    usb_command_clock_t clock);
+    usb_command_clock_t clock,
+    const char *firmware_version,
+    const char *build_id);
 usb_command_process_result_t usb_command_processor_process_once(
     usb_command_processor_t *processor);
 

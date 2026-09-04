@@ -101,6 +101,21 @@ configure_file(
     @ONLY
 )
 
+set(FIRMWARE_IDENTITY_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/firmware_identity.c"
+)
+add_custom_target(generate_firmware_identity ALL
+    COMMAND "${CMAKE_COMMAND}"
+        -DSOURCE_DIRECTORY=${PROJECT_SOURCE_DIR}
+        -DFIRMWARE_VERSION=${PROJECT_VERSION}
+        -DOUTPUT_FILE=${FIRMWARE_IDENTITY_SOURCE}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/generate_firmware_identity.cmake"
+    BYPRODUCTS "${FIRMWARE_IDENTITY_SOURCE}"
+    COMMENT "Refreshing dirty-aware firmware build identity"
+    VERBATIM
+)
+set_source_files_properties("${FIRMWARE_IDENTITY_SOURCE}" PROPERTIES GENERATED TRUE)
+
 add_library(stm32cube_f4 STATIC
     "${STM32_DEVICE_ROOT}/Source/Templates/system_stm32f4xx.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal.c"
@@ -150,6 +165,7 @@ add_executable(flight_firmware
     app/usb_command_processor.c
     app/usb_health_response.c
     app/usb_logging_backend.c
+    "${FIRMWARE_IDENTITY_SOURCE}"
     flight/actuators/motor_command.c
     flight/actuators/motor_output.c
     peripherals/usb/newline_framer.c
@@ -166,6 +182,7 @@ add_executable(flight_firmware
     hardware/mcu/stm32f405/timebase_snapshot.c
     "${STM32_DEVICE_ROOT}/Source/Templates/gcc/startup_stm32f405xx.s"
 )
+add_dependencies(flight_firmware generate_firmware_identity)
 
 target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/app"

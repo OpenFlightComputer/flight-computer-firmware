@@ -1,6 +1,11 @@
 # CMake and generated build artifacts
 /build/
 /out/
+/reports/
+/host_tools/.venv/
+/host_tools/.pytest_cache/
+/host_tools/*.egg-info/
+__pycache__/
 CMakeUserPresets.json
 compile_commands.json
 *.bin

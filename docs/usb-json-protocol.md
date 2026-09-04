@@ -35,7 +35,7 @@ accepted only in `DISARMED`, while disarm is accepted in `ARMED` or `FAILSAFE`.
 Examples, each followed by one newline:
 
 ```json
-{"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","uptime_us":123456}
+{"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","uptime_us":123456,"firmware_version":"0.1.0","build_id":"5db525a"}
 {"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
 {"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
@@ -56,6 +56,12 @@ envelope is malformed and no trustworthy ID was parsed. Log events are
 unsolicited and therefore have no request ID. Protocol version negotiation is
 deferred until independently released host software must communicate with
 older deployed firmware.
+
+The status response separates semantic `firmware_version` from the dirty-aware
+Git `build_id`. A clean build uses a seven-character commit such as `5db525a`;
+an image built with local changes uses `5db525a-dirty`. These fields identify
+the exact image for diagnostics, but they are not a protocol-version or
+compatibility guarantee.
 
 ## Log events
 

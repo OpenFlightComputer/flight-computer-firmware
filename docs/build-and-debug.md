@@ -199,4 +199,17 @@ disconnect/reconnect recovery, and zero unexpected drop/error counters.
 
 ## Current physical validation status
 
-Debug and Release images build and pass static artifact inspection. STM32CubeProgrammer 2.23.0 was installed but reported no attached ST-Link during the Milestone 0.2 implementation session. Programming, reset, HSE startup, USB enumeration/output/reconnection, the running status, and the task counters must therefore be checked when the hardware is connected.
+The root `./ofc` launcher now wraps the normal CMake presets and
+STM32CubeProgrammer flow. `./ofc firmware flash --profile debug` performs the
+build/program/verify/reset sequence, while `./ofc smoke --profile release`
+continues through safe status and health checks and writes a JSON report. See
+`docs/host-tools.md`; neither command sends an arm request.
+
+The Debug image from commit `5db525a` has been programmed, read-back verified,
+and reset through ST-Link on a V1 board. It reaches running `DISARMED` state,
+reports health `OK`, enumerates as `CAFE:4002` with the V1 VBUS workaround, and
+passes initial JSON framing/correlation checks. SWD inspection confirms the 168
+MHz core value, TIM5 configuration, and expected task-counter ratios. Release
+image execution, physical cable-disconnect cases, accelerated TIM5 wrap,
+target-forced maximum 64-bit output, overload/stack measurements, and injected
+fault behavior remain open in `docs/hardware-validation-checklist.md`.

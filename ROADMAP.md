@@ -26,7 +26,9 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
 2. Generic actuator/motor interface — complete.
 3. V1 bring-up carryover and flight-firmware smoke test — in progress: the
    board-selected VBUS mode and bounded 64-bit formatting are implemented;
-   build traceability and physical foundation-image validation remain.
+   the initial Debug-image smoke test passes; dirty-aware build identity and
+   reusable `./ofc` automation are implemented; the traceable Release smoke and
+   remaining physical stress/boundary checks remain.
 4. Hardware-independent DShot packet encoder.
 5. TIM8/GPIO/DMA board mapping review against the physical V1.
 6. DShot timing representation and rate selection.

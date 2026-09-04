@@ -1,3 +1,5 @@
 # Tools
 
-Repository-owned developer and host utilities will live here when an approved milestone requires them. No tool is needed for Milestone 0.1.
+Repository-owned one-off development utilities live here. The reusable Python
+host application is in `host_tools/` and is launched from the repository root
+with `./ofc`.

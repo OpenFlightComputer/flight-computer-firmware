@@ -49,8 +49,10 @@ Milestone 1.3 is in progress following physical V1 bring-up. VBUS behavior is
 now an explicit board capability: V1 assumes VBUS is present and leaves its
 defective PA9 divider unused, while corrected hardware can select sensing. A
 shared bounded decimal converter also removes project-owned `%llu` dependencies
-from uptime, health, and logging output. Build traceability and the physical
-flight-image smoke test remain pending.
+from uptime, health, and logging output. Firmware now embeds separate semantic
+version and dirty-aware Git build identity fields, and `./ofc` provides reusable
+build, flash, inspection, and smoke automation. The traceable Release smoke and
+remaining physical boundary/stress checks remain pending.
 
 Initialize the pinned STM32CubeF4 dependency and its two required nested dependencies:
 
@@ -70,6 +72,25 @@ cmake --build --preset firmware-debug
 cmake --preset firmware-release
 cmake --build --preset firmware-release
 ```
+
+The repository also provides one host entry point for building, flashing,
+inspection, and repeatable non-arming smoke tests:
+
+```bash
+./ofc firmware build --profile debug
+./ofc firmware flash --profile release
+./ofc device status
+./ofc device monitor
+./ofc smoke --profile release
+./ofc smoke --no-flash
+```
+
+`./ofc smoke` builds, programs, verifies, resets, checks `DISARMED` status and
+`OK` health, and writes a machine-readable JSON report. It never arms the
+flight computer. The CLI is a thin wrapper over reusable Python services in
+`host_tools/openflightcomputer`, allowing a later frontend to call those APIs
+directly. See [docs/host-tools.md](docs/host-tools.md) for command behavior and
+extension boundaries.
 
 Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase, task registry, scheduler, state transitions, faults, health derivation, logging core, USB JSON serialization, newline framing, protocol parsing, and command dispatch. The image configures only the internal timebase and USB CDC pins/peripheral; there is no motor control, receiver decoding, sensor processing, or operational flight behavior yet.
 

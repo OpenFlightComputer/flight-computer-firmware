@@ -73,7 +73,9 @@ static void response_builders_are_exact_and_bounded(void)
     static const char status[] =
         "{\"type\":\"response\",\"request_id\":42,"
         "\"command\":\"status\",\"ok\":true,"
-        "\"state\":\"DISARMED\",\"uptime_us\":42}\n";
+        "\"state\":\"DISARMED\",\"uptime_us\":42,"
+        "\"firmware_version\":\"0.1.0\","
+        "\"build_id\":\"abcdef0-dirty\"}\n";
     static const char accepted[] =
         "{\"type\":\"response\",\"request_id\":7,"
         "\"command\":\"arm\",\"ok\":true,"
@@ -89,20 +91,26 @@ static void response_builders_are_exact_and_bounded(void)
         "{\"type\":\"error\",\"request_id\":9,"
         "\"error\":\"unsupported_command\"}\n";
 
-    assert(usb_json_build_status_response("DISARMED", 42U, 42U, output,
+    assert(usb_json_build_status_response("DISARMED", 42U, 42U,
+                                          "0.1.0", "abcdef0-dirty", output,
                                           sizeof(output), &length));
     assert(length == sizeof(status) - 1U);
     assert(memcmp(output, status, length) == 0);
     assert(usb_json_build_status_response("DISARMED",
                                           UINT32_MAX,
                                           UINT64_MAX,
+                                          "0.1.0",
+                                          "abcdef0",
                                           output,
                                           sizeof(output),
                                           &length));
     assert(strstr(output,
                   "\"request_id\":4294967295") != NULL);
     assert(strstr(output,
-                  "\"uptime_us\":18446744073709551615}\n") != NULL);
+                  "\"uptime_us\":18446744073709551615,") != NULL);
+    assert(!usb_json_build_status_response("DISARMED", 1U, 1U,
+                                           NULL, "build", output,
+                                           sizeof(output), &length));
     assert(usb_json_build_transition_response(USB_JSON_COMMAND_ARM, 7U, true,
                                               "ARMED", NULL, output,
                                               sizeof(output), &length));

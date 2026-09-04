@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "ofc: uv is required; install it from https://docs.astral.sh/uv/" >&2
+    exit 127
+fi
+
+repository_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec uv run --project "$repository_root/host_tools" ofc "$@"

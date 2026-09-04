@@ -92,7 +92,9 @@ static void initialize_system(usb_command_processor_t *processor,
     assert(usb_command_processor_initialize(processor,
                                             state_machine,
                                             fault_system,
-                                            fake_clock) ==
+                                            fake_clock,
+                                            "0.1.0",
+                                            "test-build") ==
            USB_COMMAND_INIT_OK);
 }
 
@@ -116,7 +118,9 @@ static void status_and_health_report_current_summary(void)
     static const char status[] =
         "{\"type\":\"response\",\"request_id\":10,"
         "\"command\":\"status\",\"ok\":true,"
-        "\"state\":\"DISARMED\",\"uptime_us\":123456}\n";
+        "\"state\":\"DISARMED\",\"uptime_us\":123456,"
+        "\"firmware_version\":\"0.1.0\","
+        "\"build_id\":\"test-build\"}\n";
     static const char health[] =
         "{\"type\":\"response\",\"request_id\":11,"
         "\"command\":\"health\",\"ok\":true,"
@@ -248,7 +252,12 @@ static void initialization_and_invalid_state_are_checked(void)
     reset_fakes();
     system_state_machine_initialize(&state_machine);
     assert(usb_command_processor_initialize(NULL, &state_machine,
-                                            &fault_system, fake_clock) ==
+                                            &fault_system, fake_clock,
+                                            "0.1.0", "test-build") ==
+           USB_COMMAND_INIT_INVALID_ARGUMENT);
+    assert(usb_command_processor_initialize(&processor, &state_machine,
+                                            &fault_system, fake_clock,
+                                            NULL, "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_INVALID_STATE);

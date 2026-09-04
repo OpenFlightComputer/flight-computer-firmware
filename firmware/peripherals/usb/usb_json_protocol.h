@@ -41,6 +41,8 @@ bool usb_json_build_transition_response(usb_json_command_t command,
 bool usb_json_build_status_response(const char *state,
                                     uint32_t request_id,
                                     uint64_t uptime_us,
+                                    const char *firmware_version,
+                                    const char *build_id,
                                     char *destination,
                                     size_t capacity,
                                     size_t *length);
