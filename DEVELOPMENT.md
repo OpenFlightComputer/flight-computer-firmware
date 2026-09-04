@@ -6,16 +6,16 @@ Phase 1 — DShot actuator subsystem.
 
 ## Current milestone
 
-Milestone 1.3 — V1 bring-up carryover and flight-firmware smoke test:
-**software compatibility fixes and initial Debug-image smoke test complete;
-build traceability and reusable host automation implemented; remaining physical
-stress/boundary checks remain**.
+Milestone 1.4 — hardware-independent DShot packet encoder:
+**implementation and host verification complete; awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 1.2 — generic actuator/motor interface. Backend-independent
-initialization, complete-command submission, force-stop behavior, and ownership
-contracts are integrated and reviewed.
+Milestone 1.3 — V1 bring-up carryover and initial flight-firmware smoke test.
+The compatibility changes, build identity, host automation, Debug-image smoke,
+and deterministic RGB startup state are integrated and reviewed. Remaining
+stress and boundary measurements stay explicit in the hardware checklist and
+must be closed before flight; progression does not count them as passed.
 
 ## Current implementation status
 
@@ -215,6 +215,13 @@ contracts are integrated and reviewed.
   now preloads PA1 low, emits one tester-proven all-zero GRB frame to clear
   retained LED state, and leaves the line low; it adds no status semantics or
   general RGB API.
+- Added a pure outbound DShot frame encoder with separate throttle/stop and
+  special-command entry points. It packs the 11-bit value, telemetry-request
+  bit, and four-bit nibble-XOR checksum into one MSB-first `uint16_t` without
+  hardware, scheduling, flight-model, allocation, or mutable-global coupling.
+- Made throttle encoding accept only stop `0` or `48..2047`; reserved commands
+  `1..47` require the explicit command API. Invalid inputs leave prior output
+  unchanged, while command repetition and authorization remain future policy.
 
 No motor output, receiver input, sensor access, persistent flight-data logging,
 or flight-control behavior has been implemented. `motor_command_t` and the
@@ -225,7 +232,8 @@ and the `ARMED` lifecycle state still has no actuator effect.
 
 - Milestone 0.2 had no board evidence, but the later manufacturing acceptance
   run has now proven SWD programming/reset and the HSE/PLL clock tree. The
-  flight image itself still needs the Milestone 1.3 smoke test.
+  later flight-image Debug smoke independently passed; Release and stress
+  coverage remain in the hardware checklist.
 - The hardware repository was not available in the current workspace for this
   plan update. The prior reviewed hashes remain the design baseline; physical
   findings and tester commits provide the new evidence.
@@ -280,11 +288,28 @@ and the `ARMED` lifecycle state still has no actuator effect.
 
 ## Next step
 
-Complete Milestone 1.3 by using `./ofc` to flash and smoke-test a traceable
-Release image, then close the remaining physical checklist items: true cable
-reconnection, target-forced maximum 64-bit output, accelerated TIM5 wrap,
-overload/timing/stack evidence, and injected fault behavior. The
-hardware-independent DShot packet encoder remains Milestone 1.4.
+Review Milestone 1.4, then begin Milestone 1.5 by resolving and documenting the
+physical V1 motor outputs against schematic/manufacturing evidence before any
+TIM8, GPIO, or DMA implementation. The outstanding foundation stress checks
+remain flight prerequisites in `docs/hardware-validation-checklist.md`.
+
+## Milestone 1.4 verification
+
+- The normal and address/undefined-behavior sanitizer builds each run all 18
+  host test executables successfully.
+- A dedicated host suite exhaustively encodes all 2,048 values with telemetry
+  both clear and set, covering the full 4,096-frame ordinary DShot space.
+- Tests compare against an independent iterative-nibble checksum calculation,
+  recover value and telemetry fields, and check documented value 1046 without
+  telemetry as exact frame `0x82C6`.
+- Tests prove stop and throttle cannot enter the reserved command range,
+  commands cannot enter stop/throttle ranges, out-of-range values are rejected,
+  null destinations are rejected, and failures preserve existing output.
+- The module is pure C with fixed execution and no HAL, STM32, timer, DMA, GPIO,
+  float, `motor_command_t`, scheduler, allocation, or mutable-global dependency.
+- Correct host frames are not physical DShot evidence; timing, bit-to-duty
+  representation, DMA ordering, routing, voltage, and ESC acceptance remain in
+  later milestones.
 
 ## Milestone 1.3 software verification
 
@@ -314,8 +339,9 @@ hardware-independent DShot packet encoder remains Milestone 1.4.
 - The Release ELF has no unresolved symbols, clangd reports zero errors for the
   new common formatter and changed board USB port, and Git whitespace
   validation passes.
-- Physical USB enumeration and exact target-output inspection remain pending;
-  host and link results are not recorded as board evidence.
+- Physical Debug-image USB enumeration and ordinary target output passed after
+  this software work; Release, forced numeric boundaries, and stress cases
+  remain explicitly pending rather than inferred from host/link results.
 
 ## Milestone 1.2 verification
 

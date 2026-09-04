@@ -168,6 +168,24 @@ target_compile_options(motor_output_tests PRIVATE
 
 add_test(NAME motor_output COMMAND motor_output_tests)
 
+add_executable(dshot_encoder_tests
+    dshot_encoder_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot/dshot_encoder.c"
+)
+
+target_include_directories(dshot_encoder_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot"
+)
+
+target_compile_options(dshot_encoder_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME dshot_encoder COMMAND dshot_encoder_tests)
+
 add_executable(board_usb_tests
     board_usb_tests.c
 )

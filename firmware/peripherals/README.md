@@ -7,3 +7,7 @@ STM32 types or routed pins.
 The `usb/` implementation owns CDC descriptors, fixed receive/transmit queues,
 newline framing, and the strict JSON wire protocol. Flight Computer V1 board
 support supplies the proven OTG FS pins and low-level STM USB port.
+
+The `dshot/` implementation owns the hardware-independent outbound DShot frame
+format. It does not own normalized throttle conversion, actuator authorization,
+timer/DMA output, or ESC command policy.

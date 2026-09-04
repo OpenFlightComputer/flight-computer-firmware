@@ -24,14 +24,16 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
 
 1. Motor command model — complete.
 2. Generic actuator/motor interface — complete.
-3. V1 bring-up carryover and flight-firmware smoke test — in progress: the
+3. V1 bring-up carryover and flight-firmware smoke test — complete for planned
+   implementation and initial smoke evidence: the
    board-selected VBUS mode and bounded 64-bit formatting are implemented;
    the initial Debug-image smoke test passes; dirty-aware build identity and
    reusable `./ofc` automation are implemented; V1's WS2812 now receives a
    deterministic boot-off frame after an undriven input caused random green
-   illumination; the traceable Release smoke and remaining physical
-   stress/boundary checks remain.
-4. Hardware-independent DShot packet encoder.
+   illumination; remaining stress/boundary checks stay tracked as pre-flight
+   validation.
+4. Hardware-independent DShot packet encoder — implementation complete and
+   awaiting review; all values and telemetry states are exhaustively host-tested.
 5. TIM8/GPIO/DMA board mapping review against the physical V1.
 6. DShot timing representation and rate selection.
 7. Final lifecycle, health, freshness, and force-stop safety gate.

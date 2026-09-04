@@ -73,6 +73,11 @@ descriptor copying, command revalidation/canonicalization, distinct facade
 storage, accepted-copy lifetime, busy/error/unknown mapping, and force-stop's
 accepted-or-error contract.
 
+The native `dshot_encoder_tests` target exhaustively covers all 2,048 protocol
+values with telemetry both clear and set, independently verifies the checksum
+and recovered fields, and enforces the public stop/throttle versus command
+separation. It proves frame construction only, not a physical waveform.
+
 The native `board_usb_tests` target verifies the explicit VBUS-mode semantics
 and that Flight Computer V1 selects assume-present behavior rather than its
 defective PA9 sensing path.
@@ -81,7 +86,7 @@ The native `uint64_decimal_tests` target verifies zero, decimal boundaries,
 `UINT64_MAX`, bounded zero padding, invalid arguments, and exact-capacity
 rejection without any formatted long-long I/O.
 
-Future hardware-independent tests will cover DShot encoding, receiver parsing,
-mixing, and control algorithms as their milestones are approved.
+Future hardware-independent tests will cover receiver parsing, mixing, and
+control algorithms as their milestones are approved.
 
 Hardware tests remain separate and must not be represented as passing host tests.

@@ -168,6 +168,7 @@ add_executable(flight_firmware
     "${FIRMWARE_IDENTITY_SOURCE}"
     flight/actuators/motor_command.c
     flight/actuators/motor_output.c
+    peripherals/dshot/dshot_encoder.c
     peripherals/usb/newline_framer.c
     peripherals/usb/usb_cdc_transport.c
     peripherals/usb/usb_descriptors.c
@@ -191,6 +192,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"
+    "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/dshot"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/usb"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
