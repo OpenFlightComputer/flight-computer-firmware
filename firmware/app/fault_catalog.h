@@ -18,6 +18,9 @@ enum {
     FAULT_ID_LOGGING_CLOCK_ATTACHMENT = 10U,
     FAULT_ID_USB_LOGGING_INITIALIZATION = 11U,
     FAULT_ID_USB_COMMAND_INITIALIZATION = 12U,
+    FAULT_ID_MOTOR_INITIALIZATION = 13U,
+    FAULT_ID_MOTOR_OUTPUT = 14U,
+    FAULT_ID_MOTOR_FORCE_STOP = 15U,
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count);

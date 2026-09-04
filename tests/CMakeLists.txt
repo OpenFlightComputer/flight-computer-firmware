@@ -131,6 +131,61 @@ target_compile_options(foundation_integration_tests PRIVATE
 
 add_test(NAME foundation_integration COMMAND foundation_integration_tests)
 
+add_executable(motor_safety_policy_tests
+    motor_safety_policy_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/motor_safety_policy.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
+)
+
+target_include_directories(motor_safety_policy_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+)
+
+target_compile_options(motor_safety_policy_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME motor_safety_policy COMMAND motor_safety_policy_tests)
+
+add_executable(motor_control_tests
+    motor_control_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/motor_control.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/motor_safety_policy.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/fault_catalog.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_mapping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_output.c"
+)
+
+target_include_directories(motor_control_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+)
+
+target_compile_options(motor_control_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME motor_control COMMAND motor_control_tests)
+
+add_test(
+    NAME motor_architecture
+    COMMAND "${CMAKE_COMMAND}"
+        "-DSOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/check_motor_boundaries.cmake"
+)
+
 add_executable(motor_command_tests
     motor_command_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
@@ -384,6 +439,7 @@ add_executable(usb_command_processor_tests
     usb_command_processor_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/motor_safety_policy.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/logging.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/logging_config.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"

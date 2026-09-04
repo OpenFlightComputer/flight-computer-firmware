@@ -63,6 +63,21 @@ static const fault_definition_t definitions[] = {
         .severity = FAULT_SEVERITY_FAULT,
         .source = FAULT_SOURCE_USB,
     },
+    {
+        .id = FAULT_ID_MOTOR_INITIALIZATION,
+        .severity = FAULT_SEVERITY_CRITICAL,
+        .source = FAULT_SOURCE_APPLICATION,
+    },
+    {
+        .id = FAULT_ID_MOTOR_OUTPUT,
+        .severity = FAULT_SEVERITY_CRITICAL,
+        .source = FAULT_SOURCE_APPLICATION,
+    },
+    {
+        .id = FAULT_ID_MOTOR_FORCE_STOP,
+        .severity = FAULT_SEVERITY_CRITICAL,
+        .source = FAULT_SOURCE_APPLICATION,
+    },
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count)

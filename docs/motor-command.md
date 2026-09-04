@@ -67,8 +67,9 @@ policy owns the configured timeout. Exactly the timeout boundary is fresh; the
 next microsecond is stale. A timestamp in the future is rejected instead of
 allowing unsigned subtraction to appear fresh.
 
-Freshness does not inspect system state or health. The later final safety gate
-must independently require permitted lifecycle/health state and a fresh command.
+Freshness does not inspect system state or health. The Milestone 1.7 actuator
+gate independently requires permitted lifecycle/health state and a fresh
+command, and periodically rechecks the last command the backend accepted.
 
 ## Floating-point contract
 

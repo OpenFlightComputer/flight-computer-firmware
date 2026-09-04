@@ -2,18 +2,18 @@
 
 ## Current phase
 
-Phase 1 — DShot actuator subsystem.
+Phase 1 — DShot motor subsystem.
 
 ## Current milestone
 
-Milestone 1.6 — DShot300 timing and interleaved DMA-buffer representation:
+Milestone 1.7 — lifecycle, health, freshness, and force-stop safety gate:
 **implementation and host verification complete; awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 1.5 — TIM8/GPIO/DMA board mapping. Fixed physical routes, grouped
-DMA resources, and the safely configurable logical assignment are documented,
-host-tested, reviewed, committed, and integrated.
+Milestone 1.6 — DShot300 timing and interleaved DMA-buffer representation.
+Exact V1 timing, four-lane ordering, trailing-low slots, and failure behavior
+are documented, host-tested, reviewed, committed, and integrated.
 
 ## Current implementation status
 
@@ -237,6 +237,21 @@ host-tested, reviewed, committed, and integrated.
   initialized yet.
 - Kept DShot600 as a later roadmap profile after DShot300 physical validation;
   it is intentionally rejected by the current API.
+- Added an application-owned motor controller with the only production
+  `motor_output_t`, mapping, accepted-command timestamp, clock, and timeout.
+  No command source can obtain the private output object or backend context.
+- Required exact `ARMED` lifecycle, `OK`/`WARNING`/`DEGRADED` health, complete
+  command revalidation, and freshness before mapping and forwarding a command.
+- Added periodic safety synchronization so producer silence expires the last
+  command actually accepted by the backend; a busy result does not refresh it.
+- Made invalid/stale commands and `UNKNOWN` health enter `FAILSAFE` while
+  armed and force stop. Critical motor initialization, output, and
+  force-stop failures use catalogue-owned IDs and enter terminal `FAULT`.
+- Added health-aware USB arm admission: `UNKNOWN` and `CRITICAL` are rejected
+  before the state machine, while warning/degraded health remains armable.
+- Added an automated every-build and CTest production-source boundary check
+  rejecting raw motor output/DShot calls and new arm-event sites outside their
+  explicitly allowed owner files.
 - Added a hardware-independent logical-to-physical motor permutation with an
   identity default, complete permutation validation, atomic replacement, and
   explicit requirements that the caller confirm both `DISARMED` lifecycle and
@@ -250,11 +265,10 @@ host-tested, reviewed, committed, and integrated.
   ownership, DMA choice, resource conflicts, safety boundaries, and physical
   validation.
 
-No motor output, receiver input, sensor access, persistent flight-data logging,
-or flight-control behavior has been implemented. `motor_command_t`, the motor
-mapping, and the generic output facade remain unconnected contracts with no
-production backend, and the `ARMED` lifecycle state still has no actuator
-effect.
+No physical motor output, receiver input, sensor access, persistent flight-data
+logging, or flight-control behavior has been implemented. The motor safety
+owner is compiled but remains uninitialized because no production backend is
+attached. Consequently `ARMED` still has no physical motor effect.
 
 ## Known issues and limitations
 
@@ -274,7 +288,9 @@ effect.
 - Receiver UART, motor timing/register implementation, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
 - Ready-batch fairness prevents selection starvation only when callbacks return. A non-returning callback blocks every task, and CPU overload still causes recorded missed releases.
-- USB is now an explicit development/bench arm-request source, but it is unauthenticated and changes only lifecycle state. Actuator authorization and final output gating must be defined before later motor commands can affect hardware.
+- USB is an unauthenticated development/bench arm-request source and changes
+  only lifecycle state. Health admission and the final output gate are now
+  enforced, but USB manual motor commands do not exist yet.
 - State-machine mutation currently belongs to main context and is not an interrupt-safe concurrent API.
 - Fault reporting and clearing also currently belong to main context and are not interrupt-safe concurrent APIs.
 - The production catalogue contains current foundation failures plus ordinary logging-clock and USB-service faults; additional warning and non-critical IDs remain owned by their future subsystem milestones.
@@ -328,12 +344,37 @@ effect.
 
 ## Next step
 
-Review Milestone 1.6, then begin Milestone 1.7 by implementing the final
-lifecycle, health, command-freshness, and force-stop safety gate before any
-timer output is activated. Staged single-channel TIM8/GPIO/DMA activation
-follows in Milestone 1.8. DShot600 remains a roadmap extension after DShot300
-works reliably. The outstanding foundation stress checks remain flight
-prerequisites in `docs/hardware-validation-checklist.md`.
+Review Milestone 1.7. Then begin staged single-channel TIM8/GPIO/DMA activation
+in Milestone 1.8, retaining stopped initialization and the private motor
+boundary. DShot600 remains a roadmap extension after DShot300 works reliably.
+The outstanding foundation stress checks remain flight prerequisites in
+`docs/hardware-validation-checklist.md`.
+
+## Milestone 1.7 verification
+
+- The normal and address/undefined-behavior sanitizer builds each run all 24
+  host test executables/checks successfully.
+- Actuator policy tests cover every health enum value and prove that only
+  `OK`, `WARNING`, and `DEGRADED` permit arm/output consideration.
+- Actuator controller tests cover invalid/backend/initial-stop initialization,
+  mandatory stopped startup, private mapping, accepted/busy/error submission,
+  command canonicalization, warning/degraded operation, state and health
+  rejection, invalid/stale failsafe entry, periodic expiration, critical fault
+  reporting, force-stop failure, and stopped-state tracking.
+- USB tests prove `UNKNOWN` health rejects arm before state-machine mutation
+  with a distinct request-ID-correlated `health_rejected` response.
+- An every-build and CTest source scan rejects accidental raw `motor_output`,
+  DShot encode/timing, or new arm-event uses outside explicit owner files.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. Debug uses 53,476 bytes of Flash and reserves
+  14,744 bytes of RAM; Release uses 35,580 bytes of Flash and reserves 14,744
+  bytes of RAM.
+- The gate uses fixed storage, bounded operations, an injected monotonic clock,
+  and main-context-only state/fault access. It adds no allocation, interrupt,
+  GPIO, timer, DMA, DShot transmission, USB motor command, or physical output.
+- No physical stop is claimed. Backend cancellation, DMA ownership, waveform
+  timing, ESC response, and timeout-service latency remain Milestones 1.8-1.11
+  and the propeller-free hardware checklist.
 
 ## Milestone 1.6 verification
 
@@ -451,7 +492,7 @@ prerequisites in `docs/hardware-validation-checklist.md`.
   behavior, global mutable state, runtime allocation, DShot representation, USB
   schema, state/health lookup, or timeout enforcement.
 - Address/undefined-behavior sanitizer execution of all fifteen host suites
-  passes, clangd reports zero errors for both actuator production modules, Git
+  passes, clangd reports zero errors for both motor production modules, Git
   whitespace validation passes, and the Release ELF has no unresolved symbols.
 - Physical verification is not applicable to this interface-only milestone;
   each future real backend must separately prove its copy, pending-demand

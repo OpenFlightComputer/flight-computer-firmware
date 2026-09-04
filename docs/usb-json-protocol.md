@@ -21,14 +21,16 @@ The supported commands are:
 | --- | --- |
 | `status` | Report lifecycle state and monotonic uptime |
 | `health` | Report derived overall health, lifecycle state, severity counts, and bounded active-fault details |
-| `arm` | Submit `ARM_REQUESTED` to the lifecycle state machine |
+| `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
 
 `arm` changes only the software lifecycle state. This firmware contains no
-motor driver or actuator output, so accepting it cannot drive hardware. The
-state machine remains the sole transition authority: for example, arm is
-accepted only in `DISARMED`, while disarm is accepted in `ARMED` or `FAILSAFE`.
-`FAULT` remains terminal until reset.
+physical motor backend, so accepting it cannot drive hardware. The application
+safety policy first requires `OK`, `WARNING`, or `DEGRADED` health;
+`UNKNOWN`/`CRITICAL` returns `health_rejected` without sending an arm event.
+The state machine remains the sole transition authority after admission: arm
+is accepted only in `DISARMED`, while disarm is accepted in `ARMED` or
+`FAILSAFE`. `FAULT` remains terminal until reset.
 
 ## Responses
 
@@ -39,8 +41,9 @@ Examples, each followed by one newline:
 {"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
 {"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
+{"type":"response","request_id":46,"command":"arm","ok":false,"state":"DISARMED","error":"health_rejected"}
 {"type":"error","request_id":null,"error":"invalid_request"}
-{"type":"error","request_id":46,"error":"unsupported_command"}
+{"type":"error","request_id":47,"error":"unsupported_command"}
 ```
 
 Milestone 0.12 derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or `CRITICAL`

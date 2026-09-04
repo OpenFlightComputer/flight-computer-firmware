@@ -16,6 +16,14 @@ option(
     ${CMAKE_CROSSCOMPILING}
 )
 
+add_custom_target(check_motor_architecture ALL
+    COMMAND "${CMAKE_COMMAND}"
+        "-DSOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        -P "${PROJECT_SOURCE_DIR}/tests/check_motor_boundaries.cmake"
+    COMMENT "Checking motor submission and arm-event boundaries"
+    VERBATIM
+)
+
 add_subdirectory(firmware/common)
 
 if(OPENFLIGHTCOMPUTER_BUILD_FIRMWARE)

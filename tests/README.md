@@ -52,14 +52,31 @@ validity-aware active-fault metadata, fixed-capacity response truncation,
 reported/active count distinction, and invalid destination handling.
 
 The native `usb_command_processor_tests` target uses a fake line source and
-transport to verify status/structured-health responses, state-machine-only arm/disarm,
-rejected transitions, malformed/unsupported errors, and pending-response
-backpressure. The STM32 USB device library, interrupt behavior, pins,
-enumeration, and physical transfer remain firmware-build or board-level checks.
+transport to verify status/structured-health responses, health-aware arm
+admission, state-machine arm/disarm transitions, malformed/unsupported errors,
+and pending-response backpressure. The STM32 USB device library, interrupt
+behavior, pins, enumeration, and physical transfer remain firmware-build or
+board-level checks.
 
 The native `foundation_integration_tests` target verifies complete
 state/fault/health chains for successful and degraded startup, fatal startup,
 ordinary and critical armed-runtime faults, recovery, and registry exhaustion.
+
+The native `motor_safety_policy_tests` target verifies all health outcomes:
+`OK`, `WARNING`, and `DEGRADED` permit arm/output consideration, while
+`UNKNOWN`, `CRITICAL`, and invalid values fail closed.
+
+The native `motor_control_tests` target uses an injected copying backend to
+verify fail-closed initialization, mandatory initial stop, singleton ownership,
+private mapping, state/health/validity/freshness gates, accepted and busy
+ownership, periodic timeout enforcement, failsafe entry, critical backend
+faults, and force-stop uncertainty.
+
+The motor architecture check runs in every normal build and as the named
+`motor_architecture` CTest. It scans production sources and rejects raw
+motor-output/DShot calls or new arm-event sites outside their explicit owner
+files. It guards against accidental bypass; it is not a security boundary
+against modified source code.
 
 The native `motor_command_tests` target verifies invalid initialization,
 atomic four-motor creation, normalized boundaries, exact-stop

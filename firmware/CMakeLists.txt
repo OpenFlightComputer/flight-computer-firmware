@@ -152,6 +152,8 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 )
 
 add_executable(flight_firmware
+    app/motor_control.c
+    app/motor_safety_policy.c
     app/fault.c
     app/fault_catalog.c
     app/health.c

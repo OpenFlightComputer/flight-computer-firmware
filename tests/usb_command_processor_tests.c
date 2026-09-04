@@ -200,6 +200,37 @@ static void illegal_transition_is_rejected_without_state_mutation(void)
     assert(processor.statistics.transition_rejected_count == 1U);
 }
 
+static void unknown_health_rejects_arm_before_the_state_machine(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+    fault_system.dropped_record_count = 1U;
+
+    queue_input("{\"type\":\"command\",\"request_id\":31,"
+                "\"command\":\"arm\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(state_machine.current == SYSTEM_STATE_DISARMED);
+    assert(strstr(captured_response, "health_rejected") != NULL);
+    assert(processor.last_transition_valid);
+    assert(processor.last_transition_result ==
+           SYSTEM_STATE_TRANSITION_REJECTED);
+    assert(processor.statistics.transition_rejected_count == 1U);
+    assert(logging_queue_count() == 0U);
+
+    fault_system.dropped_record_count = 0U;
+    queue_input("{\"type\":\"command\",\"request_id\":32,"
+                "\"command\":\"arm\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(state_machine.current == SYSTEM_STATE_ARMED);
+}
+
 static void invalid_unsupported_and_busy_responses_are_bounded(void)
 {
     usb_command_processor_t processor;
@@ -268,6 +299,7 @@ int main(void)
     status_and_health_report_current_summary();
     arm_and_disarm_use_the_state_machine();
     illegal_transition_is_rejected_without_state_mutation();
+    unknown_health_rejects_arm_before_the_state_machine();
     invalid_unsupported_and_busy_responses_are_bounded();
     initialization_and_invalid_state_are_checked();
     return 0;

@@ -43,12 +43,13 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 ## Current status
 
-Phase 1, Milestone 1.6 selects DShot300 for the initial SpeedyBee BLS 60A ESC
-and converts complete frames into an exact, host-tested four-lane TIM8 compare
-buffer. The preceding fixed V1 routes, synchronized TIM8-update DMA selection,
-logical-to-physical permutation, and packet encoder remain in force. DShot600
-is a later roadmap profile. No GPIO, TIM8, DMA, or physical motor output is
-configured yet.
+Phase 1, Milestone 1.7 adds the private motor safety owner and makes it the
+only permitted production caller of raw motor submission. State, health,
+complete-command validity, and freshness must pass; periodic synchronization
+forces stale or unauthorized output to stop. USB arm admission now rejects
+`UNKNOWN` and `CRITICAL` health. The preceding DShot300 timing, fixed V1 routes,
+grouped DMA selection, mapping, and encoder remain in force. No GPIO, TIM8,
+DMA, or physical motor output is configured yet.
 
 Milestone 1.3 completed its planned implementation and initial physical V1
 bring-up evidence. VBUS behavior is an explicit board capability: V1 assumes

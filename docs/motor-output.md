@@ -7,9 +7,9 @@ select DShot, configure hardware, authorize output, or store a latest command.
 ## Data flow and dependency boundary
 
 ```text
-future manual/control producer
+manual/control producer
         ↓ motor_command_t
-future safety gate
+motor_control safety gate
         ↓
 motor_output facade
         ↓ backend callbacks
@@ -23,7 +23,7 @@ protocol values, timer channels, DMA buffers, routed pins, or ESC timing. The
 backend is injected as three callbacks plus an opaque context pointer.
 
 To preserve `app -> flight -> peripherals -> hardware` dependency direction, a
-future production adapter that understands both this facade and a selected
+production adapter that understands both this facade and a selected
 peripheral belongs in the application integration layer, like the existing USB
 logging adapter. A DShot peripheral implementation must not include this
 flight-layer header or acquire knowledge of `motor_command_t`.
@@ -56,9 +56,10 @@ from and retain a safe non-driving or stopped state while it prepares its owned
 resources. The facade then invokes force-stop as an independent operational
 check. Only both accepted results make the facade initialized.
 
-An initialization or initial-stop error leaves the facade unusable and must be
-handled by later application fault policy. Unknown backend enum values fail as
-errors. No normal submission callback occurs during initialization.
+An initialization or initial-stop error leaves the facade unusable and is
+translated by `motor_control` into a critical catalogue-owned fault. Unknown
+backend enum values fail as errors. No normal submission callback occurs during
+initialization.
 
 ## Complete-command submission and ownership
 
@@ -86,8 +87,8 @@ will satisfy it by copying or converting the complete snapshot into an inactive
 backend-owned frame buffer before returning accepted.
 
 The facade maps accepted, busy, error, and unknown backend results to explicit
-public outcomes. It does not retry or queue commands; latest-command storage and
-scheduling belong to later milestones.
+outcomes. It does not retry or queue commands; `motor_control` retains only
+the last actually accepted command for periodic freshness enforcement.
 
 ## Force-stop semantics
 
@@ -103,12 +104,13 @@ bench validation must verify cancellation, buffer, DMA, timing, and electrical
 behavior.
 
 Normal submission is permitted again after an accepted force-stop because this
-layer owns mechanism, not lifecycle authorization. The future final safety gate
-must be the sole normal caller and decide whether a submission is permitted.
+layer owns mechanism, not lifecycle authorization. The Milestone 1.7
+`motor_control` gate is the sole permitted production caller and decides
+whether a submission is permitted.
 
 ## Current exclusions
 
-Milestone 1.2 adds no global instance, task, state/health lookup, freshness
-enforcement, fault report, DShot representation, timer/DMA/GPIO configuration,
-USB command, or physical output. Its fake backend verifies only the portable
-API and ownership contracts.
+The facade itself still has no global instance, task, state/health lookup,
+freshness enforcement, fault report, DShot representation, timer/DMA/GPIO
+configuration, USB command, or physical output. The application gate owns the
+one production instance without changing this lower interface's responsibilities.

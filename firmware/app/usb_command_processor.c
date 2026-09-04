@@ -1,5 +1,6 @@
 #include "usb_command_processor.h"
 
+#include "motor_safety_policy.h"
 #include "health.h"
 #include "logging.h"
 #include "usb_health_response.h"
@@ -96,9 +97,18 @@ static bool build_command_response(usb_command_processor_t *processor,
             request->command == USB_JSON_COMMAND_ARM
                 ? SYSTEM_STATE_EVENT_ARM_REQUESTED
                 : SYSTEM_STATE_EVENT_DISARM_REQUESTED;
+        const bool arm_health_rejected =
+            (request->command == USB_JSON_COMMAND_ARM) &&
+            !motor_fault_state_allows_arm(processor->fault_system);
 
-        processor->last_transition_result =
-            system_state_machine_handle_event(processor->state_machine, event);
+        if (arm_health_rejected) {
+            processor->last_transition_result =
+                SYSTEM_STATE_TRANSITION_REJECTED;
+        } else {
+            processor->last_transition_result =
+                system_state_machine_handle_event(processor->state_machine,
+                                                  event);
+        }
         processor->last_transition_valid = true;
 
         if (processor->last_transition_result == SYSTEM_STATE_TRANSITION_OK) {
@@ -125,7 +135,8 @@ static bool build_command_response(usb_command_processor_t *processor,
             request->request_id,
             false,
             system_state_name(processor->state_machine->current),
-            "transition_rejected",
+            arm_health_rejected ? "health_rejected"
+                                : "transition_rejected",
             processor->pending_response,
             sizeof(processor->pending_response),
             &processor->pending_response_length);

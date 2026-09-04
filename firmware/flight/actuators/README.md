@@ -9,12 +9,12 @@ reordering. `motor_output` defines the instance-based facade and injected
 backend contract for initialization, complete-command submission, and
 unconditional force-stop.
 
-DShot framing belongs in a later hardware-independent peripheral protocol
-module. An application-owned adapter will bridge that lower API to this facade
+DShot framing belongs in the hardware-independent peripheral protocol module.
+The application-owned motor controller will bridge that lower API to this facade
 without making the peripheral depend upward on flight types. Timer, DMA, and
 routed-pin implementations belong below the board and MCU hardware boundaries.
-The mapping and facade remain unconnected to application state and have only
-host-test consumers. They perform no production output. A future
-application-owned adapter must derive the mapping configuration booleans from
-the real lifecycle and force-stop results; callers must not assert them
-optimistically.
+The mapping and facade remain independently testable mechanism layers and
+perform no physical output. `app/motor_control` privately owns their one
+production instance, derives mapping conditions from real lifecycle and
+force-stop results, and is the only production module permitted to submit raw
+motor output.

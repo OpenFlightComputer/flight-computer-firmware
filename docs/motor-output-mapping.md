@@ -79,7 +79,7 @@ logical 3 -> physical output 3 / ESC_M4
 ```
 
 A proposed runtime mapping is accepted only when both conditions supplied by
-the future actuator owner are true:
+the future motor owner are true:
 
 1. the lifecycle state is `DISARMED`;
 2. the physical output backend has accepted force-stop.
@@ -90,9 +90,9 @@ mapping. A complete command is reordered through temporary local storage, so
 in-place application is safe and no partially remapped motor set is exposed.
 
 The module does not read application lifecycle state or operate hardware. The
-future application-owned actuator adapter is responsible for deriving the two
-safety conditions from the actual state machine and output backend rather than
-passing optimistic values.
+Milestone 1.7 application-owned motor controller derives both safety
+conditions from the actual state machine and its private output state rather
+than accepting optimistic booleans from command producers.
 
 ## Motor direction
 

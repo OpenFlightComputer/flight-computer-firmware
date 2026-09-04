@@ -10,8 +10,8 @@ explicit events. It does not control motors or infer state from peripherals.
 | --- | --- |
 | `BOOT` | Software state immediately after state-machine initialization |
 | `INITIALIZING` | Board, task registry, and scheduler initialization is in progress |
-| `DISARMED` | Initialization succeeded; future actuator output must be inhibited |
-| `ARMED` | An explicit arm request was accepted; future actuator output may be considered |
+| `DISARMED` | Initialization succeeded; future motor output must be inhibited |
+| `ARMED` | An explicit arm request was accepted; future motor output may be considered |
 | `FAILSAFE` | A failsafe was detected while armed; future actuator policy must inhibit or explicitly handle output |
 | `FAULT` | A fatal condition occurred; the state is terminal until reset |
 
@@ -84,11 +84,12 @@ state directly, unless a later design explicitly adds and validates a critical
 section policy.
 
 Health labels are a read-only diagnostic projection and do not alter lifecycle
-authority. The reviewed future arm-admission policy permits `OK`, `WARNING`,
-and `DEGRADED`, but rejects `UNKNOWN` and `CRITICAL`. An ordinary degradation
+authority. Milestone 1.7 arm admission permits `OK`, `WARNING`, and `DEGRADED`,
+but rejects `UNKNOWN` and `CRITICAL`. An ordinary degradation
 that appears while already armed does not automatically leave `ARMED`; a
 storage failure must not change flight behavior merely because it occurred in
 flight. Critical faults still enter terminal `FAULT`, so future subsystem
 catalogues must reserve that classification for conditions whose defined safe
-response justifies it. Phase 1 must enforce these decisions independently at
-the final actuator-output boundary.
+response justifies it. The final motor gate independently enforces state,
+health and command freshness; `UNKNOWN`, invalid input, or expired input while
+armed enters `FAILSAFE` and forces stop. See `docs/motor-safety-gate.md`.

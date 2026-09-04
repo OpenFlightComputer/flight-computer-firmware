@@ -20,7 +20,7 @@ Development is milestone-driven. Each milestone is implemented, documented, veri
 
 Phase 0 does not control motors, decode receiver input, or use sensor data for flight.
 
-## Phase 1 — DShot actuator subsystem
+## Phase 1 — DShot motor subsystem
 
 1. Motor command model — complete.
 2. Generic actuator/motor interface — complete.
@@ -37,10 +37,10 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
 5. TIM8/GPIO/DMA board mapping review against the physical V1 — complete;
    fixed routes, grouped DMA resources, and a safely configurable logical
    assignment are host-tested.
-6. DShot timing representation and rate selection — DShot300 selected for the
-   initial SpeedyBee BLS 60A/J-H-40 ESC; implementation and host verification
-   complete and awaiting review.
-7. Final lifecycle, health, freshness, and force-stop safety gate.
+6. DShot timing representation and rate selection — complete; DShot300 selected
+   for the initial SpeedyBee BLS 60A/J-H-40 ESC.
+7. Final lifecycle, health, freshness, and force-stop safety gate —
+   implementation and host verification complete; awaiting review.
 8. Single-channel timer/DMA output.
 9. Four-channel synchronized output.
 10. USB manual motor commands through the shared command model.
@@ -56,7 +56,7 @@ first-flight prerequisite and must not be selectable until separately tested.
 
 | Phase | Objective |
 | --- | --- |
-| 1 | DShot actuator subsystem controlled by safe USB bench commands — in progress |
+| 1 | DShot motor subsystem controlled by safe USB bench commands — in progress |
 | 2 | ELRS/CRSF receiver input, normalization, freshness, and diagnostics |
 | 3 | Open-loop receiver-to-motor integration and first controlled physical response |
 | 4 | BMI270-based estimation and stabilized flight, followed by optional BMP388 use |

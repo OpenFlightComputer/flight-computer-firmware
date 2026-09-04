@@ -28,6 +28,9 @@ already detect:
 | Logging-clock attachment | Fault | Application |
 | USB logging initialization | Fault | USB |
 | USB command initialization | Fault | USB |
+| Actuator initialization | Critical | Application |
+| Actuator output | Critical | Application |
+| Actuator force-stop | Critical | Application |
 
 Warning and non-critical fault behavior is host-tested with a test catalogue.
 The first production non-critical ID records failure to attach the logging
@@ -37,6 +40,11 @@ non-critical because USB is a development/diagnostic channel: its service task
 remains detached while firmware continues without host access. Other
 production IDs will be added only when an owning
 subsystem defines a real detectable condition and its safety consequence.
+The actuator failures are critical because initialization cannot establish a
+stopped backend, a normal command cannot be delivered reliably, or software
+cannot confirm that force-stop was accepted. The motor gate attempts stop
+where possible and preserves that physical uncertainty while critical
+reporting moves lifecycle state to terminal `FAULT`.
 
 ## Severity behavior
 
@@ -57,7 +65,7 @@ critical startup report therefore moves `INITIALIZING` to terminal `FAULT`, and
 a later arm request is rejected. The fault engine changes lifecycle state but
 does not halt the MCU. Existing fatal application paths still halt explicitly
 after reporting; future runtime policy may remain alive for diagnostics while
-the final actuator gate enforces non-`ARMED` output inhibition.
+the final motor gate enforces non-`ARMED` output inhibition.
 
 ## Records and repeated occurrences
 

@@ -125,7 +125,7 @@ Milestone 1.1 begins `flight/` with a normalized four-motor value snapshot.
 The model validates and timestamps complete commands but owns no global state,
 transport, lifecycle decision, DShot representation, or hardware output. This
 keeps future USB and control producers on one command type while leaving the
-final actuator safety gate and peripheral/hardware implementations in their
+final motor safety gate and peripheral/hardware implementations in their
 reviewed later milestones. See `docs/motor-command.md`.
 
 Milestone 1.2 adds an instance-based facade in `flight/actuators` whose injected
@@ -137,6 +137,15 @@ backpressure. A future application-owned adapter will bridge this flight type to
 the selected lower peripheral API, preventing DShot from depending upward on
 `flight/`. No production backend or safety authorization is connected. See
 `docs/motor-output.md`.
+
+Milestone 1.7 adds the application-owned `motor_control` safety boundary. It
+privately owns the one production motor-output instance and mapping, and is the
+only production module permitted to call raw motor submission. State, health,
+complete-command validity, and freshness must all pass before forwarding. A
+periodic synchronization call expires the last accepted command even when
+producers fall silent. CTest scans production sources for accidental raw motor
+or DShot calls outside their allowed owner files. See
+`docs/motor-safety-gate.md`.
 
 ## Separation from manufacturing test
 

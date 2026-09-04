@@ -2,8 +2,8 @@
 
 This directory contains the operational embedded firmware foundation.
 
-Milestone 1.2 adds the backend-independent motor-output facade while retaining the
-reviewed Phase 0 foundation:
+Milestone 1.7 adds the final hardware-independent motor safety gate while
+retaining the reviewed Phase 0 foundation:
 
 ```text
 application main
@@ -57,7 +57,10 @@ structure, and no motor GPIO, timer, DMA, or DShot behavior is configured.
 backend callbacks. It requires backend initialization plus an accepted initial
 force-stop, revalidates into facade-owned temporary storage, copies the backend
 descriptor, and exposes accepted/busy/error results without retaining caller
-storage. No production backend is attached.
+storage. `app/motor_control` privately owns the only production instance and
+mapping. State, health, validity, and freshness must pass before submission;
+periodic synchronization expires a previously accepted command even if its
+producer falls silent. No production backend is attached.
 
 `common/` contains allocation-free hardware-independent utilities, including the bounded unsigned-64 decimal formatter used in place of target long-long `printf`. `app/` contains boot/status orchestration plus health projection, command dispatch, the portable logging core, USB adapters, fault system, system state, Task registry, and cooperative scheduler. `flight/` owns hardware-independent control data and future flight behavior. Neither contains STM32 HAL calls. `peripherals/usb/` owns CDC descriptors, bounded receive/transmit state, newline framing, and the JSON wire protocol. `hardware/boards/flightcomputer_v1/` owns board identity, routed USB pins and OTG FS setup, timebase frequency selection, VBUS mode, and initialization policy. `hardware/mcu/stm32f405/` owns F405 startup support, linker layout, HAL configuration, clock implementation, TIM5 register access, and core interrupt handlers.
 

@@ -118,9 +118,12 @@ and formatting remains in cooperative main context, never the USB interrupt.
 
 ## Safety boundary
 
-Health labels are diagnostic output, not an actuator gate. The current state
-machine continues to decide transitions, and the fault system continues to
+Health labels remain a read-only diagnostic projection rather than owning the
+motor gate. The current state machine continues to decide transitions, and
+the fault system continues to
 send `FAULT_DETECTED` synchronously for critical reports and registry
-exhaustion. Before actuators exist, arm admission will explicitly allow
-`OK`, `WARNING`, and `DEGRADED` but reject `UNKNOWN` and `CRITICAL`; the final
-motor-output gate remains a separate Phase 1 safety mechanism.
+exhaustion. Milestone 1.7's separate application safety policy explicitly
+allows arm admission and output for `OK`, `WARNING`, and `DEGRADED`, while
+rejecting `UNKNOWN` and `CRITICAL`. `UNKNOWN` appearing while armed also causes
+the motor gate to enter `FAILSAFE` and force stop. Health evaluation itself
+still performs no transition or output operation.
