@@ -9,7 +9,10 @@ from openflightcomputer.cli import build_parser
         ["firmware", "build"],
         ["firmware", "flash"],
         ["device", "status"],
+        ["device", "arm"],
+        ["device", "disarm"],
         ["device", "monitor"],
+        ["motor", "run", "--motor", "1", "--throttle", "0.02", "--duration", "0.25"],
         ["smoke", "--no-flash"],
     ],
 )

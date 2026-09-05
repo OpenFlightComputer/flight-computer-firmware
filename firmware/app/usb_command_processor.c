@@ -3,11 +3,16 @@
 #include "motor_safety_policy.h"
 #include "health.h"
 #include "logging.h"
+#include "motor_control.h"
 #include "usb_health_response.h"
 #include "usb_json_protocol.h"
 
 #include <limits.h>
 #include <stddef.h>
+
+#define USB_MOTOR_TEST_ALLOWED_MOTOR 1U
+#define USB_MOTOR_TEST_MAX_THROTTLE_MILLIONTHS 100000U
+#define USB_MOTOR_TEST_THROTTLE_SCALE 1000000.0f
 
 static void saturating_increment(uint32_t *value)
 {
@@ -55,6 +60,94 @@ static bool build_error(usb_command_processor_t *processor,
         request_id_valid,
         request_id,
         error,
+        processor->pending_response,
+        sizeof(processor->pending_response),
+        &processor->pending_response_length);
+}
+
+static const char *motor_test_error(motor_control_submit_result_t result)
+{
+    switch (result) {
+    case MOTOR_CONTROL_SUBMIT_BUSY:
+        return "busy";
+    case MOTOR_CONTROL_SUBMIT_BLOCKED_STATE:
+        return "state_rejected";
+    case MOTOR_CONTROL_SUBMIT_BLOCKED_HEALTH:
+        return "health_rejected";
+    case MOTOR_CONTROL_SUBMIT_NOT_INITIALIZED:
+    case MOTOR_CONTROL_SUBMIT_INVALID_COMMAND:
+    case MOTOR_CONTROL_SUBMIT_STALE_COMMAND:
+    case MOTOR_CONTROL_SUBMIT_MAPPING_ERROR:
+    case MOTOR_CONTROL_SUBMIT_BACKEND_ERROR:
+    case MOTOR_CONTROL_SUBMIT_FORCE_STOP_ERROR:
+        return "motor_output_error";
+    case MOTOR_CONTROL_SUBMIT_ACCEPTED:
+        break;
+    }
+
+    return "motor_output_error";
+}
+
+static bool build_motor_test_response(
+    usb_command_processor_t *processor,
+    const usb_json_request_t *request)
+{
+    float throttles[MOTOR_COMMAND_MOTOR_COUNT] = {0.0f};
+    motor_command_t command;
+    motor_control_submit_result_t result;
+
+    saturating_increment(&processor->statistics.motor_test_count);
+    if (request->motor != USB_MOTOR_TEST_ALLOWED_MOTOR) {
+        saturating_increment(&processor->statistics.motor_test_rejected_count);
+        return usb_json_build_motor_test_response(
+            request->request_id,
+            false,
+            request->motor,
+            request->throttle_millionths,
+            system_state_name(processor->state_machine->current),
+            "motor_not_allowed",
+            processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    }
+    if (request->throttle_millionths >
+        USB_MOTOR_TEST_MAX_THROTTLE_MILLIONTHS) {
+        saturating_increment(&processor->statistics.motor_test_rejected_count);
+        return usb_json_build_motor_test_response(
+            request->request_id,
+            false,
+            request->motor,
+            request->throttle_millionths,
+            system_state_name(processor->state_machine->current),
+            "throttle_out_of_range",
+            processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    }
+
+    throttles[request->motor - 1U] =
+        (float)request->throttle_millionths /
+        USB_MOTOR_TEST_THROTTLE_SCALE;
+    if (motor_command_create(&command, throttles, processor->clock()) !=
+        MOTOR_COMMAND_CREATE_OK) {
+        result = MOTOR_CONTROL_SUBMIT_INVALID_COMMAND;
+    } else {
+        result = motor_control_submit(&command);
+    }
+
+    if (result == MOTOR_CONTROL_SUBMIT_ACCEPTED) {
+        saturating_increment(&processor->statistics.motor_test_accepted_count);
+    } else {
+        saturating_increment(&processor->statistics.motor_test_rejected_count);
+    }
+    return usb_json_build_motor_test_response(
+        request->request_id,
+        result == MOTOR_CONTROL_SUBMIT_ACCEPTED,
+        request->motor,
+        request->throttle_millionths,
+        system_state_name(processor->state_machine->current),
+        result == MOTOR_CONTROL_SUBMIT_ACCEPTED ? NULL
+                                               : motor_test_error(result),
         processor->pending_response,
         sizeof(processor->pending_response),
         &processor->pending_response_length);
@@ -141,6 +234,8 @@ static bool build_command_response(usb_command_processor_t *processor,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
     }
+    case USB_JSON_COMMAND_MOTOR_TEST:
+        return build_motor_test_response(processor, request);
     case USB_JSON_COMMAND_UNSUPPORTED:
     case USB_JSON_COMMAND_INVALID:
         break;

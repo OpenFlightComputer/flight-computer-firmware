@@ -31,6 +31,18 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(parse("{\"type\":\"command\",\"request_id\":3,"
                  "\"command\":\"disarm\"}").command ==
            USB_JSON_COMMAND_DISARM);
+    request = parse("{\"throttle\":0.02,\"motor\":1,"
+                    "\"command\":\"motor_test\",\"request_id\":5,"
+                    "\"type\":\"command\"}");
+    assert(request.command == USB_JSON_COMMAND_MOTOR_TEST);
+    assert(request.request_id == 5U);
+    assert(request.motor == 1U);
+    assert(request.throttle_millionths == 20000U);
+    request = parse("{\"type\":\"command\",\"request_id\":6,"
+                    "\"command\":\"motor_test\",\"motor\":255,"
+                    "\"throttle\":0.000001}");
+    assert(request.motor == UINT8_MAX);
+    assert(request.throttle_millionths == 1U);
     assert(parse("{\"type\":\"command\",\"request_id\":4,"
                  "\"command\":\"future\"}").command ==
            USB_JSON_COMMAND_UNSUPPORTED);
@@ -54,6 +66,22 @@ static void malformed_or_noncanonical_requests_are_rejected(void)
         "\"request_id\":\"1\"}",
         "{\"type\":\"command\",\"command\":\"status\",\"request_id\":1,"
         "\"request_id\":2}",
+        "{\"type\":\"command\",\"command\":\"motor_test\","
+        "\"request_id\":1}",
+        "{\"type\":\"command\",\"command\":\"motor_test\","
+        "\"request_id\":1,\"motor\":1,\"throttle\":-0.1}",
+        "{\"type\":\"command\",\"command\":\"motor_test\","
+        "\"request_id\":1,\"motor\":1,\"throttle\":.1}",
+        "{\"type\":\"command\",\"command\":\"motor_test\","
+        "\"request_id\":1,\"motor\":1,\"throttle\":0.}",
+        "{\"type\":\"command\",\"command\":\"motor_test\","
+        "\"request_id\":1,\"motor\":1,\"throttle\":0.0000001}",
+        "{\"type\":\"command\",\"command\":\"motor_test\","
+        "\"request_id\":1,\"motor\":1,\"throttle\":1e-2}",
+        "{\"type\":\"command\",\"command\":\"motor_test\","
+        "\"request_id\":1,\"motor\":256,\"throttle\":0.1}",
+        "{\"type\":\"command\",\"command\":\"status\","
+        "\"request_id\":1,\"motor\":1,\"throttle\":0.1}",
     };
     size_t index;
 
@@ -90,6 +118,16 @@ static void response_builders_are_exact_and_bounded(void)
     static const char correlated_error[] =
         "{\"type\":\"error\",\"request_id\":9,"
         "\"error\":\"unsupported_command\"}\n";
+    static const char motor_accepted[] =
+        "{\"type\":\"response\",\"request_id\":10,"
+        "\"command\":\"motor_test\",\"ok\":true,"
+        "\"state\":\"ARMED\",\"motor\":1,"
+        "\"throttle\":0.020000}\n";
+    static const char motor_rejected[] =
+        "{\"type\":\"response\",\"request_id\":11,"
+        "\"command\":\"motor_test\",\"ok\":false,"
+        "\"state\":\"DISARMED\",\"motor\":2,"
+        "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
 
     assert(usb_json_build_status_response("DISARMED", 42U, 42U,
                                           "0.1.0", "abcdef0-dirty", output,
@@ -125,6 +163,18 @@ static void response_builders_are_exact_and_bounded(void)
     assert(usb_json_build_error_response(true, 9U, "unsupported_command",
                                          output, sizeof(output), &length));
     assert(memcmp(output, correlated_error, length) == 0);
+    assert(usb_json_build_motor_test_response(10U, true, 1U, 20000U,
+                                              "ARMED", NULL, output,
+                                              sizeof(output), &length));
+    assert(memcmp(output, motor_accepted, length) == 0);
+    assert(usb_json_build_motor_test_response(11U, false, 2U, 100000U,
+                                              "DISARMED",
+                                              "motor_not_allowed", output,
+                                              sizeof(output), &length));
+    assert(memcmp(output, motor_rejected, length) == 0);
+    assert(!usb_json_build_motor_test_response(1U, true, 1U, 1000001U,
+                                               "ARMED", NULL, output,
+                                               sizeof(output), &length));
     assert(!usb_json_build_error_response(false, 0U, "invalid_request",
                                           output, 4U,
                                           &length));

@@ -470,11 +470,13 @@ add_executable(usb_command_processor_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_command_processor.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_health_response.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb/usb_json_protocol.c"
 )
 
 target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
 

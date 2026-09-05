@@ -1,5 +1,6 @@
 #include "fault.h"
 #include "logging.h"
+#include "motor_control.h"
 #include "system_state.h"
 #include "usb_cdc_transport.h"
 #include "usb_command_processor.h"
@@ -18,6 +19,18 @@ static char captured_response[USB_CDC_TRANSMIT_CAPACITY];
 static size_t captured_length;
 static size_t write_count;
 static uint64_t current_time_us;
+static motor_control_submit_result_t motor_submit_result;
+static motor_command_t captured_motor_command;
+static uint32_t motor_submit_count;
+
+motor_control_submit_result_t motor_control_submit(
+    const motor_command_t *command)
+{
+    assert(command != NULL);
+    captured_motor_command = *command;
+    motor_submit_count++;
+    return motor_submit_result;
+}
 
 usb_cdc_line_result_t usb_cdc_transport_read_line(uint8_t *destination,
                                                   size_t capacity,
@@ -73,6 +86,9 @@ static void reset_fakes(void)
     captured_length = 0U;
     write_count = 0U;
     current_time_us = UINT64_C(123456);
+    motor_submit_result = MOTOR_CONTROL_SUBMIT_ACCEPTED;
+    motor_command_initialize(&captured_motor_command);
+    motor_submit_count = 0U;
     logging_initialize();
 }
 
@@ -231,6 +247,64 @@ static void unknown_health_rejects_arm_before_the_state_machine(void)
     assert(state_machine.current == SYSTEM_STATE_ARMED);
 }
 
+static void motor_test_is_bounded_and_uses_the_motor_gate(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+    assert(system_state_machine_handle_event(
+               &state_machine, SYSTEM_STATE_EVENT_ARM_REQUESTED) ==
+           SYSTEM_STATE_TRANSITION_OK);
+
+    queue_input("{\"type\":\"command\",\"request_id\":33,"
+                "\"command\":\"motor_test\",\"motor\":1,"
+                "\"throttle\":0.02}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(motor_submit_count == 1U);
+    assert(captured_motor_command.valid);
+    assert(captured_motor_command.timestamp_us == current_time_us);
+    assert(captured_motor_command.throttle[0] > 0.0199f);
+    assert(captured_motor_command.throttle[0] < 0.0201f);
+    assert(captured_motor_command.throttle[1] == 0.0f);
+    assert(captured_motor_command.throttle[2] == 0.0f);
+    assert(captured_motor_command.throttle[3] == 0.0f);
+    assert(strstr(captured_response, "\"ok\":true") != NULL);
+    assert(strstr(captured_response, "\"throttle\":0.020000") != NULL);
+
+    queue_input("{\"type\":\"command\",\"request_id\":34,"
+                "\"command\":\"motor_test\",\"motor\":2,"
+                "\"throttle\":0.02}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(motor_submit_count == 1U);
+    assert(strstr(captured_response, "motor_not_allowed") != NULL);
+
+    queue_input("{\"type\":\"command\",\"request_id\":35,"
+                "\"command\":\"motor_test\",\"motor\":1,"
+                "\"throttle\":0.100001}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(motor_submit_count == 1U);
+    assert(strstr(captured_response, "throttle_out_of_range") != NULL);
+
+    motor_submit_result = MOTOR_CONTROL_SUBMIT_BUSY;
+    queue_input("{\"type\":\"command\",\"request_id\":36,"
+                "\"command\":\"motor_test\",\"motor\":1,"
+                "\"throttle\":0}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(motor_submit_count == 2U);
+    assert(strstr(captured_response, "\"error\":\"busy\"") != NULL);
+    assert(processor.statistics.motor_test_count == 4U);
+    assert(processor.statistics.motor_test_accepted_count == 1U);
+    assert(processor.statistics.motor_test_rejected_count == 3U);
+}
+
 static void invalid_unsupported_and_busy_responses_are_bounded(void)
 {
     usb_command_processor_t processor;
@@ -300,6 +374,7 @@ int main(void)
     arm_and_disarm_use_the_state_machine();
     illegal_transition_is_rejected_without_state_mutation();
     unknown_health_rejects_arm_before_the_state_machine();
+    motor_test_is_bounded_and_uses_the_motor_gate();
     invalid_unsupported_and_busy_responses_are_bounded();
     initialization_and_invalid_state_are_checked();
     return 0;

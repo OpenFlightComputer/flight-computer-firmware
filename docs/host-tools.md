@@ -7,7 +7,10 @@ to run the Python package in `host_tools/` and currently provides:
 ofc firmware build [--profile debug|release]
 ofc firmware flash [--profile debug|release] [--firmware IMAGE.elf]
 ofc device status [--port PATH]
+ofc device arm [--port PATH]
+ofc device disarm [--port PATH]
 ofc device monitor [--port PATH]
+ofc motor run --motor 1 --throttle VALUE --duration SECONDS [--port PATH]
 ofc smoke [--profile debug|release] [--no-flash]
 ```
 
@@ -22,6 +25,16 @@ USB discovery selects the flight-firmware development identity `CAFE:4002` or
 an explicit `--port`. `device status` makes one correlated request while
 ignoring interleaved log events. `device monitor` emits the live newline JSON
 stream until interrupted.
+
+`device arm` and `device disarm` expose the existing lifecycle commands without
+combining them with output. `motor run` is a separate propeller-free bench
+workflow and refuses to arm implicitly. Both the host and firmware restrict it
+to logical motor 1 and at most 10% normalized throttle; the host additionally
+bounds one run to one second and requires an active request above the command
+model's 0.001 stop threshold. The workflow prepares the ESC with zero commands,
+refreshes the firmware's 100 ms command lease, and attempts repeated zero plus
+disarm cleanup after completion, an error, or Ctrl-C. The firmware lease is the
+independent stop mechanism if host cleanup cannot reach the board.
 
 ## Smoke safety and reports
 

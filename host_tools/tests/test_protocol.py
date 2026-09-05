@@ -37,6 +37,29 @@ def test_request_demultiplexes_log_and_correlates_response():
     }
 
 
+def test_request_adds_command_parameters_without_replacing_envelope():
+    connection = FakeConnection(
+        [b'{"type":"response","request_id":1,"command":"motor_test","ok":true}']
+    )
+    JsonProtocolClient(connection).request(
+        "motor_test", parameters={"motor": 1, "throttle": 0.02}
+    )
+    assert json.loads(connection.written[0]) == {
+        "type": "command",
+        "command": "motor_test",
+        "request_id": 1,
+        "motor": 1,
+        "throttle": 0.02,
+    }
+
+
+def test_request_parameters_cannot_replace_correlated_envelope():
+    with pytest.raises(ValueError, match="request_id"):
+        JsonProtocolClient(FakeConnection([])).request(
+            "status", parameters={"request_id": 99}
+        )
+
+
 def test_correlated_error_is_raised():
     connection = FakeConnection(
         [b'{"type":"error","request_id":1,"error":"unsupported_command"}']

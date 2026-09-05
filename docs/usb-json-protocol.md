@@ -8,8 +8,9 @@ inspection; it is not an authenticated remote-control interface.
 ## Requests
 
 A request must be exactly one object with two string members and one unsigned
-32-bit request ID. Member order is irrelevant, but missing, duplicate,
-additional, non-integer, negative, or noncanonical numeric members are rejected:
+32-bit request ID, plus the documented command-specific members. Member order
+is irrelevant, but missing, duplicate, additional, negative, or noncanonical
+numeric members are rejected:
 
 ```json
 {"type":"command","command":"status","request_id":42}
@@ -23,14 +24,30 @@ The supported commands are:
 | `health` | Report derived overall health, lifecycle state, severity counts, and bounded active-fault details |
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
+| `motor_test` | Submit a short-lived, constrained motor-one command through the production safety gate |
 
-`arm` changes only the software lifecycle state. This firmware contains no
-physical motor backend, so accepting it cannot drive hardware. The application
-safety policy first requires `OK`, `WARNING`, or `DEGRADED` health;
+`arm` changes only the software lifecycle state and does not itself request
+nonzero output. The application safety policy first requires `OK`, `WARNING`,
+or `DEGRADED` health;
 `UNKNOWN`/`CRITICAL` returns `health_rejected` without sending an arm event.
 The state machine remains the sole transition authority after admission: arm
 is accepted only in `DISARMED`, while disarm is accepted in `ARMED` or
 `FAILSAFE`. `FAULT` remains terminal until reset.
+
+The only accepted manual output request is:
+
+```json
+{"type":"command","request_id":48,"command":"motor_test","motor":1,"throttle":0.020000}
+```
+
+Firmware—not merely the host tool—restricts this path to logical motor 1 and a
+normalized throttle from zero through `0.100000`. The decimal has at most six
+fractional digits and is converted to integer millionths before any float is
+created. Motors 2–4 are always submitted as zero. Every request passes through
+`motor_control_submit()`, so lifecycle, health, freshness, mapping, backend,
+and fault behavior are identical to other future command producers. An
+accepted command is a 100 ms lease: without a fresh accepted request, the
+1 kHz motor-control task forces stop and enters failsafe.
 
 ## Responses
 
@@ -42,6 +59,8 @@ Examples, each followed by one newline:
 {"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
 {"type":"response","request_id":46,"command":"arm","ok":false,"state":"DISARMED","error":"health_rejected"}
+{"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":1,"throttle":0.020000}
+{"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":2,"throttle":0.020000,"error":"motor_not_allowed"}
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":47,"error":"unsupported_command"}
 ```
@@ -126,3 +145,20 @@ response retry, and JSON log escaping. Physical enumeration, packet delivery,
 disconnect/reconnect, overflow under a real host, and interactive commands
 still require a connected Flight Computer V1 running the flight image with the
 V1 VBUS workaround.
+
+## Propeller-free host workflow
+
+The reusable host workflow behind `./ofc motor run` requires the board to
+already report `ARMED`; it never arms implicitly. It sends zero-throttle frames
+for one second so the ESC can recognize the DShot stream, refreshes the selected
+throttle every 20 ms for at most one second, then sends five explicit zero
+requests and disarms. The same cleanup is attempted after Ctrl-C or a command
+error. Firmware remains authoritative if the process, USB connection, or host
+computer disappears because the 100 ms lease expires independently.
+
+Initial sequence with all propellers removed:
+
+```bash
+./ofc device arm
+./ofc motor run --motor 1 --throttle 0.02 --duration 0.25
+```

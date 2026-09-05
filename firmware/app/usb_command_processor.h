@@ -25,6 +25,9 @@ typedef struct {
     uint32_t unsupported_count;
     uint32_t status_count;
     uint32_t health_count;
+    uint32_t motor_test_count;
+    uint32_t motor_test_accepted_count;
+    uint32_t motor_test_rejected_count;
     uint32_t transition_accepted_count;
     uint32_t transition_rejected_count;
     uint32_t response_sent_count;

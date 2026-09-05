@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any, Protocol
 
 
@@ -41,14 +41,28 @@ class JsonProtocolClient:
         self,
         command: str,
         *,
+        parameters: Mapping[str, object] | None = None,
         timeout_seconds: float = 2.0,
         observer: MessageObserver | None = None,
     ) -> dict[str, Any]:
+        if parameters is not None:
+            reserved = {"type", "command", "request_id"}.intersection(parameters)
+            if reserved:
+                names = ", ".join(sorted(reserved))
+                raise ValueError(f"request parameters cannot replace reserved fields: {names}")
         request_id = self._next_request_id
         self._next_request_id = (request_id + 1) & 0xFFFFFFFF
+        request: dict[str, object] = {
+            "type": "command",
+            "command": command,
+            "request_id": request_id,
+        }
+        if parameters is not None:
+            request.update(parameters)
         payload = json.dumps(
-            {"type": "command", "command": command, "request_id": request_id},
+            request,
             separators=(",", ":"),
+            allow_nan=False,
         ).encode("utf-8")
         self._connection.write_line(payload, timeout_seconds=timeout_seconds)
         deadline = time.monotonic() + timeout_seconds

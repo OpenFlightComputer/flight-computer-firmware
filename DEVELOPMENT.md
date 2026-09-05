@@ -6,14 +6,14 @@ Phase 1 — DShot motor subsystem.
 
 ## Current milestone
 
-Milestones 1.8 and 1.9 — synchronized four-channel DShot300 TIM8/DMA backend:
+Milestone 1.10 — constrained USB/Python motor bench command:
 **implementation and software verification complete; awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 1.7 — lifecycle, health, freshness, and force-stop safety gate.
-The single production motor-control boundary, periodic timeout enforcement,
-fault policy, and architecture guard are reviewed, committed, and integrated.
+Milestones 1.8 and 1.9 — synchronized four-channel DShot300 TIM8/DMA backend.
+The complete four-channel implementation, board-owned route/DMA storage, and
+software verification are reviewed, committed, and integrated.
 
 ## Current implementation status
 
@@ -286,12 +286,23 @@ fault policy, and architecture guard are reviewed, committed, and integrated.
   added, so this image has no software path to nonzero throttle.
 - Added adapter, board-ordering, generic-status, and asynchronous safety tests
   plus `docs/dshot-motor-backend.md`.
+- Added the strict `motor_test` USB request with decimal-to-millionths parsing,
+  correlated responses, and firmware-owned limits of logical motor 1 and 10%
+  normalized throttle. The other three command values are always zero.
+- Routed every accepted manual request through `motor_control_submit()` and
+  extended the source boundary check so USB cannot bypass lifecycle, health,
+  freshness, mapping, backend, force-stop, or fault policy.
+- Added reusable host protocol parameters and a motor workflow. It requires a
+  separate arm request, sends one second of zero frames, refreshes the 100 ms
+  command lease every 20 ms for at most one second, then sends five zero
+  requests and disarms even after Ctrl-C or a command failure.
+- Extended `./ofc` with explicit `device arm`, `device disarm`, and constrained
+  `motor run` commands without changing the non-arming smoke workflow.
 
 No receiver input, sensor access, persistent flight-data logging, or
-flight-control behavior has been implemented. The four-channel motor hardware
-backend is initialized and sends an all-zero frame at boot, but no command
-producer can request nonzero throttle. Physical waveform and ESC behavior are
-not yet claimed.
+flight-control behavior has been implemented. Only the constrained development
+USB path can request nonzero throttle. Physical waveform, ESC, and motor
+behavior are not yet claimed.
 
 ## Known issues and limitations
 
@@ -311,9 +322,9 @@ not yet claimed.
 - Receiver UART, motor timing/register implementation, GPS PPS capture, IMU EXTI, and ADC sampling decisions remain deliberately deferred to their owning milestones.
 - Host tests cover the portable overflow resolver; TIM5 register behavior and frequency still require the separate physical-board checks described above.
 - Ready-batch fairness prevents selection starvation only when callbacks return. A non-returning callback blocks every task, and CPU overload still causes recorded missed releases.
-- USB is an unauthenticated development/bench arm-request source and changes
-  only lifecycle state. Health admission and the final output gate are now
-  enforced, but USB manual motor commands do not exist yet.
+- USB remains an unauthenticated development/bench source. Its manual motor
+  path is deliberately narrow but must not be treated as a security boundary;
+  physical access and propeller removal remain part of the test procedure.
 - State-machine mutation currently belongs to main context and is not an interrupt-safe concurrent API.
 - Fault reporting and clearing also currently belong to main context and are not interrupt-safe concurrent APIs.
 - The production catalogue contains current foundation failures plus ordinary logging-clock and USB-service faults; additional warning and non-critical IDs remain owned by their future subsystem milestones.
@@ -338,9 +349,9 @@ not yet claimed.
   point. Its relationship to actual ESC startup behavior remains a propeller-free
   Phase 1 bench-validation item.
 - Latest accepted command storage, timeout enforcement, lifecycle/health
-  gating, asynchronous status, and a real force-stop backend are implemented.
-  A constrained bench command and later receiver/flight-control producers
-  remain deliberately absent.
+  gating, asynchronous status, a real force-stop backend, and a constrained
+  bench producer are implemented. Receiver/flight-control producers remain
+  deliberately absent.
 - A backend descriptor is copied, but its non-null context object is not; that
   context must have static or otherwise sufficient lifetime. Accepted submission
   likewise promises only an internal copy, not immediate physical application.
@@ -368,12 +379,36 @@ not yet claimed.
 
 ## Next step
 
-Review the combined Milestones 1.8 and 1.9 implementation. Then add the
-constrained propeller-free single-motor USB/Python bench path in Milestone
-1.10 before physically validating PC9/ESC_M1 and the remaining synchronized
-outputs in Milestone 1.11. DShot600 remains a roadmap extension after DShot300
-works reliably. The outstanding foundation stress checks remain flight
-prerequisites in `docs/hardware-validation-checklist.md`.
+Review Milestone 1.10. After it is accepted and committed, flash the resulting
+image and execute Milestone 1.11's staged propeller-free validation: begin with
+PC9/ESC_M1 at low throttle through `./ofc motor run`, then identify the other
+physical outputs and validate synchronized operation. DShot600 remains a
+roadmap extension after DShot300 works reliably. The outstanding foundation
+stress checks remain flight prerequisites in
+`docs/hardware-validation-checklist.md`.
+
+## Milestone 1.10 software verification
+
+- Native USB protocol tests cover valid motor/throttle fields, strict decimal
+  grammar, malformed or extra fields, integer bounds, and exact accepted and
+  rejected response serialization.
+- Command-processor tests prove the 10% and motor-one policies are enforced in
+  firmware, only the selected logical command entry is nonzero, all accepted
+  traffic uses the motor-control safety gate, and rejection statistics and
+  errors are correlated.
+- Python tests cover parameter serialization and reserved-envelope protection,
+  host-side bounds, no implicit arming, zero-frame preparation, 20 ms active
+  refresh, normal cleanup, and Ctrl-C cleanup.
+- The normal and address/undefined-behavior sanitizer host builds each run all
+  25 native test executables/checks, and all pass. The Python host package runs
+  28 tests, and all pass.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. Debug uses 63,368 bytes of Flash and reserves
+  15,176 bytes of RAM; Release uses 42,504 bytes of Flash and reserves 15,176
+  bytes of RAM.
+- No physical verification is claimed. The battery remained disconnected
+  during implementation; ESC recognition, motor identity, actual stop latency,
+  and disconnect behavior remain Milestone 1.11 checks.
 
 ## Milestones 1.8 and 1.9 software verification
 

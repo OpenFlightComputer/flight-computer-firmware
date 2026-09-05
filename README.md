@@ -48,10 +48,13 @@ The private motor safety owner is the only raw-submission caller; its adapter
 creates an `M1`-through-`M4` 18-by-4 table. The V1 board alone reorders it into
 its owned DMA buffer, and one DMA2 Stream 1 update burst feeds TIM8 CCR1
 through CCR4 synchronously. PC6 through PC9 are GPIO-low at rest. A
-highest-priority 1 kHz task observes state, health,
-freshness, and asynchronous DMA errors. There is still no USB, receiver, or
-flight-control motor-command producer, so this image cannot request nonzero
-throttle.
+highest-priority 1 kHz task observes state, health, freshness, and asynchronous
+DMA errors. Milestone 1.10 adds one deliberately constrained nonzero producer
+for propeller-free testing: USB may request only logical motor 1, no more than
+10% throttle, under a 100 ms renewable firmware lease. The reusable `./ofc
+motor run` workflow bounds duration to one second and performs explicit
+stop/disarm cleanup. There is still no receiver or flight-control command
+producer.
 
 Milestone 1.3 completed its planned implementation and initial physical V1
 bring-up evidence. VBUS behavior is an explicit board capability: V1 assumes
@@ -101,6 +104,6 @@ flight computer. The CLI is a thin wrapper over reusable Python services in
 directly. See [docs/host-tools.md](docs/host-tools.md) for command behavior and
 extension boundaries.
 
-Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase, task registry, scheduler, state transitions, faults, health derivation, logging core, USB JSON serialization, newline framing, protocol parsing, command dispatch, motor mapping, DShot conversion, and board motor-route facts. The image initializes stopped four-channel motor-output hardware but has no source of nonzero motor commands, receiver decoding, sensor processing, or operational flight behavior yet.
+Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. Native host tests exercise the timebase, task registry, scheduler, state transitions, faults, health derivation, logging core, USB JSON serialization, newline framing, protocol parsing, command dispatch, motor mapping, DShot conversion, board motor-route facts, and constrained manual motor policy. The image has no receiver decoding, sensor processing, stabilization, or operational flight behavior yet.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/dshot-motor-backend.md](docs/dshot-motor-backend.md) for the four-channel timer/DMA implementation, [docs/motor-output-mapping.md](docs/motor-output-mapping.md) for the fixed V1 routes, grouped DMA decision, and configurable logical assignment, [docs/dshot-encoder.md](docs/dshot-encoder.md) for packet construction and value separation, [docs/motor-command.md](docs/motor-command.md) for the normalized motor snapshot, [docs/motor-output.md](docs/motor-output.md) for the backend-independent output and ownership contract, [docs/v1-bringup-carryover.md](docs/v1-bringup-carryover.md) for the physical acceptance findings and their owning milestones, [docs/phase-0-integration-review.md](docs/phase-0-integration-review.md) for the consolidated foundation contracts, [docs/hardware-validation-checklist.md](docs/hardware-validation-checklist.md) for remaining flight-image checks, [docs/health-reporting.md](docs/health-reporting.md) for health derivation and response bounds, [docs/usb-json-protocol.md](docs/usb-json-protocol.md) for commands and framing, [docs/logging.md](docs/logging.md) for logging policy and usage, [docs/usb-cdc-logging.md](docs/usb-cdc-logging.md) for USB transport behavior, [docs/fault-system.md](docs/fault-system.md) for fault policy and records, [docs/safety.md](docs/safety.md) for lifecycle safety behavior, [docs/scheduler.md](docs/scheduler.md) for scheduler behavior, [docs/task-model.md](docs/task-model.md) for the task contract, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.

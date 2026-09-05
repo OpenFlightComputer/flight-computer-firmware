@@ -50,6 +50,14 @@ assert_token_is_private("motor_output_submit" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_force_stop" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_status" ${MOTOR_OUTPUT_FILES})
 
+set(MOTOR_SUBMISSION_FILES
+    firmware/app/motor_control.c
+    firmware/app/motor_control.h
+    firmware/app/usb_command_processor.c
+)
+
+assert_token_is_private("motor_control_submit" ${MOTOR_SUBMISSION_FILES})
+
 set(DSHOT_ENCODER_FILES
     firmware/app/dshot_motor_backend.c
     firmware/peripherals/dshot/dshot_encoder.c
