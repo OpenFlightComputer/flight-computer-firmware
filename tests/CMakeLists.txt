@@ -242,6 +242,31 @@ target_compile_options(motor_output_tests PRIVATE
 
 add_test(NAME motor_output COMMAND motor_output_tests)
 
+add_executable(dshot_motor_backend_tests
+    dshot_motor_backend_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/dshot_motor_backend.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_output.c"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot/dshot_encoder.c"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot/dshot_timing.c"
+)
+
+target_include_directories(dshot_motor_backend_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot"
+)
+
+target_compile_options(dshot_motor_backend_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME dshot_motor_backend COMMAND dshot_motor_backend_tests)
+
 add_executable(dshot_encoder_tests
     dshot_encoder_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot/dshot_encoder.c"

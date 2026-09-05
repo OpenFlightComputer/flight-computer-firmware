@@ -20,7 +20,7 @@ DShot, PWM, CAN, fake, or other lower implementation
 
 The facade accepts only `motor_command_t`, so flight producers do not know
 protocol values, timer channels, DMA buffers, routed pins, or ESC timing. The
-backend is injected as three callbacks plus an opaque context pointer.
+backend is injected as four callbacks plus an opaque context pointer.
 
 To preserve `app -> flight -> peripherals -> hardware` dependency direction, a
 production adapter that understands both this facade and a selected
@@ -35,6 +35,7 @@ typedef struct {
     motor_output_backend_initialize_t initialize;
     motor_output_backend_submit_t submit;
     motor_output_backend_force_stop_t force_stop;
+    motor_output_backend_status_fn_t status;
     void *context;
 } motor_output_backend_t;
 ```
@@ -90,6 +91,10 @@ The facade maps accepted, busy, error, and unknown backend results to explicit
 outcomes. It does not retry or queue commands; `motor_control` retains only
 the last actually accepted command for periodic freshness enforcement.
 
+`motor_output_status()` maps the backend's asynchronous idle, busy, and error
+state without exposing its timer or DMA representation. The 1 kHz safety task
+uses this to catch a DMA failure that occurs after an accepted submission.
+
 ## Force-stop semantics
 
 `motor_output_force_stop()` is an unconditional output operation, not a special
@@ -99,9 +104,9 @@ stop request. It has no busy result: the backend either accepts responsibility
 for stopping or reports an error requiring safety/fault handling.
 
 The generic facade can enforce the result vocabulary but cannot prove the
-physical backend stopped. The later DShot implementation and propeller-free
-bench validation must verify cancellation, buffer, DMA, timing, and electrical
-behavior.
+physical backend stopped. The attached DShot backend implements cancellation,
+owned buffers, and a synchronous zero-frame stop; propeller-free bench
+validation must still verify timing and electrical behavior.
 
 Normal submission is permitted again after an accepted force-stop because this
 layer owns mechanism, not lifecycle authorization. The Milestone 1.7
@@ -112,5 +117,5 @@ whether a submission is permitted.
 
 The facade itself still has no global instance, task, state/health lookup,
 freshness enforcement, fault report, DShot representation, timer/DMA/GPIO
-configuration, USB command, or physical output. The application gate owns the
-one production instance without changing this lower interface's responsibilities.
+configuration, or USB command. The application gate and its injected backend
+own those production responsibilities without changing this lower interface.

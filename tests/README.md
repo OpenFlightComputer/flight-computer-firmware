@@ -94,7 +94,13 @@ The native `motor_output_tests` target uses an injected fake backend to verify
 complete callback validation, backend and initial-stop failure handling,
 descriptor copying, command revalidation/canonicalization, distinct facade
 storage, accepted-copy lifetime, busy/error/unknown mapping, and force-stop's
-accepted-or-error contract.
+accepted-or-error contract. It also verifies asynchronous backend status
+mapping.
+
+The native `dshot_motor_backend_tests` target replaces the V1 board engine with
+a fake and verifies DShot300 initialization, normalized-throttle conversion,
+exact physical `M1`-through-`M4` table order, caller-independent copying, busy
+behavior, all-zero force-stop storage, and board result/status error mapping.
 
 The native `dshot_encoder_tests` target exhaustively covers all 2,048 protocol
 values with telemetry both clear and set, independently verifies the checksum
@@ -110,8 +116,9 @@ not timer/DMA or physical output.
 
 The native `board_motor_output_map_tests` target verifies the fixed V1
 `ESC_M1` through `ESC_M4` mapping to PC9 through PC6 and TIM8_CH4 through CH1,
-plus the selected 168 MHz TIM8 update DMA2 Stream 1/Channel 7 four-register
-burst. It proves recorded configuration data, not physical routing or output.
+plus the physical-order-to-CCR-order row transformation and the selected
+168 MHz TIM8 update DMA2 Stream 1/Channel 7 four-register burst. It proves
+recorded configuration and ordering logic, not physical routing or output.
 
 The native `board_usb_tests` target verifies the explicit VBUS-mode semantics
 and that Flight Computer V1 selects assume-present behavior rather than its

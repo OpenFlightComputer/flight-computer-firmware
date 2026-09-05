@@ -14,10 +14,12 @@ typedef struct {
     motor_output_backend_init_result_t initialize_result;
     motor_output_backend_submit_result_t submit_result;
     motor_output_backend_stop_result_t stop_result;
+    motor_output_backend_status_t status_result;
     motor_command_t last_command;
     uint32_t initialize_count;
     uint32_t submit_count;
     uint32_t stop_count;
+    uint32_t status_count;
 } fake_backend_t;
 
 static uint64_t current_time_us;
@@ -56,12 +58,21 @@ static motor_output_backend_stop_result_t fake_force_stop(void *context)
     return fake->stop_result;
 }
 
+static motor_output_backend_status_t fake_status(void *context)
+{
+    fake_backend_t *fake = context;
+
+    fake->status_count++;
+    return fake->status_result;
+}
+
 static motor_output_backend_t backend_for(fake_backend_t *fake)
 {
     return (motor_output_backend_t){
         .initialize = fake_initialize,
         .submit = fake_submit,
         .force_stop = fake_force_stop,
+        .status = fake_status,
         .context = fake,
     };
 }
@@ -216,6 +227,7 @@ static void successful_initialization_is_stopped_and_singleton(
     fake->initialize_result = MOTOR_OUTPUT_BACKEND_INIT_OK;
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
     fake->stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED;
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
 
     assert(motor_control_initialize(state_machine,
                                        fault_system,
@@ -412,6 +424,33 @@ static void backend_and_stop_failures_become_critical(
     assert(!motor_control_outputs_stopped());
 }
 
+static void asynchronous_backend_error_becomes_critical(
+    system_state_machine_t *state_machine,
+    fault_system_t *fault_system,
+    fake_backend_t *fake)
+{
+    motor_command_t command;
+
+    initialize_fault_system(state_machine, fault_system);
+    enter_disarmed(state_machine);
+    enter_armed(state_machine);
+    current_time_us = UINT64_C(1500000);
+    command = make_command(0.4f, 0.3f, 0.2f, 0.1f, current_time_us);
+    fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
+    fake->stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED;
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
+    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_ERROR;
+    assert(motor_control_synchronize() ==
+           MOTOR_CONTROL_SYNC_BACKEND_ERROR);
+    assert(state_machine->current == SYSTEM_STATE_FAULT);
+    assert(fault_system_record_for_id(fault_system,
+                                      FAULT_ID_MOTOR_OUTPUT) != NULL);
+    assert(motor_control_outputs_stopped());
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
+}
+
 int main(void)
 {
     system_state_machine_t state_machine;
@@ -420,6 +459,7 @@ int main(void)
         .initialize_result = MOTOR_OUTPUT_BACKEND_INIT_OK,
         .submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED,
         .stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED,
+        .status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE,
     };
 
     initialize_fault_system(&state_machine, &fault_system);
@@ -435,6 +475,8 @@ int main(void)
     unknown_health_stops_and_enters_failsafe(
         &state_machine, &fault_system, &fake);
     backend_and_stop_failures_become_critical(
+        &state_machine, &fault_system, &fake);
+    asynchronous_backend_error_becomes_critical(
         &state_machine, &fault_system, &fake);
     return 0;
 }

@@ -6,14 +6,14 @@ Phase 1 — DShot motor subsystem.
 
 ## Current milestone
 
-Milestone 1.7 — lifecycle, health, freshness, and force-stop safety gate:
-**implementation and host verification complete; awaiting owner review**.
+Milestones 1.8 and 1.9 — synchronized four-channel DShot300 TIM8/DMA backend:
+**implementation and software verification complete; awaiting owner review**.
 
 ## Last completed milestone
 
-Milestone 1.6 — DShot300 timing and interleaved DMA-buffer representation.
-Exact V1 timing, four-lane ordering, trailing-low slots, and failure behavior
-are documented, host-tested, reviewed, committed, and integrated.
+Milestone 1.7 — lifecycle, health, freshness, and force-stop safety gate.
+The single production motor-control boundary, periodic timeout enforcement,
+fault policy, and architecture guard are reviewed, committed, and integrated.
 
 ## Current implementation status
 
@@ -264,11 +264,34 @@ are documented, host-tested, reviewed, committed, and integrated.
   resource facts, plus `docs/motor-output-mapping.md` covering evidence,
   ownership, DMA choice, resource conflicts, safety boundaries, and physical
   validation.
+- Added a production DShot300 adapter that converts normalized physical-order
+  motor commands into 18-by-4 compare tables without knowing the V1 pin or
+  timer-channel assignment.
+- Added the complete V1 PC6-PC9/TIM8/DMA2 Stream 1 Channel 7 register backend.
+  All four CCR values move in one update-triggered timer DMA burst, with PWM
+  preload, bounded completion/error handling, and GPIO-low rest state.
+- Moved physical-output-to-CCR reordering and the persistent active DMA buffer
+  entirely into the V1 board layer. The adapter supplies `ESC_M1` through
+  `ESC_M4`; the board copies each row into CCR1 through CCR4 order before
+  accepting an asynchronous transfer.
+- Added a prebuilt application stop table. Force-stop aborts pending output;
+  the board copies/reorders that table into its owned DMA storage and sends it
+  synchronously.
+- Extended the generic motor-output interface with backend status so the
+  application detects DMA failures that occur after an accepted submission.
+- Registered a highest-priority 1,000 Hz motor-control task for lifecycle,
+  health, timeout, and asynchronous backend-error synchronization.
+- Initialized the backend during boot and made an accepted initial zero frame
+  mandatory. No USB, receiver, or flight-controller command producer was
+  added, so this image has no software path to nonzero throttle.
+- Added adapter, board-ordering, generic-status, and asynchronous safety tests
+  plus `docs/dshot-motor-backend.md`.
 
-No physical motor output, receiver input, sensor access, persistent flight-data
-logging, or flight-control behavior has been implemented. The motor safety
-owner is compiled but remains uninitialized because no production backend is
-attached. Consequently `ARMED` still has no physical motor effect.
+No receiver input, sensor access, persistent flight-data logging, or
+flight-control behavior has been implemented. The four-channel motor hardware
+backend is initialized and sends an all-zero frame at boot, but no command
+producer can request nonzero throttle. Physical waveform and ESC behavior are
+not yet claimed.
 
 ## Known issues and limitations
 
@@ -314,9 +337,10 @@ attached. Consequently `ARMED` still has no physical motor effect.
 - The `0.001f` normalized stop threshold is a conservative software starting
   point. Its relationship to actual ESC startup behavior remains a propeller-free
   Phase 1 bench-validation item.
-- Latest motor command storage, producer/consumer scheduling, timeout
-  enforcement, lifecycle/health gating, and a real force-stop backend remain
-  deliberately absent until their approved Phase 1 milestones.
+- Latest accepted command storage, timeout enforcement, lifecycle/health
+  gating, asynchronous status, and a real force-stop backend are implemented.
+  A constrained bench command and later receiver/flight-control producers
+  remain deliberately absent.
 - A backend descriptor is copied, but its non-null context object is not; that
   context must have static or otherwise sufficient lifetime. Accepted submission
   likewise promises only an internal copy, not immediate physical application.
@@ -328,8 +352,8 @@ attached. Consequently `ARMED` still has no physical motor effect.
 - Logical aircraft positions, mixer convention, expected CW/CCW directions,
   ESC-stored direction, and configuration persistence are not selected. No ESC
   direction command may be exposed as an ordinary runtime motor command.
-- The selected V1 motor routes and DMA resources are documentation and
-  host-tested data, not proof of PCB continuity, GPIO AF register behavior,
+- The selected V1 motor routes and DMA resources are now executable firmware
+  and host-tested data, not proof of PCB continuity, GPIO AF register behavior,
   TIM8/DMA execution, electrical waveform quality, ESC acceptance, physical
   motor order, or direction.
 
@@ -344,19 +368,47 @@ attached. Consequently `ARMED` still has no physical motor effect.
 
 ## Next step
 
-Review Milestone 1.7. Then begin staged single-channel TIM8/GPIO/DMA activation
-in Milestone 1.8, retaining stopped initialization and the private motor
-boundary. DShot600 remains a roadmap extension after DShot300 works reliably.
-The outstanding foundation stress checks remain flight prerequisites in
-`docs/hardware-validation-checklist.md`.
+Review the combined Milestones 1.8 and 1.9 implementation. Then add the
+constrained propeller-free single-motor USB/Python bench path in Milestone
+1.10 before physically validating PC9/ESC_M1 and the remaining synchronized
+outputs in Milestone 1.11. DShot600 remains a roadmap extension after DShot300
+works reliably. The outstanding foundation stress checks remain flight
+prerequisites in `docs/hardware-validation-checklist.md`.
+
+## Milestones 1.8 and 1.9 software verification
+
+- The normal and address/undefined-behavior sanitizer builds each run all 25
+  host test executables/checks successfully.
+- DShot backend tests prove exact normalized conversion, strict physical
+  `M1`-through-`M4` output order, busy behavior, caller-independent copying,
+  and fail-closed board result/status mapping.
+- Board-map tests prove the reversed physical-to-CCR row transformation,
+  including safe in-place use; the board engine owns the only buffer passed to
+  DMA.
+- Motor-output and motor-control tests cover the new asynchronous status path,
+  including conversion of a post-acceptance backend error into a critical
+  motor-output fault and forced stop.
+- Route tests retain the exact ESC_M1/PC9/CCR4 through
+  ESC_M4/PC6/CCR1 arrangement.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. Debug uses 60,020 bytes of Flash and reserves
+  15,168 bytes of RAM; Release uses 39,556 bytes of Flash and reserves 15,168
+  bytes of RAM.
+- clangd reports zero errors for the board engine, application adapter, motor
+  control, and composition changes. The Release ELF has no unresolved symbols,
+  the source-boundary check passes, and Git whitespace validation passes.
+- No physical verification is claimed. Pin state, timer/DMA execution, DShot
+  pulse widths, ESC recognition, cancellation latency, motor identity, and
+  direction remain propeller-free Milestone 1.11 checks after the constrained
+  Milestone 1.10 command path exists.
 
 ## Milestone 1.7 verification
 
 - The normal and address/undefined-behavior sanitizer builds each run all 24
   host test executables/checks successfully.
-- Actuator policy tests cover every health enum value and prove that only
+- Motor safety-policy tests cover every health enum value and prove that only
   `OK`, `WARNING`, and `DEGRADED` permit arm/output consideration.
-- Actuator controller tests cover invalid/backend/initial-stop initialization,
+- Motor-control tests cover invalid/backend/initial-stop initialization,
   mandatory stopped startup, private mapping, accepted/busy/error submission,
   command canonicalization, warning/degraded operation, state and health
   rejection, invalid/stale failsafe entry, periodic expiration, critical fault

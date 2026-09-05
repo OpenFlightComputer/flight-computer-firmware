@@ -89,13 +89,21 @@ firmware link must not be recorded as proof that the flight image works.
   power cycle and an MCU-only reset.
 - [ ] Measure WS2812 3.3 V-to-5 V logic margin and the scheduling impact of its
   roughly 30 microsecond interrupt-masked update before allowing in-flight use.
-- [ ] Validate PC6-PC9 TIM8 motor routing, channel order, waveform, and DMA on
-  hardware during Phase 1; the tester did not validate DShot.
+- [ ] Confirm PC6-PC9 remain low after cold boot, MCU reset, normal frame
+  completion, forced stop, and injected DMA failure.
+- [ ] Validate PC6-PC9 TIM8 motor routing, CCR1/M4 through CCR4/M1 channel
+  order, DShot300 pulse widths, synchronized edges, and DMA completion/error
+  behavior; the tester did not validate DShot.
+- [ ] Measure the synchronous zero-frame force-stop duration and confirm its
+  interrupt masking does not lose USB service or TIM5 overflow state.
+- [ ] Confirm the 1 kHz motor-control task detects an injected asynchronous DMA
+  error and command expiry within the documented scheduler bound.
 - [ ] With propellers removed, validate DShot300 first against the SpeedyBee
-  BLS 60A 30x30 4-in-1 ESC (stock BLHeli_S J-H-40): inspect one PC6-PC9
-  waveform if practical, confirm ESC recognition, identify S1-S4/motor order,
-  then exercise synchronized four-channel output. Keep the telemetry request
-  clear because the stock ESC has no separate telemetry output.
+  BLS 60A 30x30 4-in-1 ESC (stock BLHeli_S J-H-40): begin with only
+  PC9/ESC_M1 nonzero through the constrained host command, confirm ESC
+  recognition, identify S1-S4/motor order one at a time, then exercise multiple
+  synchronized nonzero channels. Keep the telemetry request clear because the
+  stock ESC has no separate telemetry output.
 
 ## Flight-image evidence log
 

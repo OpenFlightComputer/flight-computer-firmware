@@ -39,10 +39,12 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
    assignment are host-tested.
 6. DShot timing representation and rate selection — complete; DShot300 selected
    for the initial SpeedyBee BLS 60A/J-H-40 ESC.
-7. Final lifecycle, health, freshness, and force-stop safety gate —
-   implementation and host verification complete; awaiting review.
-8. Single-channel timer/DMA output.
-9. Four-channel synchronized output.
+7. Final lifecycle, health, freshness, and force-stop safety gate — complete.
+8. TIM8/DMA output engine — combined with Milestone 1.9 by owner decision;
+   four-channel implementation and host/build verification complete, awaiting
+   review and propeller-free physical validation.
+9. Four-channel synchronized output — implemented with Milestone 1.8 because
+   all channels share one table, timer, DMA stream, and completion path.
 10. USB manual motor commands through the shared command model.
 11. Propeller-free ESC and motor bench validation.
 

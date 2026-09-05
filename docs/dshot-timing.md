@@ -2,8 +2,8 @@
 
 Milestone 1.6 converts four already-encoded DShot frames into the interleaved
 timer compare values required by the selected Flight Computer V1 TIM8 DMA
-burst. It is a pure representation milestone: it does not configure GPIO,
-TIM8, DMA, interrupts, or motor power.
+burst. The module remains a pure representation layer; Milestones 1.8 and 1.9
+now consume it through the separate application and board backend.
 
 ## Initial ESC validation target
 
@@ -63,19 +63,22 @@ rows 0..15  = frame bits 15..0, most-significant bit first
 rows 16..17 = all-zero trailing low periods
 ```
 
-Each row is one future TIM8 update burst. Its columns are timer compare
-register order, not aircraft motor order:
+The timing function preserves whatever four-output order its caller supplies;
+it does not assign motors to timer channels. In the production path, the
+application first creates this table in physical order and the V1 board then
+creates the final DMA table in timer-register order:
 
-| Buffer lane | Timer destination | V1 physical signal |
+| Final V1 DMA lane | Timer destination | V1 physical signal |
 | --- | --- | --- |
 | 0 | CCR1 | `ESC_M4` |
 | 1 | CCR2 | `ESC_M3` |
 | 2 | CCR3 | `ESC_M2` |
 | 3 | CCR4 | `ESC_M1` |
 
-The two zero rows force every PWM output low after the frame. Exact DMA
-pipeline startup and completion behavior is deferred until TIM8/DMA activation;
-the hardware milestone must not assume these rows alone prove a safe stop.
+The two zero rows force every PWM output low after the frame. The board backend
+uses the first period to load preloads, completes with a zero row active, then
+stops TIM8 and changes all pins back to GPIO-low. Physical validation must
+still confirm the intended pipeline and waveform.
 
 ## Worked 50% and 25% examples
 
@@ -98,7 +101,8 @@ Therefore:
 “50%” is a normalized command, not a guarantee of 50% electrical power or
 thrust.
 
-All four physical motors at 50% produce four identical columns:
+After the V1 board transformation, all four physical motors at 50% produce
+four identical columns:
 
 | Bit | CCR1/M4 | CCR2/M3 | CCR3/M2 | CCR4/M1 |
 | ---: | ---: | ---: | ---: | ---: |
@@ -121,8 +125,9 @@ All four physical motors at 50% produce four identical columns:
 | low 1 | 0 | 0 | 0 | 0 |
 | low 2 | 0 | 0 | 0 | 0 |
 
-For physical M1/M2 at 50% and M3/M4 at 25%, the reverse channel routing means
-the 25% frames occupy CCR1/CCR2 and the 50% frames occupy CCR3/CCR4:
+For physical M1/M2 at 50% and M3/M4 at 25%, the V1 board's reverse channel
+routing means the 25% frames occupy CCR1/CCR2 and the 50% frames occupy
+CCR3/CCR4:
 
 | Bit | CCR1/M4 25% | CCR2/M3 25% | CCR3/M2 50% | CCR4/M1 50% |
 | ---: | ---: | ---: | ---: | ---: |
@@ -145,7 +150,9 @@ the 25% frames occupy CCR1/CCR2 and the 50% frames occupy CCR3/CCR4:
 | low 1 | 0 | 0 | 0 | 0 |
 | low 2 | 0 | 0 | 0 | 0 |
 
-The second table is retained as an exact host-test vector.
+The second final-board table is retained as an exact host-test vector. Other
+boards may produce a different final column order without changing the DShot
+encoder, timing function, or application adapter.
 
 ## API guarantees and limits
 

@@ -18,6 +18,7 @@ typedef enum {
     BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR = 107U,
     BOOT_STATUS_FAULT_SYSTEM_INITIALIZATION_ERROR = 108U,
     BOOT_STATUS_FAULT_CLOCK_ATTACHMENT_ERROR = 109U,
+    BOOT_STATUS_MOTOR_INITIALIZATION_ERROR = 110U,
 } boot_status_t;
 
 extern volatile boot_status_t firmware_boot_status;
@@ -33,5 +34,8 @@ extern volatile uint32_t firmware_usb_initialization_result;
 extern volatile uint32_t firmware_logging_drain_last_result;
 extern volatile uint32_t firmware_usb_command_last_result;
 extern volatile uint32_t firmware_usb_service_task_executions;
+extern volatile uint32_t firmware_motor_control_initialization_result;
+extern volatile uint32_t firmware_motor_control_sync_last_result;
+extern volatile uint32_t firmware_motor_control_task_executions;
 
 #endif

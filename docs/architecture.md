@@ -147,6 +147,17 @@ producers fall silent. CTest scans production sources for accidental raw motor
 or DShot calls outside their allowed owner files. See
 `docs/motor-safety-gate.md`.
 
+Milestones 1.8 and 1.9 attach the one production motor backend. The
+application adapter converts complete physical-order normalized commands into
+physical-order DShot300 tables. The selected V1 board layer owns the physical-
+to-CCR transformation, active DMA buffer, PC6-PC9, TIM8, DMA2 Stream 1/Channel
+7, interrupt completion, and GPIO-low rest state.
+All four channels are submitted as one DMA transaction; normal completion is
+asynchronous, while force-stop aborts pending work and sends an all-zero frame
+through a bounded synchronous path. A highest-priority 1 kHz application task
+polls backend status and applies lifecycle, health, and freshness safety. See
+`docs/dshot-motor-backend.md`.
+
 ## Separation from manufacturing test
 
 The manufacturing-test application proves board capabilities through an operator-driven, single-active-component workflow. Flight firmware has different lifecycle, timing, fault, safety, and data-ownership requirements. It may reuse verified clock, linker, startup, USB, and peripheral knowledge, but it will not inherit the tester's application loop, component-test registry, session protocol, or acceptance policy.

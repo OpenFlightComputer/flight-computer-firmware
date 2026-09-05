@@ -6,8 +6,12 @@ This board implementation targets manufacturing revision 1.7, generated from sch
 
 `motor_output_map.*` records the fixed `ESC_M1` through `ESC_M4` routes on
 PC9 through PC6 as reversed TIM8 channels 4 through 1, and the selected grouped
-TIM8-update DMA2 Stream 1/Channel 7 burst into CCR1 through CCR4. It is data
-only: no motor GPIO, timer, or DMA resource is initialized by this milestone.
+TIM8-update DMA2 Stream 1/Channel 7 burst into CCR1 through CCR4.
+`board_motor_output.c` consumes those facts to configure the complete
+four-channel DShot300 transfer, interrupt completion/error handling, and the
+GPIO-low rest state. Its API accepts every compare row in physical
+`ESC_M1`-through-`ESC_M4` order; the board reorders each row into CCR1-through-
+CCR4 order and copies it into the private buffer subsequently read by DMA.
 
 `time.c` exposes the generic `time_us()` API without leaking the STM32 backend. Milestone 0.10 adds `usb_device_port.c`, closely adapted from the proven tester, to own PA11/PA12 OTG FS routing, the device-controller/FIFO configuration, static USB class storage, and the OTG FS interrupt handler. The V1 PA9 divider cannot drive valid hardware VBUS detection, so the board-selected assume-present mode leaves PA9 untouched and disables sensing. A corrected board can select sense-input mode through the same hardware contract. All other deferred peripheral pins remain untouched. See `docs/flightcomputer-v1-hardware.md` for the reviewed physical map and unresolved choices.
 

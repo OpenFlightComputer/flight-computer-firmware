@@ -14,8 +14,12 @@ function(assert_token_is_private token)
 
     foreach(source_file IN LISTS PRODUCTION_SOURCES)
         file(READ "${SOURCE_ROOT}/${source_file}" contents)
-        string(FIND "${contents}" "${token}" token_position)
-        if(token_position EQUAL -1)
+        string(REGEX MATCH
+            "(^|[^A-Za-z0-9_])${token}([^A-Za-z0-9_]|$)"
+            token_match
+            "${contents}"
+        )
+        if(token_match STREQUAL "")
             continue()
         endif()
 
@@ -44,8 +48,10 @@ assert_token_is_private("motor_output_t" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_initialize" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_submit" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_force_stop" ${MOTOR_OUTPUT_FILES})
+assert_token_is_private("motor_output_status" ${MOTOR_OUTPUT_FILES})
 
 set(DSHOT_ENCODER_FILES
+    firmware/app/dshot_motor_backend.c
     firmware/peripherals/dshot/dshot_encoder.c
     firmware/peripherals/dshot/dshot_encoder.h
 )
@@ -54,6 +60,7 @@ assert_token_is_private("dshot_encode_throttle" ${DSHOT_ENCODER_FILES})
 assert_token_is_private("dshot_encode_command" ${DSHOT_ENCODER_FILES})
 
 set(DSHOT_TIMING_FILES
+    firmware/app/dshot_motor_backend.c
     firmware/peripherals/dshot/dshot_timing.c
     firmware/peripherals/dshot/dshot_timing.h
 )

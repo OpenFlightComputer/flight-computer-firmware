@@ -9,11 +9,13 @@ typedef struct {
     motor_output_backend_init_result_t init_result;
     motor_output_backend_submit_result_t submit_result;
     motor_output_backend_stop_result_t stop_result;
+    motor_output_backend_status_t status_result;
     const motor_command_t *expected_caller_command;
     motor_command_t copied_command;
     uint32_t initialize_count;
     uint32_t submit_count;
     uint32_t stop_count;
+    uint32_t status_count;
     bool submit_received_distinct_storage;
     bool copied_command_valid;
 } fake_backend_t;
@@ -50,12 +52,21 @@ static motor_output_backend_stop_result_t fake_force_stop(void *context)
     return fake->stop_result;
 }
 
+static motor_output_backend_status_t fake_status(void *context)
+{
+    fake_backend_t *fake = context;
+
+    fake->status_count++;
+    return fake->status_result;
+}
+
 static fake_backend_t successful_fake(void)
 {
     return (fake_backend_t){
         .init_result = MOTOR_OUTPUT_BACKEND_INIT_OK,
         .submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED,
         .stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED,
+        .status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE,
     };
 }
 
@@ -65,6 +76,7 @@ static motor_output_backend_t backend_for(fake_backend_t *fake)
         .initialize = fake_initialize,
         .submit = fake_submit,
         .force_stop = fake_force_stop,
+        .status = fake_status,
         .context = fake,
     };
 }
@@ -111,6 +123,10 @@ static void initialization_requires_complete_backend(void)
            MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
     backend = backend_for(&fake);
     backend.force_stop = NULL;
+    assert(motor_output_initialize(&output, &backend) ==
+           MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
+    backend = backend_for(&fake);
+    backend.status = NULL;
     assert(motor_output_initialize(&output, &backend) ==
            MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
     assert(fake.initialize_count == 0U);
@@ -262,6 +278,7 @@ static void backend_descriptor_is_copied_during_initialization(void)
     assert(motor_output_initialize(&output, &backend) == MOTOR_OUTPUT_INIT_OK);
     backend.submit = NULL;
     backend.force_stop = NULL;
+    backend.status = NULL;
     backend.context = NULL;
 
     assert(motor_output_submit(&output, &command) ==
@@ -269,6 +286,30 @@ static void backend_descriptor_is_copied_during_initialization(void)
     assert(motor_output_force_stop(&output) == MOTOR_OUTPUT_STOP_ACCEPTED);
     assert(fake.submit_count == 1U);
     assert(fake.stop_count == 2U);
+}
+
+static void status_maps_backend_results(void)
+{
+    fake_backend_t fake = successful_fake();
+    motor_output_backend_t backend = backend_for(&fake);
+    motor_output_t output = {0};
+
+    assert(motor_output_status(NULL) ==
+           MOTOR_OUTPUT_STATUS_INVALID_ARGUMENT);
+    assert(motor_output_status(&output) ==
+           MOTOR_OUTPUT_STATUS_NOT_INITIALIZED);
+    assert(motor_output_initialize(&output, &backend) == MOTOR_OUTPUT_INIT_OK);
+
+    assert(motor_output_status(&output) == MOTOR_OUTPUT_STATUS_IDLE);
+    fake.status_result = MOTOR_OUTPUT_BACKEND_STATUS_BUSY;
+    assert(motor_output_status(&output) == MOTOR_OUTPUT_STATUS_BUSY);
+    fake.status_result = MOTOR_OUTPUT_BACKEND_STATUS_ERROR;
+    assert(motor_output_status(&output) ==
+           MOTOR_OUTPUT_STATUS_BACKEND_ERROR);
+    fake.status_result = (motor_output_backend_status_t)99;
+    assert(motor_output_status(&output) ==
+           MOTOR_OUTPUT_STATUS_BACKEND_ERROR);
+    assert(fake.status_count == 4U);
 }
 
 static void force_stop_has_no_busy_outcome(void)
@@ -304,5 +345,6 @@ int main(void)
     submission_maps_backend_results();
     backend_descriptor_is_copied_during_initialization();
     force_stop_has_no_busy_outcome();
+    status_maps_backend_results();
     return 0;
 }

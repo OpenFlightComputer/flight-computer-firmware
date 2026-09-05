@@ -17,9 +17,9 @@ explicit events. It does not control motors or infer state from peripherals.
 
 The application reaches `DISARMED` after successful startup and never requests
 `ARMED` by itself. Milestone 0.11 adds an explicit USB `arm` command as a
-development/bench lifecycle-event source. It has no actuator effect because no
-motor subsystem exists. Before a later actuator command can be considered safe,
-its authorization and final output-gating policy must be designed and tested.
+development/bench lifecycle-event source. The four-channel DShot backend now
+exists, but USB has no motor-command schema and therefore still cannot request
+nonzero output. Every future producer must pass through `motor_control`.
 
 ## Legal transitions
 
@@ -45,15 +45,10 @@ or previous state. In particular:
 ## Disarm authority
 
 The state transition API is synchronous. An accepted disarm request changes
-`ARMED` or `FAILSAFE` to `DISARMED` before returning. Once an actuator subsystem
-exists, its final output gate must consume this authoritative state so that
-any state other than `ARMED` prevents normal motor demand from reaching the
-hardware.
-
-Milestone 0.7 establishes that software contract but does not implement motor
-outputs. The DShot milestone must enforce the gate at the final actuator
-boundary; merely checking state at an earlier command source would not be
-sufficient.
+`ARMED` or `FAILSAFE` to `DISARMED` before returning. The final motor output
+gate consumes this authoritative state so that any state other than `ARMED`
+forces the backend to stop. A highest-priority 1 kHz task repeats that check
+even when no producer calls the submission API.
 
 ## State versus boot status and faults
 

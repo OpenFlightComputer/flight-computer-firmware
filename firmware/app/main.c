@@ -1,9 +1,12 @@
 #include "boot_status.h"
 #include "board.h"
+#include "dshot_motor_backend.h"
 #include "fault.h"
 #include "fault_catalog.h"
 #include "firmware_identity.h"
 #include "logging.h"
+#include "motor_control.h"
+#include "motor_control_internal.h"
 #include "scheduler.h"
 #include "system_state.h"
 #include "task.h"
@@ -29,12 +32,25 @@ volatile uint32_t firmware_usb_initialization_result = UINT32_MAX;
 volatile uint32_t firmware_logging_drain_last_result = UINT32_MAX;
 volatile uint32_t firmware_usb_command_last_result = UINT32_MAX;
 volatile uint32_t firmware_usb_service_task_executions;
+volatile uint32_t firmware_motor_control_initialization_result = UINT32_MAX;
+volatile uint32_t firmware_motor_control_sync_last_result = UINT32_MAX;
+volatile uint32_t firmware_motor_control_task_executions;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
 system_state_machine_t firmware_system_state_machine;
 fault_system_t firmware_fault_system;
 usb_command_processor_t firmware_usb_command_processor;
+static dshot_motor_backend_t firmware_dshot_motor_backend;
+
+static void motor_control_task(void *context)
+{
+    (void)context;
+
+    firmware_motor_control_sync_last_result =
+        (uint32_t)motor_control_synchronize();
+    firmware_motor_control_task_executions++;
+}
 
 static void diagnostic_fast_task(void *context)
 {
@@ -97,6 +113,13 @@ static const task_definition_t usb_service_task_definition = {
     .period_us = 1000U,
     .priority = TASK_PRIORITY_BACKGROUND,
     .callback = usb_service_task,
+};
+
+static const task_definition_t motor_control_task_definition = {
+    .name = "motor-control",
+    .period_us = 1000U,
+    .priority = TASK_PRIORITY_HIGHEST,
+    .callback = motor_control_task,
 };
 
 static void stop_with_fault(boot_status_t status,
@@ -184,6 +207,16 @@ static task_registration_result_t register_application_tasks(
 
     task_registry_initialize(&firmware_task_registry);
 
+    {
+        const task_registration_result_t result =
+            task_registry_register(&firmware_task_registry,
+                                   &motor_control_task_definition);
+
+        if (result != TASK_REGISTRATION_OK) {
+            return result;
+        }
+    }
+
     for (index = 0U;
          index < (sizeof(diagnostic_task_definitions) /
                   sizeof(diagnostic_task_definitions[0]));
@@ -213,6 +246,8 @@ int main(void)
     task_registration_result_t task_registration_result;
     scheduler_init_result_t scheduler_init_result;
     usb_cdc_init_result_t usb_init_result;
+    motor_output_backend_t motor_output_backend;
+    motor_control_init_result_t motor_control_result;
     bool usb_service_available = false;
 
     logging_initialize();
@@ -267,6 +302,29 @@ int main(void)
         LOG_ERROR(LOG_MODULE_SYSTEM, "logging clock attachment failed");
     }
     LOG_INFO(LOG_MODULE_BOARD, "Flight Computer V1 initialized");
+
+    if (!dshot_motor_backend_prepare(&firmware_dshot_motor_backend,
+                                     &motor_output_backend)) {
+        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
+                        FAULT_ID_MOTOR_INITIALIZATION,
+                        false,
+                        0U);
+    }
+    motor_control_result = motor_control_initialize(
+        &firmware_system_state_machine,
+        &firmware_fault_system,
+        time_us,
+        MOTOR_COMMAND_DEFAULT_TIMEOUT_US,
+        &motor_output_backend);
+    firmware_motor_control_initialization_result =
+        (uint32_t)motor_control_result;
+    if (motor_control_result != MOTOR_CONTROL_INIT_OK) {
+        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
+                        FAULT_ID_MOTOR_INITIALIZATION,
+                        true,
+                        (uint32_t)motor_control_result);
+    }
+    LOG_INFO(LOG_MODULE_SYSTEM, "four-channel DShot300 output initialized");
 
     usb_init_result = usb_cdc_transport_initialize();
     firmware_usb_initialization_result = (uint32_t)usb_init_result;

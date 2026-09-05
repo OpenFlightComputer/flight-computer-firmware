@@ -87,14 +87,14 @@ dshot_timing_result_t dshot_timing_profile_create(
 
 dshot_timing_result_t dshot_timing_build_dma_buffer(
     const dshot_timing_profile_t *profile,
-    const uint16_t frames_by_timer_lane[DSHOT_TIMER_LANE_COUNT],
+    const uint16_t frames_by_output[DSHOT_OUTPUT_COUNT],
     dshot_dma_buffer_t buffer)
 {
-    uint16_t owned_frames[DSHOT_TIMER_LANE_COUNT];
+    uint16_t owned_frames[DSHOT_OUTPUT_COUNT];
     size_t bit_index;
     size_t lane;
 
-    if ((profile == NULL) || (frames_by_timer_lane == NULL) ||
+    if ((profile == NULL) || (frames_by_output == NULL) ||
         (buffer == NULL)) {
         return DSHOT_TIMING_INVALID_ARGUMENT;
     }
@@ -102,8 +102,8 @@ dshot_timing_result_t dshot_timing_build_dma_buffer(
         return DSHOT_TIMING_INVALID_PROFILE;
     }
 
-    for (lane = 0U; lane < DSHOT_TIMER_LANE_COUNT; lane++) {
-        owned_frames[lane] = frames_by_timer_lane[lane];
+    for (lane = 0U; lane < DSHOT_OUTPUT_COUNT; lane++) {
+        owned_frames[lane] = frames_by_output[lane];
     }
 
     for (bit_index = 0U; bit_index < DSHOT_FRAME_BIT_COUNT; bit_index++) {
@@ -111,7 +111,7 @@ dshot_timing_result_t dshot_timing_build_dma_buffer(
             (uint16_t)(UINT16_C(1) <<
                        (DSHOT_FRAME_BIT_COUNT - 1U - bit_index));
 
-        for (lane = 0U; lane < DSHOT_TIMER_LANE_COUNT; lane++) {
+        for (lane = 0U; lane < DSHOT_OUTPUT_COUNT; lane++) {
             buffer[bit_index][lane] =
                 ((owned_frames[lane] & bit_mask) != 0U)
                     ? profile->one_high_ticks
@@ -120,7 +120,7 @@ dshot_timing_result_t dshot_timing_build_dma_buffer(
     }
 
     for (; bit_index < DSHOT_DMA_SLOT_COUNT; bit_index++) {
-        for (lane = 0U; lane < DSHOT_TIMER_LANE_COUNT; lane++) {
+        for (lane = 0U; lane < DSHOT_OUTPUT_COUNT; lane++) {
             buffer[bit_index][lane] = 0U;
         }
     }

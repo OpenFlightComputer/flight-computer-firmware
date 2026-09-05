@@ -215,9 +215,24 @@ motor_control_submit_result_t motor_control_submit(
 
 motor_control_sync_result_t motor_control_synchronize(void)
 {
+    motor_output_status_t output_status;
+
     if (!control.initialized) {
         return MOTOR_CONTROL_SYNC_NOT_INITIALIZED;
     }
+
+    output_status = motor_output_status(&control.physical_output);
+    if ((output_status != MOTOR_OUTPUT_STATUS_IDLE) &&
+        (output_status != MOTOR_OUTPUT_STATUS_BUSY)) {
+        (void)enter_failsafe_if_armed();
+        report_motor_fault(FAULT_ID_MOTOR_OUTPUT,
+                           (uint32_t)output_status);
+        if (!force_stop_internal()) {
+            return MOTOR_CONTROL_SYNC_FORCE_STOP_ERROR;
+        }
+        return MOTOR_CONTROL_SYNC_BACKEND_ERROR;
+    }
+
     if (control.state_machine->current != SYSTEM_STATE_ARMED) {
         if (control.outputs_stopped) {
             return MOTOR_CONTROL_SYNC_STOPPED;

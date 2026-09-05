@@ -1,9 +1,9 @@
-# Actuator safety gate
+# Motor safety gate
 
 Milestone 1.7 establishes the sole production boundary through which a motor
-command may eventually reach physical output. It is hardware-independent and
-does not configure GPIO, TIM8, DMA, DShot transmission, or a scheduled output
-task.
+command may reach physical output. Milestones 1.8 and 1.9 attach the private
+four-channel DShot300 backend and a highest-priority 1 kHz synchronization
+task without exposing raw hardware access to command producers.
 
 ## Ownership and call path
 
@@ -19,7 +19,10 @@ USB / future receiver / future flight controller
                        |
         private motor_output_t singleton
                        |
-          future private DShot backend
+          private DShot300 backend
+                       |
+                       v
+        TIM8 update DMA to all four outputs
 ```
 
 `motor_control.c` owns the only production `motor_output_t`, current motor
@@ -28,10 +31,9 @@ The public API accepts logical commands, requests an unconditional stop,
 periodically synchronizes safety state, and configures mapping only under its
 existing disarmed/stopped rule.
 
-Initialization is deliberately in `motor_control_internal.h`. A later
-application-composition milestone may provide the one real backend descriptor,
-but command producers must never receive that descriptor or the private output
-instance.
+Initialization is deliberately in `motor_control_internal.h`. Application
+composition supplies the real backend descriptor, but command producers never
+receive that descriptor or the private output instance.
 
 An automated source-boundary check runs in every normal host and firmware build
 and as a named CTest. It rejects production uses of the raw `motor_output`
@@ -81,11 +83,12 @@ production stopped. A backend `BUSY` result does not refresh the retained
 timestamp because that new command was not accepted. The previous accepted
 command therefore still expires normally.
 
-The current default command timeout is 100,000 microseconds. The timer-output
-milestone must choose and document a service frequency; that period determines
-the small additional detection latency beyond the timeout. State transitions
-must also be followed by synchronization in the same main-context service
-cycle. No interrupt calls this API.
+The current default command timeout is 100,000 microseconds. The production
+`motor-control` task runs every 1,000 microseconds at
+`TASK_PRIORITY_HIGHEST`, so detection adds at most one normal service period
+beyond the timeout when the cooperative scheduler is meeting deadlines. It
+also converts asynchronous DMA backend errors into critical faults in main
+context. No interrupt calls this API.
 
 ## Force-stop and fault policy
 
@@ -122,12 +125,9 @@ The shared application safety policy permits USB arming only for `OK`,
 The state machine still independently requires the current lifecycle state to
 allow an arm request.
 
-This currently preserves the development-only ability to enter logical
-`ARMED` before a physical backend exists. It cannot produce motor output:
-motor submission returns `NOT_INITIALIZED`, and no production backend is
-attached. When the backend is integrated, its successful initialization and
-initial stop become mandatory before the application exposes manual motor
-commands.
+USB can currently enter logical `ARMED`, but no USB motor-command schema exists
+and no other producer supplies nonzero throttle. Backend initialization and an
+accepted initial all-zero frame are mandatory during startup.
 
 ## Verification boundary
 
@@ -138,7 +138,8 @@ commands, timeout synchronization, failsafe entry, critical fault reporting,
 force-stop failure, and stopped-state tracking. Separate policy tests cover all
 health values, while USB tests cover health-rejected arm requests.
 
-These tests prove software decisions and callback ordering only. They do not
-prove GPIO state, DMA cancellation, timer preload behavior, waveform timing,
-ESC recognition, motor response, or physical stop. Those remain staged,
-propeller-free hardware milestones.
+These tests prove software decisions, callback ordering, table ownership, and
+asynchronous error propagation. Firmware builds verify the selected register
+interface. They do not prove GPIO voltage, DMA cancellation, timer preload
+behavior, waveform timing, ESC recognition, motor response, or physical stop.
+Those remain staged, propeller-free hardware checks.

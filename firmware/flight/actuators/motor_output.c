@@ -5,7 +5,8 @@
 static bool backend_is_valid(const motor_output_backend_t *backend)
 {
     return (backend != NULL) && (backend->initialize != NULL) &&
-           (backend->submit != NULL) && (backend->force_stop != NULL);
+           (backend->submit != NULL) && (backend->force_stop != NULL) &&
+           (backend->status != NULL);
 }
 
 motor_output_init_result_t motor_output_initialize(
@@ -97,4 +98,28 @@ motor_output_stop_result_t motor_output_force_stop(motor_output_t *output)
     }
 
     return MOTOR_OUTPUT_STOP_BACKEND_ERROR;
+}
+
+motor_output_status_t motor_output_status(const motor_output_t *output)
+{
+    motor_output_backend_status_t backend_status;
+
+    if (output == NULL) {
+        return MOTOR_OUTPUT_STATUS_INVALID_ARGUMENT;
+    }
+    if (!output->initialized || !backend_is_valid(&output->backend)) {
+        return MOTOR_OUTPUT_STATUS_NOT_INITIALIZED;
+    }
+
+    backend_status = output->backend.status(output->backend.context);
+    switch (backend_status) {
+    case MOTOR_OUTPUT_BACKEND_STATUS_IDLE:
+        return MOTOR_OUTPUT_STATUS_IDLE;
+    case MOTOR_OUTPUT_BACKEND_STATUS_BUSY:
+        return MOTOR_OUTPUT_STATUS_BUSY;
+    case MOTOR_OUTPUT_BACKEND_STATUS_ERROR:
+        return MOTOR_OUTPUT_STATUS_BACKEND_ERROR;
+    }
+
+    return MOTOR_OUTPUT_STATUS_BACKEND_ERROR;
 }

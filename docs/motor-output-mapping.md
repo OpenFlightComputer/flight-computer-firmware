@@ -1,9 +1,9 @@
 # Motor output mapping
 
 Milestone 1.5 resolved the Flight Computer V1 motor-output resources and added
-a separate configurable logical-to-physical assignment. Milestone 1.6 has now
-selected DShot300 and added a pure timing-buffer representation, but still does
-not configure GPIO, start TIM8 or DMA, send ESC commands, or energize a motor.
+a separate configurable logical-to-physical assignment. Milestone 1.6 selected
+DShot300 and its timing-buffer representation. Milestones 1.8 and 1.9 now use
+that mapping in the complete four-channel TIM8/DMA backend.
 
 ## Fixed physical V1 routing
 
@@ -19,7 +19,9 @@ Physical output indices zero through three correspond to schematic signals
 
 `hardware/boards/flightcomputer_v1/motor_output_map.*` is the firmware source
 of truth for this fixed ordering. The reverse timer-channel order is explicit
-and host-tested rather than being repeated in future register code.
+and host-tested. The V1 board copies each physical-order compare row into its
+private CCR-order DMA buffer, so application and DShot code never perform or
+inspect this hardware-specific permutation.
 
 The routing agrees with the retained V1 hardware map and manufacturing-test
 configuration. The STM32F405 alternate-function table independently confirms
@@ -37,7 +39,7 @@ Milestone 1.6 derives 560 timer ticks per DShot300 bit from this clock. See
 
 ## Selected grouped DMA path
 
-All four outputs share TIM8 and will use one update-triggered timer DMA burst:
+All four outputs share TIM8 and use one update-triggered timer DMA burst:
 
 | Resource | Selection |
 | --- | --- |
@@ -52,10 +54,10 @@ All four outputs share TIM8 and will use one update-triggered timer DMA burst:
 
 RM0090's DMA2 request map assigns TIM8 update to DMA2 Stream 1, Channel 7.
 TIM8's `DCR`/`DMAR` mechanism can redirect one timer-triggered DMA burst into
-sequential timer registers. CCR preloading will be required so the four values
-written during a burst become active together at a timer update boundary.
-Those register writes and their initial/final pipeline behavior belong to the
-timer-output milestones.
+sequential timer registers. CCR preloading makes the four values written during
+a burst active together at a timer update boundary. The implementation begins
+with an all-low preload, uses one low startup period, ends on a trailing-low
+row, then stops TIM8 and returns every output to ordinary GPIO-low.
 
 This choice uses one stream and one completion/error path instead of four
 independent channel streams. It also avoids consuming DMA2 Streams 2, 3, 4,
@@ -122,6 +124,8 @@ and complete command reordering. They do not prove the PCB trace, alternate-
 function register configuration, waveform timing, voltage, DMA execution, ESC
 acceptance, motor order, or motor direction.
 
-Physical validation remains staged and propeller-free: first observe a single
-output waveform if practical, then identify one ESC/motor at a time, and only
-then test synchronized four-channel output.
+Physical validation remains staged and propeller-free: the implementation
+always runs one synchronized four-channel transaction, while the host-side
+bench command must allow nonzero throttle for only one selected motor. Observe
+PC9/ESC_M1 first, identify each motor in turn, and only then test multiple
+nonzero channels.

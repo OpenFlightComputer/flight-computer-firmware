@@ -152,6 +152,7 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 )
 
 add_executable(flight_firmware
+    app/dshot_motor_backend.c
     app/motor_control.c
     app/motor_safety_policy.c
     app/fault.c
@@ -178,6 +179,7 @@ add_executable(flight_firmware
     peripherals/usb/usb_descriptors.c
     peripherals/usb/usb_json_protocol.c
     hardware/boards/flightcomputer_v1/board.c
+    hardware/boards/flightcomputer_v1/board_motor_output.c
     hardware/boards/flightcomputer_v1/motor_output_map.c
     hardware/boards/flightcomputer_v1/rgb_led_safe_state.c
     hardware/boards/flightcomputer_v1/time.c

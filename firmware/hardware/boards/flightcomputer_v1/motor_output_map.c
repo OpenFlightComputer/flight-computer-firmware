@@ -48,6 +48,35 @@ flightcomputer_v1_motor_output_route(size_t physical_output)
     return &motor_output_routes[physical_output];
 }
 
+bool flightcomputer_v1_motor_output_order_compare_row(
+    const uint16_t physical_order[FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT],
+    uint16_t timer_order[FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT])
+{
+    uint16_t reordered[FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT];
+    size_t physical_output;
+
+    if ((physical_order == NULL) || (timer_order == NULL)) {
+        return false;
+    }
+
+    for (physical_output = 0U;
+         physical_output < FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT;
+         physical_output++) {
+        const size_t timer_lane =
+            (size_t)motor_output_routes[physical_output].timer_channel - 1U;
+
+        reordered[timer_lane] = physical_order[physical_output];
+    }
+
+    for (physical_output = 0U;
+         physical_output < FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT;
+         physical_output++) {
+        timer_order[physical_output] = reordered[physical_output];
+    }
+
+    return true;
+}
+
 const flightcomputer_v1_motor_output_group_t *
 flightcomputer_v1_motor_output_group(void)
 {

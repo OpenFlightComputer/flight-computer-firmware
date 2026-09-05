@@ -5,7 +5,9 @@
 
 #include "dshot_encoder.h"
 
-#define DSHOT_TIMER_LANE_COUNT 4U
+#define DSHOT_OUTPUT_COUNT 4U
+/* Retained for code that treats the generic outputs as timer lanes. */
+#define DSHOT_TIMER_LANE_COUNT DSHOT_OUTPUT_COUNT
 #define DSHOT_TRAILING_LOW_SLOT_COUNT 2U
 #define DSHOT_DMA_SLOT_COUNT \
     (DSHOT_FRAME_BIT_COUNT + DSHOT_TRAILING_LOW_SLOT_COUNT)
@@ -23,7 +25,7 @@ typedef struct {
 } dshot_timing_profile_t;
 
 typedef uint16_t
-    dshot_dma_buffer_t[DSHOT_DMA_SLOT_COUNT][DSHOT_TIMER_LANE_COUNT];
+    dshot_dma_buffer_t[DSHOT_DMA_SLOT_COUNT][DSHOT_OUTPUT_COUNT];
 
 typedef enum {
     DSHOT_TIMING_OK = 0,
@@ -38,13 +40,10 @@ dshot_timing_result_t dshot_timing_profile_create(
     uint32_t timer_clock_hz,
     dshot_timing_profile_t *profile);
 
-/*
- * Frame index zero becomes the first interleaved DMA lane. For the selected
- * V1 TIM8 burst, lanes zero through three are CCR1 through CCR4 respectively.
- */
+/* Frame order is preserved; its physical or hardware meaning belongs to the caller. */
 dshot_timing_result_t dshot_timing_build_dma_buffer(
     const dshot_timing_profile_t *profile,
-    const uint16_t frames_by_timer_lane[DSHOT_TIMER_LANE_COUNT],
+    const uint16_t frames_by_output[DSHOT_OUTPUT_COUNT],
     dshot_dma_buffer_t buffer);
 
 #endif

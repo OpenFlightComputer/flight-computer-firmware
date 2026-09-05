@@ -1,6 +1,7 @@
 #ifndef OPENFLIGHTCOMPUTER_FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_MAP_H
 #define OPENFLIGHTCOMPUTER_FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_MAP_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -44,6 +45,9 @@ typedef struct {
 /* Use a flightcomputer_v1_physical_output_t value as physical_output. */
 const flightcomputer_v1_motor_output_route_t *
 flightcomputer_v1_motor_output_route(size_t physical_output);
+bool flightcomputer_v1_motor_output_order_compare_row(
+    const uint16_t physical_order[FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT],
+    uint16_t timer_order[FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT]);
 
 const flightcomputer_v1_motor_output_group_t *
 flightcomputer_v1_motor_output_group(void);
