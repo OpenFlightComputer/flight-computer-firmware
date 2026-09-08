@@ -2,19 +2,19 @@
 
 ## Current phase
 
-Phase 1 — DShot motor subsystem.
+Phase 2 — ELRS/CRSF receiver input.
 
 ## Current milestone
 
-Milestone 1.11 — propeller-free ESC and motor bench validation:
-**implementation and physical motor-order validation complete; awaiting owner
-review**.
+Milestone 2.4 — receiver channel normalization and freshness:
+**implementation and host verification complete; awaiting owner review**. The
+tester-proven CRSF/UART source remains an independent import.
 
 ## Last completed milestone
 
-Milestone 1.10 — constrained USB/Python motor bench command. The firmware and
-host safety limits were reviewed, committed as `5748fd0`, flashed, and entered
-physical validation without accepting a nonzero command.
+Milestone 2.3 — protocol-neutral receiver service and owned raw-channel
+snapshot. Its source boundary, bounded service call, ownership, timestamp, and
+statistics were approved as the foundation for parallel Phase 2 work.
 
 ## Current implementation status
 
@@ -434,9 +434,71 @@ can request nonzero throttle.
 
 ## Next step
 
-Owner review of the cleaned Phase 1 changes, followed by Phase 2 ELRS/CRSF
-receiver input. Physical heartbeat-loss timing and per-motor direction
-configuration remain explicit pre-flight tasks. DShot600 remains deferred.
+Owner review of normalization and freshness. After approval, connection/loss
+transitions and bounded USB diagnostics can proceed against the fake source
+while the tester independently proves CRSF parsing and the PC10/PC11 UART
+backend. Do not register the production task or assign receiver-loss `FAILSAFE`
+authority until the corresponding source and Phase 3 command ownership exist.
+Physical motor heartbeat-loss timing and per-motor direction configuration
+remain explicit pre-flight tasks; DShot600 remains deferred.
+
+## Milestone 2.4 normalization and freshness
+
+- Added a separately testable normalizer with a validated, copied configuration
+  for channel assignment, axis/throttle endpoints, reversal, and the arm-switch
+  high threshold. The replaceable RP1 development profile now uses the latest
+  successful tester result: roll 174/992/1805, pitch 175/992/1811, throttle
+  174/1785, and yaw 355/997/1713 on AETR channels 1-4. Channel 5 remains the
+  provisional arm input with a conservative 1500 threshold.
+- Added piecewise centered-axis conversion to `[-1, 1]`, throttle conversion to
+  `[0, 1]`, clamping, reversal, conservative switch interpretation, and a
+  normalized snapshot that preserves the raw reception timestamp and sequence.
+- Added a separate stateless freshness evaluator with injected fresh/loss
+  boundaries and `UNAVAILABLE`, `FRESH`, `STALE`, and `LOST` outcomes. Clock
+  rollback fails closed as `LOST`; no production timeout is guessed yet.
+- Extended the service so one clock sample drives each invocation, a new raw
+  and normalized pair is published atomically only after successful conversion,
+  and freshness advances even when no new frame arrives. Callers retrieve the
+  normalized snapshot and freshness together.
+- Added dedicated normalizer and freshness unit tests plus service integration
+  coverage. No UART, DMA, CRSF parsing, USB schema, fault, lifecycle, or motor
+  behavior is added, and the production receiver task remains unregistered.
+- Documented the replaceable calibration and timestamp policy in
+  `docs/receiver-normalization.md`.
+- Recorded traceability to tester result
+  `20260908T174707Z_002D003E3435471135383539_036e0ee8-81c6-459b-b24e-84487bbbe086.json`.
+  Its extrema come only from accepted CRC-valid frames. Its 3,041 CRC and 1,913
+  framing errors remain a blocking investigation for the later UART/CRSF import;
+  they do not define freshness thresholds, and no timeout was inferred from the
+  final 4 ms packet-age sample.
+- All 28 native host checks pass normally and under address/undefined-behavior
+  sanitizers, all 37 Python host-tool tests pass, and Debug/Release firmware
+  builds pass with warnings as errors. Because the receiver service remains
+  uninstantiated, linked image usage remains 64,724/43,332 bytes of Flash and
+  15,344 bytes of RAM.
+
+## Milestone 2.3 receiver service
+
+- Added `flight/receiver/receiver_source.h` as the portable handoff from the
+  future tester-proven UART/CRSF implementation. Each non-blocking call returns
+  at most one complete decoded 16-channel frame, no frame, invalid data, or a
+  source error.
+- Added `app/receiver_service.c`, which owns the latest accepted frame, captures
+  its monotonic reception timestamp, assigns a saturating sequence, and tracks
+  bounded poll/outcome statistics. Invalid and error results cannot replace or
+  refresh the last valid snapshot.
+- Added the scheduler-compatible `receiver_service_task()` callback, but did
+  not register it in production without a real source or guess its period and
+  priority before tester timing evidence exists.
+- Added host tests with an injected source and clock. No CRSF constants, UART
+  selection, channel normalization, fault policy, lifecycle transition, or
+  motor behavior is introduced by this milestone.
+- Documented the integration and ownership boundary in
+  `docs/receiver-service.md`.
+- All 26 native host checks pass normally and under address/undefined-behavior
+  sanitizers. Debug and Release firmware builds pass with warnings as errors;
+  because the service is deliberately not instantiated yet, linked image usage
+  remains 64,724/43,332 bytes of Flash and 15,344 bytes of RAM.
 
 ## Milestone 1.11 bring-up evidence
 

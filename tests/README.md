@@ -9,6 +9,22 @@ unique names, deterministic registration order, priority/period preservation,
 and zero-initialized scheduling and execution metadata without invoking task
 callbacks.
 
+The native `receiver_service_tests` target uses an injected decoded-frame source
+and monotonic clock to verify initialization, one-read-per-service boundedness,
+owned timestamped snapshots, replacement sequencing, preservation after invalid
+or error results, atomic normalized publication, freshness advancement,
+scheduler-callback behavior, and saturating statistics. It does not test CRSF
+parsing or physical UART reception.
+
+The native `receiver_normalization_tests` target verifies copied and rejected
+configuration, the replaceable default profile, asymmetric centered-axis
+scaling, throttle scaling, clamping, reversal, switch interpretation, and exact
+timestamp/sequence preservation.
+
+The native `receiver_freshness_tests` target verifies configuration bounds,
+unavailable data, inclusive fresh/lost boundaries, stale and lost transitions,
+clock rollback, and stable diagnostic names.
+
 The native `scheduler_tests` target uses a fake microsecond clock to verify
 ready-task selection, batch fairness, disabled tasks, stable periodic release,
 execution measurements, skipped-release behavior, and overrun detection.

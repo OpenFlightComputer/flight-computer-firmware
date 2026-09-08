@@ -155,6 +155,7 @@ add_executable(flight_firmware
     app/dshot_motor_backend.c
     app/motor_control.c
     app/motor_safety_policy.c
+    app/receiver_service.c
     app/fault.c
     app/fault_catalog.c
     app/health.c
@@ -172,6 +173,9 @@ add_executable(flight_firmware
     flight/actuators/motor_command.c
     flight/actuators/motor_mapping.c
     flight/actuators/motor_output.c
+    flight/receiver/receiver_freshness.c
+    flight/receiver/receiver_normalization.c
+    flight/receiver/receiver_source.h
     peripherals/dshot/dshot_encoder.c
     peripherals/dshot/dshot_timing.c
     peripherals/usb/newline_framer.c
@@ -196,6 +200,7 @@ add_dependencies(flight_firmware generate_firmware_identity)
 target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/app"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/actuators"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/receiver"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"

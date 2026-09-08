@@ -34,6 +34,63 @@ target_compile_options(task_tests PRIVATE
 
 add_test(NAME task COMMAND task_tests)
 
+add_executable(receiver_service_tests
+    receiver_service_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/receiver_service.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_freshness.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_normalization.c"
+)
+
+target_include_directories(receiver_service_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+
+target_compile_options(receiver_service_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME receiver_service COMMAND receiver_service_tests)
+
+add_executable(receiver_normalization_tests
+    receiver_normalization_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_normalization.c"
+)
+
+target_include_directories(receiver_normalization_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+
+target_compile_options(receiver_normalization_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME receiver_normalization COMMAND receiver_normalization_tests)
+
+add_executable(receiver_freshness_tests
+    receiver_freshness_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_freshness.c"
+)
+
+target_include_directories(receiver_freshness_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+
+target_compile_options(receiver_freshness_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME receiver_freshness COMMAND receiver_freshness_tests)
+
 add_executable(scheduler_tests
     scheduler_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/scheduler.c"

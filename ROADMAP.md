@@ -56,6 +56,27 @@ After DShot300 is physically reliable, add DShot600 as an optional timing
 profile. It is supported by the selected SpeedyBee ESC, but it is not a
 first-flight prerequisite and must not be selectable until separately tested.
 
+## Phase 2 — ELRS/CRSF receiver input
+
+Phase 2 is split so the flight application can progress while the manufacturing
+tester independently proves the physical receiver path:
+
+1. Tester-to-flight receiver boundary — complete; the portable source returns
+   at most one complete decoded 16-channel frame per non-blocking call.
+2. Tester-proven CRSF parser and V1 UART backend import — pending physical
+   validation in the tester repository.
+3. Receiver service and owned raw-channel snapshot — complete. Production
+   registration waits for the imported source.
+4. Channel assignment, replaceable calibration, normalized control snapshot,
+   and configurable freshness — implementation and host verification complete;
+   awaiting owner review.
+5. Connection/loss transitions, bounded diagnostics, and non-critical Phase 2
+   fault reporting.
+6. USB inspection and flight-firmware physical validation against the receiver.
+
+Phase 2 never submits motor commands. Receiver-loss authority over `FAILSAFE`
+begins in Phase 3 when the receiver becomes a motor-command source.
+
 ## Later phases
 
 | Phase | Objective |

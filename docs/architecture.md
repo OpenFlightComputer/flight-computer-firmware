@@ -128,6 +128,22 @@ keeps future USB and control producers on one command type while leaving the
 final motor safety gate and peripheral/hardware implementations in their
 reviewed later milestones. See `docs/motor-command.md`.
 
+Milestone 2.3 adds a protocol-neutral receiver source below an application-owned
+service. The future tester-proven UART/CRSF implementation returns no more than
+one complete decoded channel frame per call; the service copies and timestamps
+accepted frames without learning protocol or hardware details. It is not yet
+registered in production and has no lifecycle or motor authority. See
+`docs/receiver-service.md`.
+
+Milestone 2.4 keeps conversion and age policy in separate `flight/receiver`
+modules. The application service supplies a decoded frame, reception timestamp,
+and sequence to the normalizer, atomically publishes raw and normalized
+snapshots, and evaluates freshness every invocation. Configuration is copied so
+future calibrated values replace the development profile without changing the
+algorithm. Consumers receive control values and freshness together; Phase 2
+still grants neither lifecycle nor motor authority. See
+`docs/receiver-normalization.md`.
+
 Milestone 1.2 adds an instance-based facade in `flight/actuators` whose injected
 backend callbacks form the downward dependency boundary. The facade copies the
 backend descriptor and passes a revalidated facade-owned complete command;
