@@ -24,6 +24,9 @@ static motor_command_t captured_motor_command;
 static uint32_t motor_submit_count;
 static bool motor_ready_for_arm;
 static bool motor_outputs_stopped;
+static receiver_inspection_t receiver_inspection;
+static bool receiver_inspection_read_result;
+static uint32_t receiver_inspection_read_count;
 
 motor_control_submit_result_t motor_control_submit(
     const motor_command_t *command)
@@ -42,6 +45,20 @@ bool motor_control_ready_for_arm(void)
 bool motor_control_outputs_stopped(void)
 {
     return motor_outputs_stopped;
+}
+
+static bool fake_receiver_inspection_read(
+    void *context,
+    receiver_inspection_t *inspection)
+{
+    assert(context == &receiver_inspection);
+    assert(inspection != NULL);
+    receiver_inspection_read_count++;
+    if (!receiver_inspection_read_result) {
+        return false;
+    }
+    *inspection = receiver_inspection;
+    return true;
 }
 
 usb_cdc_line_result_t usb_cdc_transport_read_line(uint8_t *destination,
@@ -103,6 +120,13 @@ static void reset_fakes(void)
     motor_submit_count = 0U;
     motor_ready_for_arm = true;
     motor_outputs_stopped = false;
+    receiver_inspection = (receiver_inspection_t){
+        .freshness = RECEIVER_FRESHNESS_UNAVAILABLE,
+        .failsafe_state = RECEIVER_FAILSAFE_UNAVAILABLE,
+        .failsafe_action = RECEIVER_FAILSAFE_ACTION_NONE,
+    };
+    receiver_inspection_read_result = true;
+    receiver_inspection_read_count = 0U;
     logging_initialize();
 }
 
@@ -112,6 +136,10 @@ static void initialize_system(usb_command_processor_t *processor,
 {
     static const fault_definition_t definitions[] = {
         {1U, FAULT_SEVERITY_WARNING, FAULT_SOURCE_USB},
+    };
+    const receiver_inspection_provider_t receiver_provider = {
+        .read = fake_receiver_inspection_read,
+        .context = &receiver_inspection,
     };
 
     system_state_machine_initialize(state_machine);
@@ -123,9 +151,55 @@ static void initialize_system(usb_command_processor_t *processor,
                                             state_machine,
                                             fault_system,
                                             fake_clock,
+                                            &receiver_provider,
                                             "0.1.0",
                                             "test-build") ==
            USB_COMMAND_INIT_OK);
+}
+
+static void receiver_inspection_is_read_only_when_requested(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    receiver_inspection.available = true;
+    receiver_inspection.freshness = RECEIVER_FRESHNESS_FRESH;
+    receiver_inspection.failsafe_state = RECEIVER_FAILSAFE_LIVE;
+    receiver_inspection.failsafe_action = RECEIVER_FAILSAFE_ACTION_LIVE;
+    receiver_inspection.sequence = 9U;
+    receiver_inspection.channels[0] = 992U;
+    receiver_inspection.roll = 0.0F;
+    receiver_inspection.pitch = 0.0F;
+    receiver_inspection.yaw = 0.0F;
+    receiver_inspection.throttle = 0.0F;
+    initialize_system(&processor, &state_machine, &fault_system);
+
+    queue_input("{\"type\":\"command\",\"request_id\":12,"
+                "\"command\":\"status\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(receiver_inspection_read_count == 0U);
+
+    queue_input("{\"type\":\"command\",\"request_id\":13,"
+                "\"command\":\"receiver\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(receiver_inspection_read_count == 1U);
+    assert(strstr(captured_response, "\"command\":\"receiver\"") != NULL);
+    assert(strstr(captured_response, "\"available\":true") != NULL);
+    assert(strstr(captured_response, "\"channels\":[992,") != NULL);
+    assert(processor.statistics.receiver_count == 1U);
+
+    receiver_inspection_read_result = false;
+    queue_input("{\"type\":\"command\",\"request_id\":14,"
+                "\"command\":\"receiver\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(receiver_inspection_read_count == 2U);
+    assert(strstr(captured_response,
+                  "receiver_inspection_unavailable") != NULL);
 }
 
 static void enter_disarmed(system_state_machine_t *state_machine)
@@ -397,17 +471,23 @@ static void initialization_and_invalid_state_are_checked(void)
     usb_command_processor_t processor = {0};
     system_state_machine_t state_machine;
     fault_system_t fault_system = {0};
+    const receiver_inspection_provider_t receiver_provider = {
+        .read = fake_receiver_inspection_read,
+        .context = &receiver_inspection,
+    };
 
     reset_fakes();
     system_state_machine_initialize(&state_machine);
     assert(usb_command_processor_initialize(NULL, &state_machine,
                                             &fault_system,
                                             fake_clock,
+                                            &receiver_provider,
                                             "0.1.0", "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_initialize(&processor, &state_machine,
                                             &fault_system,
                                             fake_clock,
+                                            &receiver_provider,
                                             NULL, "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_process_once(&processor) ==
@@ -417,6 +497,7 @@ static void initialization_and_invalid_state_are_checked(void)
 int main(void)
 {
     status_and_health_report_current_summary();
+    receiver_inspection_is_read_only_when_requested();
     arm_and_disarm_use_the_state_machine();
     illegal_transition_is_rejected_without_state_mutation();
     unknown_health_rejects_arm_before_the_state_machine();

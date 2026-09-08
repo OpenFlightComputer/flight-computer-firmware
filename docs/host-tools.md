@@ -7,6 +7,7 @@ to run the Python package in `host_tools/` and currently provides:
 ofc firmware build [--profile debug|release]
 ofc firmware flash [--profile debug|release] [--firmware IMAGE.elf]
 ofc device status [--port PATH]
+ofc device receiver [--watch] [--interval SECONDS] [--port PATH]
 ofc device arm [--port PATH]
 ofc device disarm [--port PATH]
 ofc device monitor [--port PATH]
@@ -25,6 +26,15 @@ USB discovery selects the flight-firmware development identity `CAFE:4002` or
 an explicit `--port`. `device status` makes one correlated request while
 ignoring interleaved log events. `device monitor` emits the live newline JSON
 stream until interrupted.
+
+`device receiver` makes one on-demand inspection request and renders the
+latest raw 16-channel frame, normalized roll/pitch/yaw/throttle and arm state,
+freshness/failsafe state, CRSF link statistics, and UART/parser/DMA counters.
+Add `--watch` for the tester-style live view. The default polling interval is
+0.1 seconds and can be changed with `--interval`; polling changes only the
+display rate, not the independent 1 kHz receiver task. Per-channel minimum and
+maximum values are accumulated locally for the lifetime of that CLI process
+and are not stored in firmware.
 
 `device arm` and `device disarm` expose the existing lifecycle commands without
 combining them with output. `motor run` is a separate propeller-free bench

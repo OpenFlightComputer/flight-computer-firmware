@@ -70,6 +70,27 @@ the decision nor its requested controls can reach motor output during Phase 2.
 Lifecycle and motor authority remain deferred to Phase 3. See
 `receiver-normalization.md` and `receiver-failsafe.md`.
 
+## On-demand USB inspection
+
+The `receiver` USB command calls a read-only inspection provider in application
+context. The provider copies the raw and normalized snapshots already owned by
+the receiver service, calculates packet age from the monotonic clock, and adds
+the current failsafe, link, UART, parser, and DMA diagnostics. It does not
+consume DMA bytes or call the receiver task. Consequently, inspection is idle
+when no host requests it, and even a slow terminal display cannot delay the
+high-priority receiver input path.
+
+`./ofc device receiver --watch` polls that command at 10 Hz by default and
+recreates the tester's raw-channel position and session minimum/maximum view,
+while also showing the flight firmware's normalized controls. The host owns
+the display-only extrema; firmware publishes no continuously maintained
+inspection snapshot.
+
+The Release flight image was flashed to Flight Computer V1 and the live view
+displayed the connected RP1's raw and normalized controls, freshness, failsafe
+state, and diagnostics. This closes the Phase 2 physical receiver-inspection
+boundary; receiver-to-motor authority remains Phase 3 work.
+
 Host tests use a fake source and clock to prove dependency validation,
 single-call boundedness, caller-storage independence, timestamp and sequence
 replacement, preservation across invalid/error results, task-callback behavior,

@@ -73,10 +73,13 @@ tester independently proves the physical receiver path:
 5. Connection/loss transitions, bounded diagnostics, and non-critical Phase 2
    fault reporting — complete; the staged policy is observed but has no motor
    or lifecycle authority until Phase 3.
-6. USB inspection and flight-firmware physical validation against the receiver.
+6. USB inspection and flight-firmware physical validation against the receiver
+   — complete; the flashed flight image and tester-style host view displayed
+   live RP1 raw channels, normalized controls, freshness, and diagnostics.
 
 Phase 2 never submits motor commands. Receiver-loss authority over `FAILSAFE`
 begins in Phase 3 when the receiver becomes a motor-command source.
+Phase 2 is complete.
 
 The initial configurable receiver-loss policy will retain the last controls
 through the short validation window, then use neutral roll/pitch/yaw and 5%

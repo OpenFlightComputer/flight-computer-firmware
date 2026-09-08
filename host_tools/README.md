@@ -9,6 +9,19 @@ Run `./ofc --help` from the repository root. Hardware-changing smoke tests are
 safe by default with respect to actuators: they query `status` and `health` but
 never send `arm` or motor commands.
 
+Inspect the receiver once or use the tester-style live display with:
+
+```bash
+./ofc device receiver
+./ofc device receiver --watch
+./ofc device receiver --watch --interval 0.2
+```
+
+The display includes all 16 raw channels, session-local minima/maxima,
+normalized flight controls, freshness/failsafe state, link statistics, and
+UART/parser/DMA diagnostics. Each refresh is an on-demand USB request; it does
+not alter the firmware's independent receiver task or motor state.
+
 The separately explicit propeller-free bench path is:
 
 ```bash

@@ -5,15 +5,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
+
+from rich.console import Console
+from rich.live import Live
 
 from openflightcomputer.device import DeviceError, UsbCdcConnection, wait_for_flight_port
 from openflightcomputer.firmware import REPOSITORY_ROOT, FirmwareBuildError, build_firmware
 from openflightcomputer.models import ProgressEvent
 from openflightcomputer.programmer import ProgrammingError
 from openflightcomputer.protocol import JsonProtocolClient, ProtocolError
+from openflightcomputer.receiver import ReceiverView
 from openflightcomputer.reporting import smoke_report_data, write_smoke_report
 from openflightcomputer.workflows.flash import build_and_flash
 from openflightcomputer.workflows.motor import run_motor_test
@@ -82,6 +87,20 @@ def build_parser() -> argparse.ArgumentParser:
     _add_device_options(arm)
     disarm = device_commands.add_parser("disarm", help="request the DISARMED state")
     _add_device_options(disarm)
+    receiver = device_commands.add_parser(
+        "receiver", help="inspect raw and normalized receiver input"
+    )
+    _add_device_options(receiver)
+    receiver.add_argument(
+        "--watch", action="store_true", help="continuously refresh the receiver view"
+    )
+    receiver.add_argument(
+        "--interval",
+        type=_positive_float,
+        default=0.1,
+        metavar="SECONDS",
+        help="watch polling interval (default: 0.1)",
+    )
     monitor = device_commands.add_parser("monitor", help="print the live JSON stream")
     _add_device_options(monitor)
 
@@ -134,6 +153,34 @@ def _device_monitor(arguments: argparse.Namespace) -> int:
         for message in JsonProtocolClient(connection).messages():
             print(json.dumps(message, separators=(",", ":")), flush=True)
     return 0
+
+
+def _device_receiver(arguments: argparse.Namespace) -> int:
+    port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
+    view = ReceiverView()
+    console = Console()
+    with UsbCdcConnection.open(port) as connection:
+        client = JsonProtocolClient(connection)
+        if not arguments.watch:
+            view.update(client.request("receiver", timeout_seconds=arguments.timeout))
+            console.print(view.render())
+            return 0
+
+        print(
+            f"Watching receiver on {port.device}; press Ctrl-C to stop.",
+            file=sys.stderr,
+        )
+        with Live(
+            view.render(),
+            console=console,
+            refresh_per_second=10,
+        ) as live:
+            while True:
+                view.update(
+                    client.request("receiver", timeout_seconds=arguments.timeout)
+                )
+                live.update(view.render(), refresh=True)
+                time.sleep(arguments.interval)
 
 
 def _smoke(arguments: argparse.Namespace) -> int:
@@ -201,6 +248,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.command == "device":
             if arguments.device_command == "monitor":
                 return _device_monitor(arguments)
+            if arguments.device_command == "receiver":
+                return _device_receiver(arguments)
             return _device_request(arguments, arguments.device_command)
         if arguments.command == "motor":
             return _motor_run(arguments)

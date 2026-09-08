@@ -165,6 +165,8 @@ bool usb_json_parse_request(const char *line,
                 request->command = USB_JSON_COMMAND_STATUS;
             } else if (token_equals(line, value, "health")) {
                 request->command = USB_JSON_COMMAND_HEALTH;
+            } else if (token_equals(line, value, "receiver")) {
+                request->command = USB_JSON_COMMAND_RECEIVER;
             } else if (token_equals(line, value, "arm")) {
                 request->command = USB_JSON_COMMAND_ARM;
             } else if (token_equals(line, value, "disarm")) {
@@ -219,6 +221,8 @@ const char *usb_json_command_name(usb_json_command_t command)
         return "status";
     case USB_JSON_COMMAND_HEALTH:
         return "health";
+    case USB_JSON_COMMAND_RECEIVER:
+        return "receiver";
     case USB_JSON_COMMAND_ARM:
         return "arm";
     case USB_JSON_COMMAND_DISARM:

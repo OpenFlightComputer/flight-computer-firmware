@@ -22,6 +22,7 @@ The supported commands are:
 | --- | --- |
 | `status` | Report lifecycle state and monotonic uptime |
 | `health` | Report derived overall health, lifecycle state, severity counts, and bounded active-fault details |
+| `receiver` | Inspect the latest raw and normalized receiver state plus link and transport diagnostics |
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
 | `motor_test` | Submit a leased single-motor command through the production safety gate |
@@ -57,6 +58,7 @@ Examples, each followed by one newline:
 ```json
 {"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","uptime_us":123456,"firmware_version":"0.1.0","build_id":"5db525a"}
 {"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
+{"type":"response","request_id":44,"command":"receiver","ok":true,"available":true,"sequence":7,"age_us":1250,"freshness":"FRESH","channels":[174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189],"normalized":{"roll":-0.500000,"pitch":0.250000,"yaw":0.000000,"throttle":1.000000,"arm":true},"failsafe":{"state":"LIVE","action":"LIVE","stage_two_latched":false,"recovery_ready":false},"link_statistics_present":true,"uplink_rssi_dbm":-42,"uplink_link_quality_percent":99,"uplink_snr_db":8,"uart_bytes":135014,"valid_frames":5000,"crc_errors":0,"framing_errors":0,"dma_overruns":0,"dma_bytes_dropped":0}
 {"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
 {"type":"response","request_id":46,"command":"arm","ok":false,"state":"DISARMED","error":"health_rejected"}
@@ -66,6 +68,20 @@ Examples, each followed by one newline:
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":50,"error":"unsupported_command"}
 ```
+
+The receiver response is produced only when the USB command is dispatched. It
+copies the receiver service's already-published raw and normalized snapshots;
+it neither reads UART/DMA data nor reruns CRSF parsing. `age_us` is computed
+from the receiver packet's capture timestamp and the monotonic clock at the
+time of the request. If no valid control frame has been published,
+`available` is false and `sequence`, `age_us`, `channels`, and `normalized` are
+`null`; failsafe and transport diagnostics remain available. Link values are
+meaningful only when `link_statistics_present` is true.
+
+The command is observational: it cannot change lifecycle state, renew motor
+authority, or submit motor commands. Repeated inspection is host-driven, so
+the 1 kHz receiver task does not continuously construct or publish a separate
+USB-only snapshot.
 
 Milestone 0.12 derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or `CRITICAL`
 from the existing lifecycle and fault authorities. Each serialized active fault
@@ -143,10 +159,10 @@ session/component acceptance behavior.
 
 Host tests cover fragmentation, CRLF, exact-size and oversized lines, recovery,
 strict parsing, response bytes, transition acceptance/rejection, pending
-response retry, and JSON log escaping. Physical enumeration, packet delivery,
-disconnect/reconnect, overflow under a real host, and interactive commands
-still require a connected Flight Computer V1 running the flight image with the
-V1 VBUS workaround.
+response retry, and JSON log escaping. Flight Computer V1 has physically
+enumerated with the V1 VBUS workaround, and the flashed flight image has served
+live RP1 receiver inspection to the host view. Extended disconnect/reconnect
+and overflow stress under a real host remain pre-flight validation work.
 
 ## Propeller-free host workflow
 

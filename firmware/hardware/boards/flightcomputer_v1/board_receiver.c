@@ -242,6 +242,12 @@ bool board_receiver_statistics(board_receiver_statistics_t *statistics)
             receiver_crsf_source.parser.framing_error_count,
         .dma_overrun_count = receiver_dma_overrun_count,
         .dma_dropped_byte_count = receiver_dma_dropped_byte_count,
+        .uplink_rssi_dbm =
+            receiver_crsf_source.link_statistics.uplink_rssi_antenna_1_dbm,
+        .uplink_link_quality_percent =
+            receiver_crsf_source.link_statistics.uplink_link_quality_percent,
+        .uplink_snr_db = receiver_crsf_source.link_statistics.uplink_snr_db,
+        .link_statistics_present = receiver_crsf_source.link_statistics_valid,
     };
     return true;
 }

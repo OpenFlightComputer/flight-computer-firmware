@@ -11,6 +11,8 @@ from openflightcomputer.cli import build_parser
         ["device", "status"],
         ["device", "arm"],
         ["device", "disarm"],
+        ["device", "receiver"],
+        ["device", "receiver", "--watch", "--interval", "0.2"],
         ["device", "monitor"],
         ["motor", "run", "--motor", "1", "--throttle", "1.0", "--duration", "60"],
         ["smoke", "--no-flash"],

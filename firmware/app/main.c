@@ -19,6 +19,7 @@
 #include "usb_logging_backend.h"
 
 #include <stddef.h>
+#include <string.h>
 
 #define USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT UINT32_C(100)
 #define RECEIVER_TASK_PERIOD_US UINT32_C(1000)
@@ -198,6 +199,76 @@ static void receiver_task(void *context)
         }
     }
 }
+
+static bool receiver_inspection_read(void *context,
+                                     receiver_inspection_t *inspection)
+{
+    receiver_service_t *service = context;
+    receiver_snapshot_t raw_snapshot;
+    receiver_control_state_t control_state;
+    board_receiver_statistics_t statistics;
+    uint64_t now_us;
+
+    if ((service == NULL) || (inspection == NULL)) {
+        return false;
+    }
+    now_us = time_us();
+
+    *inspection = (receiver_inspection_t){
+        .freshness = RECEIVER_FRESHNESS_UNAVAILABLE,
+        .failsafe_state = firmware_receiver_failsafe_decision.state,
+        .failsafe_action = firmware_receiver_failsafe_decision.action,
+        .stage_two_latched =
+            firmware_receiver_failsafe_decision.stage_two_latched,
+        .recovery_ready = firmware_receiver_failsafe_decision.recovery_ready,
+    };
+
+    if (receiver_service_latest(service, &raw_snapshot) &&
+        receiver_service_control_state(service, &control_state) &&
+        control_state.snapshot.valid &&
+        (control_state.snapshot.source_sequence == raw_snapshot.sequence)) {
+        memcpy(inspection->channels,
+               raw_snapshot.frame.channels,
+               sizeof(inspection->channels));
+        inspection->sequence = raw_snapshot.sequence;
+        inspection->age_us =
+            now_us >= raw_snapshot.received_at_us
+                ? now_us - raw_snapshot.received_at_us
+                : UINT64_MAX;
+        inspection->freshness = control_state.freshness;
+        inspection->roll = control_state.snapshot.roll;
+        inspection->pitch = control_state.snapshot.pitch;
+        inspection->yaw = control_state.snapshot.yaw;
+        inspection->throttle = control_state.snapshot.throttle;
+        inspection->arm_switch_high =
+            control_state.snapshot.arm_switch_high;
+        inspection->available = true;
+    }
+
+    if (board_receiver_statistics(&statistics)) {
+        inspection->link_statistics_present =
+            statistics.link_statistics_present;
+        inspection->uplink_rssi_dbm = statistics.uplink_rssi_dbm;
+        inspection->uplink_link_quality_percent =
+            statistics.uplink_link_quality_percent;
+        inspection->uplink_snr_db = statistics.uplink_snr_db;
+        inspection->uart_received_byte_count =
+            statistics.uart_received_byte_count;
+        inspection->valid_frame_count = statistics.valid_frame_count;
+        inspection->crc_error_count = statistics.crc_error_count;
+        inspection->framing_error_count = statistics.framing_error_count;
+        inspection->dma_overrun_count = statistics.dma_overrun_count;
+        inspection->dma_dropped_byte_count =
+            statistics.dma_dropped_byte_count;
+    }
+
+    return true;
+}
+
+static const receiver_inspection_provider_t receiver_inspection_provider = {
+    .read = receiver_inspection_read,
+    .context = &firmware_receiver_service,
+};
 
 static void diagnostic_fast_task(void *context)
 {
@@ -560,6 +631,7 @@ int main(void)
                     &firmware_system_state_machine,
                     &firmware_fault_system,
                     time_us,
+                    &receiver_inspection_provider,
                     firmware_version,
                     firmware_build_id) == USB_COMMAND_INIT_OK) {
                 usb_service_available = true;

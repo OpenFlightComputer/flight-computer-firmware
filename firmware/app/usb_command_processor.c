@@ -6,6 +6,7 @@
 #include "motor_safety_policy.h"
 #include "usb_health_response.h"
 #include "usb_json_protocol.h"
+#include "usb_receiver_response.h"
 
 #include <limits.h>
 #include <stddef.h>
@@ -166,6 +167,25 @@ static bool build_command_response(usb_command_processor_t *processor,
                                          sizeof(processor->pending_response),
                                          &processor->pending_response_length);
     }
+    case USB_JSON_COMMAND_RECEIVER: {
+        receiver_inspection_t inspection;
+
+        saturating_increment(&processor->statistics.receiver_count);
+        if (!processor->receiver_inspection_provider.read(
+                processor->receiver_inspection_provider.context,
+                &inspection)) {
+            return build_error(processor,
+                               true,
+                               request->request_id,
+                               "receiver_inspection_unavailable");
+        }
+        return usb_receiver_response_build(
+            &inspection,
+            request->request_id,
+            processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    }
     case USB_JSON_COMMAND_ARM:
     case USB_JSON_COMMAND_DISARM: {
         const system_state_t previous = processor->state_machine->current;
@@ -238,12 +258,15 @@ usb_command_init_result_t usb_command_processor_initialize(
     system_state_machine_t *state_machine,
     fault_system_t *fault_system,
     usb_command_clock_t clock,
+    const receiver_inspection_provider_t *receiver_inspection_provider,
     const char *firmware_version,
     const char *build_id)
 {
     if ((processor == NULL) || (state_machine == NULL) ||
         !state_machine->initialized || (fault_system == NULL) ||
         !fault_system->initialized || (clock == NULL) ||
+        (receiver_inspection_provider == NULL) ||
+        (receiver_inspection_provider->read == NULL) ||
         (firmware_version == NULL) || (build_id == NULL)) {
         return USB_COMMAND_INIT_INVALID_ARGUMENT;
     }
@@ -252,6 +275,7 @@ usb_command_init_result_t usb_command_processor_initialize(
         .state_machine = state_machine,
         .fault_system = fault_system,
         .clock = clock,
+        .receiver_inspection_provider = *receiver_inspection_provider,
         .firmware_version = firmware_version,
         .build_id = build_id,
         .initialized = true,
@@ -274,6 +298,7 @@ usb_command_process_result_t usb_command_processor_process_once(
         (processor->fault_system == NULL) ||
         !processor->fault_system->initialized ||
         (processor->clock == NULL) ||
+        (processor->receiver_inspection_provider.read == NULL) ||
         (processor->firmware_version == NULL) ||
         (processor->build_id == NULL)) {
         return USB_COMMAND_PROCESS_INVALID_STATE;

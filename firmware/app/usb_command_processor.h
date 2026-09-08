@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_USB_COMMAND_PROCESSOR_H
 
 #include "fault.h"
+#include "receiver_inspection.h"
 #include "system_state.h"
 #include "usb_cdc_transport.h"
 
@@ -25,6 +26,7 @@ typedef struct {
     uint32_t unsupported_count;
     uint32_t status_count;
     uint32_t health_count;
+    uint32_t receiver_count;
     uint32_t motor_test_count;
     uint32_t motor_test_accepted_count;
     uint32_t motor_test_rejected_count;
@@ -40,6 +42,7 @@ typedef struct {
     system_state_machine_t *state_machine;
     fault_system_t *fault_system;
     usb_command_clock_t clock;
+    receiver_inspection_provider_t receiver_inspection_provider;
     const char *firmware_version;
     const char *build_id;
     char pending_response[USB_CDC_TRANSMIT_CAPACITY];
@@ -61,6 +64,7 @@ usb_command_init_result_t usb_command_processor_initialize(
     system_state_machine_t *state_machine,
     fault_system_t *fault_system,
     usb_command_clock_t clock,
+    const receiver_inspection_provider_t *receiver_inspection_provider,
     const char *firmware_version,
     const char *build_id);
 usb_command_process_result_t usb_command_processor_process_once(

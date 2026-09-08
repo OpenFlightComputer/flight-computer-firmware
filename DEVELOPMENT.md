@@ -2,22 +2,33 @@
 
 ## Current phase
 
-Phase 2 — ELRS/CRSF receiver input.
+Phase 2 — ELRS/CRSF receiver input — complete. Phase 3 planning is next.
 
 ## Current milestone
 
-Milestone 2.6 — USB inspection and physical receiver validation. The
-tester-proven CRSF parser, UART4 circular-DMA backend, receiver source, and
-observational receiver-loss policy are integrated. The corrected DMA accounting
-is synchronized; flight-image USB inspection and physical RP1 validation remain.
+Phase 3 planning — define the open-loop receiver-to-motor command path and its
+authority/safety boundaries before implementation.
 
 ## Last completed milestone
 
-Milestone 2.5 — staged receiver connection/loss policy, bounded diagnostics,
-and recoverable connection-loss fault reporting without motor or lifecycle
-authority.
+Milestone 2.6 — on-demand USB receiver inspection and physical flight-image RP1
+validation. The tester-proven parser, corrected circular-DMA accounting,
+receiver service, normalization, freshness, failsafe observation, and live host
+view are integrated without granting receiver motor authority.
 
 ## Current implementation status
+
+- Added a read-only `receiver` USB command which copies the receiver service's
+  existing raw and normalized snapshots only when requested. It reports packet
+  age/freshness, failsafe state, link statistics, and UART/parser/DMA counters
+  without reading DMA or adding work to the 1 kHz receiver task.
+- Added `./ofc device receiver` and `./ofc device receiver --watch`, including
+  tester-style raw channel positions and process-local minima/maxima alongside
+  the flight firmware's normalized roll, pitch, yaw, throttle, and arm values.
+- Added bounded response, command-dispatch, protocol-validation, and Rich-view
+  host tests. The flashed flight image then displayed live RP1 raw channels,
+  normalized controls, freshness, failsafe state, link data, and diagnostics in
+  the on-demand host view, completing Milestone 2.6 and Phase 2.
 
 - Added a hardware-independent, configurable receiver-loss policy with exact
   fresh, stale-hold, loss-hold, Stage 1 fallback, and latched Stage 2 timing.
@@ -455,9 +466,10 @@ can request nonzero throttle.
 
 ## Next step
 
-Add bounded USB receiver inspection and validate the flight image against the
-connected RP1. Receiver connection/loss is a recoverable Phase 2 fault, but
-must not gain `FAILSAFE` or motor authority until Phase 3 command ownership exists.
+Plan Phase 3's open-loop receiver-to-motor integration. Define the command
+producer, arming and freshness admission, staged-loss authority, control-to-motor
+mapping, and propeller-free acceptance sequence before receiver data can gain
+motor or lifecycle authority.
 Physical motor heartbeat-loss timing and per-motor direction configuration
 remain explicit pre-flight tasks; DShot600 remains deferred.
 

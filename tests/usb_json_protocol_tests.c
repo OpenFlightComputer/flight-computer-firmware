@@ -24,6 +24,9 @@ static void valid_commands_and_key_order_are_accepted(void)
                     "\"request_id\":42}");
     assert(request.command == USB_JSON_COMMAND_HEALTH);
     assert(request.request_id == 42U);
+    assert(parse("{\"type\":\"command\",\"request_id\":43,"
+                 "\"command\":\"receiver\"}").command ==
+           USB_JSON_COMMAND_RECEIVER);
     request = parse("{\"request_id\":4294967295,\"type\":\"command\","
                     "\"command\":\"arm\"}");
     assert(request.command == USB_JSON_COMMAND_ARM);

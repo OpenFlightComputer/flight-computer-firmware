@@ -171,6 +171,7 @@ add_executable(flight_firmware
     app/usb_command_processor.c
     app/usb_health_response.c
     app/usb_logging_backend.c
+    app/usb_receiver_response.c
     "${FIRMWARE_IDENTITY_SOURCE}"
     flight/actuators/motor_command.c
     flight/actuators/motor_mapping.c

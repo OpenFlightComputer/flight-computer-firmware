@@ -25,6 +25,10 @@ typedef struct {
     uint32_t framing_error_count;
     uint32_t dma_overrun_count;
     uint32_t dma_dropped_byte_count;
+    int16_t uplink_rssi_dbm;
+    uint8_t uplink_link_quality_percent;
+    int8_t uplink_snr_db;
+    bool link_statistics_present;
 } board_receiver_statistics_t;
 
 board_receiver_init_result_t board_receiver_initialize(

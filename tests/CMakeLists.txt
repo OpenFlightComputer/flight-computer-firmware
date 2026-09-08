@@ -575,6 +575,30 @@ target_compile_options(usb_health_response_tests PRIVATE
 
 add_test(NAME usb_health_response COMMAND usb_health_response_tests)
 
+add_executable(usb_receiver_response_tests
+    usb_receiver_response_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_receiver_response.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_freshness.c"
+)
+
+target_include_directories(usb_receiver_response_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
+)
+
+target_link_libraries(usb_receiver_response_tests PRIVATE firmware_common)
+
+target_compile_options(usb_receiver_response_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME usb_receiver_response COMMAND usb_receiver_response_tests)
+
 add_executable(usb_command_processor_tests
     usb_command_processor_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/fault.c"
@@ -585,6 +609,9 @@ add_executable(usb_command_processor_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_command_processor.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_health_response.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_receiver_response.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_freshness.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb/usb_json_protocol.c"
 )
@@ -592,6 +619,7 @@ add_executable(usb_command_processor_tests
 target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
