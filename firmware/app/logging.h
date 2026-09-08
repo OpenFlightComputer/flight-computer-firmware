@@ -39,6 +39,7 @@ typedef enum {
     LOG_MODULE_STATE,
     LOG_MODULE_FAULT,
     LOG_MODULE_USB,
+    LOG_MODULE_RECEIVER,
     LOG_MODULE_COUNT,
 } log_module_t;
 

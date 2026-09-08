@@ -1,14 +1,13 @@
 # Receiver service boundary
 
-Milestone 2.3 introduces the application side of receiver processing without
-duplicating the tester's CRSF or UART implementation. It is deliberately not
-wired into the production task registry until a physically proven receiver
-source is imported.
+Milestone 2.3 introduced the application side of receiver processing. The
+physically exercised tester implementation is now adapted behind that boundary
+and the service is registered in the production task registry.
 
 ## Integration seam
 
 ```text
-tester-proven UART + CRSF parser (future import)
+V1 UART4 circular DMA + portable CRSF parser
                          |
                          v
                  receiver_source_t
@@ -41,23 +40,23 @@ the raw and control snapshots, then reevaluates freshness on every invocation.
 
 ## Scheduling
 
-`receiver_service_task()` is the scheduler-compatible callback. Production does
-not register it yet because there is no flight-firmware receiver source. Once
-the tester-proven implementation is imported, its period and priority will be
-selected from the observed receiver frame rate, UART buffering depth, measured
-execution time, and DMA/interrupt design rather than guessed now.
+`receiver_service_task()` remains the generic scheduler callback. Production
+wraps it with bounded diagnostics and runs it every 1 ms at high priority,
+below the highest-priority 1 kHz motor-output task. At 420000 baud, about 42
+wire bytes arrive per millisecond; the circular DMA buffer holds 512 bytes and
+the CRSF adapter processes at most 512 bytes per invocation. The task normally
+returns after the first decoded channel frame and cannot control motors.
 
 ## Deliberately deferred
 
-The initial channel assignments and conventional CRSF calibration are a
-replaceable development profile, not physical calibration evidence. Production
-freshness timeouts, USB serialization, fault severity, lifecycle transitions,
-and motor authority remain deferred. In particular, receiver loss cannot enter
+USB serialization, connection/loss fault policy, lifecycle transitions, and
+motor authority remain deferred. In particular, receiver loss cannot enter
 `FAILSAFE` during Phase 2 because the receiver does not control motors until
 Phase 3. See `receiver-normalization.md`.
 
 Host tests use a fake source and clock to prove dependency validation,
 single-call boundedness, caller-storage independence, timestamp and sequence
 replacement, preservation across invalid/error results, task-callback behavior,
-normalization, freshness transitions, and counter saturation. Physical UART and
-CRSF behavior remains tester and board evidence.
+normalization, freshness transitions, and counter saturation. Parser/source
+tests additionally cover CRC, packed-channel decoding, recovery, link
+statistics, malformed frames, stream errors, and the bounded byte budget.

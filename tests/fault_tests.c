@@ -167,7 +167,7 @@ static void validates_initialization_and_catalogs(void)
 
     firmware_definitions =
         firmware_fault_catalog(&firmware_definition_count);
-    assert(firmware_definition_count == 15U);
+    assert(firmware_definition_count == 17U);
     assert(fault_system_initialize(&system,
                                    &state_machine,
                                    firmware_definitions,
@@ -510,6 +510,8 @@ int main(void)
     assert(strcmp(fault_source_name(FAULT_SOURCE_STATE_MACHINE),
                   "STATE_MACHINE") == 0);
     assert(strcmp(fault_source_name(FAULT_SOURCE_USB), "USB") == 0);
+    assert(strcmp(fault_source_name(FAULT_SOURCE_RECEIVER), "RECEIVER") ==
+           0);
 
     validates_initialization_and_catalogs();
     severity_controls_state_and_preserves_diagnostics();

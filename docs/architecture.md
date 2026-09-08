@@ -129,10 +129,11 @@ final motor safety gate and peripheral/hardware implementations in their
 reviewed later milestones. See `docs/motor-command.md`.
 
 Milestone 2.3 adds a protocol-neutral receiver source below an application-owned
-service. The future tester-proven UART/CRSF implementation returns no more than
-one complete decoded channel frame per call; the service copies and timestamps
-accepted frames without learning protocol or hardware details. It is not yet
-registered in production and has no lifecycle or motor authority. See
+service. The tester-derived CRSF adapter returns no more than one complete
+decoded channel frame per call; the service copies and timestamps accepted
+frames without learning protocol or hardware details. The V1 board owns UART4,
+PC10/PC11, circular DMA1 Stream 2, and its error interrupts. The registered 1 ms
+task has high priority below motor output and has no lifecycle or motor authority. See
 `docs/receiver-service.md`.
 
 Milestone 2.4 keeps conversion and age policy in separate `flight/receiver`

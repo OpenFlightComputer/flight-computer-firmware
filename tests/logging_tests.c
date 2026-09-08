@@ -71,6 +71,8 @@ static void initializes_default_configuration(void)
     assert(strcmp(logging_module_name(LOG_MODULE_STATE), "STATE") == 0);
     assert(strcmp(logging_module_name(LOG_MODULE_FAULT), "FAULT") == 0);
     assert(strcmp(logging_module_name(LOG_MODULE_USB), "USB") == 0);
+    assert(strcmp(logging_module_name(LOG_MODULE_RECEIVER), "RECEIVER") ==
+           0);
     assert(strcmp(logging_module_name(LOG_MODULE_COUNT), "UNKNOWN") == 0);
 }
 

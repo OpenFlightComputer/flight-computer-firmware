@@ -74,6 +74,7 @@ axis scaling, clamping, reversal, switch threshold, metadata preservation,
 fresh/stale/lost boundaries, clock rollback, service integration, atomic
 replacement, and saturation. Exact endpoints, channel assignments, timeouts,
 and physical packet age remain tester/board validation items. The same run
-reported 8,252 accepted frames, 3,041 CRC errors, and 1,913 framing errors; the
-discarded frames did not contribute extrema, but that error rate must be
-resolved before importing the UART/CRSF backend into operational firmware.
+reported 8,252 accepted frames, 3,041 CRC errors, and 1,913 framing errors. The
+discarded frames did not contribute extrema. The backend is now imported for
+integration, while the tester session continues investigating that error rate;
+the flight image must be revalidated after the resulting fix is synchronized.

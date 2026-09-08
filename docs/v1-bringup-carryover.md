@@ -49,8 +49,9 @@ all timestamped diagnostics.
 
 ### Phase 2 — receiver
 
-- PC10/PC11 still permit UART4 or USART3. The acceptance run did not resolve
-  this selection, so it remains a receiver-protocol/DMA design decision.
+- The receiver tester resolved PC10/PC11 to UART4 alternate function 8 at
+  420000 baud, with RX on DMA1 Stream 2/Channel 4. The flight firmware now
+  carries this selection in its V1 board backend.
 
 ### Phase 4 — sensors
 

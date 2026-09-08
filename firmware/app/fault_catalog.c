@@ -78,6 +78,16 @@ static const fault_definition_t definitions[] = {
         .severity = FAULT_SEVERITY_CRITICAL,
         .source = FAULT_SOURCE_APPLICATION,
     },
+    {
+        .id = FAULT_ID_RECEIVER_INITIALIZATION,
+        .severity = FAULT_SEVERITY_FAULT,
+        .source = FAULT_SOURCE_RECEIVER,
+    },
+    {
+        .id = FAULT_ID_RECEIVER_SOURCE,
+        .severity = FAULT_SEVERITY_FAULT,
+        .source = FAULT_SOURCE_RECEIVER,
+    },
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count)

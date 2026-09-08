@@ -63,15 +63,16 @@ tester independently proves the physical receiver path:
 
 1. Tester-to-flight receiver boundary — complete; the portable source returns
    at most one complete decoded 16-channel frame per non-blocking call.
-2. Tester-proven CRSF parser and V1 UART backend import — pending physical
-   validation in the tester repository.
-3. Receiver service and owned raw-channel snapshot — complete. Production
-   registration waits for the imported source.
+2. Tester-proven CRSF parser and V1 UART backend import — implementation
+   complete; the tester's error-rate fix must be synchronized before final
+   flight-image validation.
+3. Receiver service and owned raw-channel snapshot — complete and registered
+   as a 1 kHz high-priority task below motor output.
 4. Channel assignment, replaceable calibration, normalized control snapshot,
-   and configurable freshness — implementation and host verification complete;
-   awaiting owner review.
+   and configurable freshness — complete and wired to the physical source.
 5. Connection/loss transitions, bounded diagnostics, and non-critical Phase 2
-   fault reporting.
+   fault reporting — UART/parser diagnostics and recoverable source failures
+   are implemented; data-unavailable/stale/lost fault transitions remain.
 6. USB inspection and flight-firmware physical validation against the receiver.
 
 Phase 2 never submits motor commands. Receiver-loss authority over `FAILSAFE`

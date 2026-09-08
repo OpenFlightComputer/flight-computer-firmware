@@ -91,6 +91,46 @@ target_compile_options(receiver_freshness_tests PRIVATE
 
 add_test(NAME receiver_freshness COMMAND receiver_freshness_tests)
 
+add_executable(crsf_tests
+    crsf_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf/crsf_decoder.c"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf/crsf_parser.c"
+)
+
+target_include_directories(crsf_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf"
+)
+
+target_compile_options(crsf_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME crsf COMMAND crsf_tests)
+
+add_executable(crsf_receiver_source_tests
+    crsf_receiver_source_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf/crsf_decoder.c"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf/crsf_parser.c"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf/crsf_receiver_source.c"
+)
+
+target_include_directories(crsf_receiver_source_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf"
+)
+
+target_compile_options(crsf_receiver_source_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME crsf_receiver_source COMMAND crsf_receiver_source_tests)
+
 add_executable(scheduler_tests
     scheduler_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/scheduler.c"

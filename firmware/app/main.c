@@ -1,5 +1,6 @@
 #include "boot_status.h"
 #include "board.h"
+#include "board_receiver.h"
 #include "dshot_motor_backend.h"
 #include "fault.h"
 #include "fault_catalog.h"
@@ -7,6 +8,7 @@
 #include "logging.h"
 #include "motor_control.h"
 #include "motor_control_internal.h"
+#include "receiver_service.h"
 #include "scheduler.h"
 #include "system_state.h"
 #include "task.h"
@@ -18,6 +20,9 @@
 #include <stddef.h>
 
 #define USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT UINT32_C(100)
+#define RECEIVER_TASK_PERIOD_US UINT32_C(1000)
+#define RECEIVER_FRESH_THROUGH_US UINT32_C(25000)
+#define RECEIVER_LOST_AFTER_US UINT32_C(100000)
 
 volatile boot_status_t firmware_boot_status = BOOT_STATUS_RESET;
 volatile uint32_t firmware_main_loop_iterations;
@@ -35,6 +40,15 @@ volatile uint32_t firmware_usb_service_task_executions;
 volatile uint32_t firmware_motor_control_initialization_result = UINT32_MAX;
 volatile uint32_t firmware_motor_control_sync_last_result = UINT32_MAX;
 volatile uint32_t firmware_motor_control_task_executions;
+volatile uint32_t firmware_receiver_initialization_result = UINT32_MAX;
+volatile uint32_t firmware_receiver_service_last_result = UINT32_MAX;
+volatile uint32_t firmware_receiver_task_executions;
+volatile uint32_t firmware_receiver_freshness =
+    (uint32_t)RECEIVER_FRESHNESS_UNAVAILABLE;
+volatile uint32_t firmware_receiver_uart_bytes;
+volatile uint32_t firmware_receiver_valid_frames;
+volatile uint32_t firmware_receiver_crc_errors;
+volatile uint32_t firmware_receiver_framing_errors;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
@@ -42,6 +56,10 @@ system_state_machine_t firmware_system_state_machine;
 fault_system_t firmware_fault_system;
 usb_command_processor_t firmware_usb_command_processor;
 static dshot_motor_backend_t firmware_dshot_motor_backend;
+receiver_service_t firmware_receiver_service;
+static receiver_freshness_state_t logged_receiver_freshness =
+    RECEIVER_FRESHNESS_UNAVAILABLE;
+static bool receiver_source_fault_reported;
 
 static void motor_control_task(void *context)
 {
@@ -50,6 +68,52 @@ static void motor_control_task(void *context)
     firmware_motor_control_sync_last_result =
         (uint32_t)motor_control_synchronize();
     firmware_motor_control_task_executions++;
+}
+
+static void receiver_task(void *context)
+{
+    receiver_service_t *service = context;
+    receiver_control_state_t control;
+    board_receiver_statistics_t statistics = {0};
+    receiver_service_result_t result;
+
+    result = receiver_service_process_once(service);
+    firmware_receiver_service_last_result = (uint32_t)result;
+    firmware_receiver_task_executions++;
+
+    if (board_receiver_statistics(&statistics)) {
+        firmware_receiver_uart_bytes = statistics.uart_received_byte_count;
+        firmware_receiver_valid_frames = statistics.valid_frame_count;
+        firmware_receiver_crc_errors = statistics.crc_error_count;
+        firmware_receiver_framing_errors = statistics.framing_error_count;
+    }
+
+    if ((result == RECEIVER_SERVICE_SOURCE_ERROR) &&
+        !receiver_source_fault_reported) {
+        firmware_fault_last_result =
+            (uint32_t)fault_system_report(&firmware_fault_system,
+                                          FAULT_ID_RECEIVER_SOURCE,
+                                          true,
+                                          statistics.uart_error);
+        receiver_source_fault_reported = true;
+        LOG_ERROR(LOG_MODULE_RECEIVER,
+                  "source error context=%lu",
+                  (unsigned long)statistics.uart_error);
+    }
+
+    if (receiver_service_control_state(service, &control)) {
+        firmware_receiver_freshness = (uint32_t)control.freshness;
+        if (control.freshness != logged_receiver_freshness) {
+            if (control.freshness == RECEIVER_FRESHNESS_FRESH) {
+                LOG_INFO(LOG_MODULE_RECEIVER, "receiver data fresh");
+            } else if (control.freshness == RECEIVER_FRESHNESS_STALE) {
+                LOG_WARN(LOG_MODULE_RECEIVER, "receiver data stale");
+            } else if (control.freshness == RECEIVER_FRESHNESS_LOST) {
+                LOG_ERROR(LOG_MODULE_RECEIVER, "receiver data lost");
+            }
+            logged_receiver_freshness = control.freshness;
+        }
+    }
 }
 
 static void diagnostic_fast_task(void *context)
@@ -120,6 +184,14 @@ static const task_definition_t motor_control_task_definition = {
     .period_us = MOTOR_CONTROL_FRAME_PERIOD_US,
     .priority = TASK_PRIORITY_HIGHEST,
     .callback = motor_control_task,
+};
+
+static const task_definition_t receiver_task_definition = {
+    .name = "receiver-service",
+    .period_us = RECEIVER_TASK_PERIOD_US,
+    .priority = TASK_PRIORITY_HIGH,
+    .callback = receiver_task,
+    .context = &firmware_receiver_service,
 };
 
 static void stop_with_fault(boot_status_t status,
@@ -201,7 +273,8 @@ static fault_id_t fault_id_for_board_error(board_init_result_t result)
 }
 
 static task_registration_result_t register_application_tasks(
-    bool register_usb_service_task)
+    bool register_usb_service_task,
+    bool register_receiver_task)
 {
     size_t index;
 
@@ -211,6 +284,16 @@ static task_registration_result_t register_application_tasks(
         const task_registration_result_t result =
             task_registry_register(&firmware_task_registry,
                                    &motor_control_task_definition);
+
+        if (result != TASK_REGISTRATION_OK) {
+            return result;
+        }
+    }
+
+    if (register_receiver_task) {
+        const task_registration_result_t result =
+            task_registry_register(&firmware_task_registry,
+                                   &receiver_task_definition);
 
         if (result != TASK_REGISTRATION_OK) {
             return result;
@@ -248,7 +331,15 @@ int main(void)
     usb_cdc_init_result_t usb_init_result;
     motor_output_backend_t motor_output_backend;
     motor_control_init_result_t motor_control_result;
+    receiver_source_t receiver_source;
+    receiver_normalization_config_t receiver_normalization_config;
+    const receiver_freshness_config_t receiver_freshness_config = {
+        .fresh_through_us = RECEIVER_FRESH_THROUGH_US,
+        .lost_after_us = RECEIVER_LOST_AFTER_US,
+    };
+    board_receiver_init_result_t receiver_init_result;
     bool usb_service_available = false;
+    bool receiver_service_available = false;
 
     logging_initialize();
     LOG_INFO(LOG_MODULE_SYSTEM,
@@ -326,6 +417,40 @@ int main(void)
     }
     LOG_INFO(LOG_MODULE_SYSTEM, "four-channel DShot300 output initialized");
 
+    receiver_init_result = board_receiver_initialize(&receiver_source);
+    firmware_receiver_initialization_result = (uint32_t)receiver_init_result;
+    if (receiver_init_result != BOARD_RECEIVER_INIT_OK) {
+        firmware_fault_last_result =
+            (uint32_t)fault_system_report(&firmware_fault_system,
+                                          FAULT_ID_RECEIVER_INITIALIZATION,
+                                          true,
+                                          (uint32_t)receiver_init_result);
+        LOG_ERROR(LOG_MODULE_RECEIVER,
+                  "receiver initialization failed result=%u",
+                  (unsigned int)receiver_init_result);
+    } else {
+        receiver_normalization_default_config(
+            &receiver_normalization_config);
+        if (receiver_service_initialize(&firmware_receiver_service,
+                                        &receiver_source,
+                                        time_us,
+                                        &receiver_normalization_config,
+                                        &receiver_freshness_config)) {
+            receiver_service_available = true;
+            LOG_INFO(LOG_MODULE_RECEIVER,
+                     "UART4 CRSF receiver initialized");
+        } else {
+            firmware_fault_last_result =
+                (uint32_t)fault_system_report(
+                    &firmware_fault_system,
+                    FAULT_ID_RECEIVER_INITIALIZATION,
+                    true,
+                    (uint32_t)BOARD_RECEIVER_INIT_SOURCE_ERROR);
+            LOG_ERROR(LOG_MODULE_RECEIVER,
+                      "receiver service initialization failed");
+        }
+    }
+
     usb_init_result = usb_cdc_transport_initialize();
     firmware_usb_initialization_result = (uint32_t)usb_init_result;
     if (usb_init_result != USB_CDC_INIT_OK) {
@@ -371,7 +496,8 @@ int main(void)
     }
 
     task_registration_result =
-        register_application_tasks(usb_service_available);
+        register_application_tasks(usb_service_available,
+                                   receiver_service_available);
     if (task_registration_result != TASK_REGISTRATION_OK) {
         stop_with_fault(BOOT_STATUS_TASK_REGISTRATION_ERROR,
                         FAULT_ID_TASK_REGISTRATION,

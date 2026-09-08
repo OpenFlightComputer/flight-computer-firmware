@@ -25,6 +25,15 @@ The native `receiver_freshness_tests` target verifies configuration bounds,
 unavailable data, inclusive fresh/lost boundaries, stale and lost transitions,
 clock rollback, and stable diagnostic names.
 
+The native `crsf_tests` target verifies the tester-derived CRC-8/DVB-S2
+implementation, packed 16-channel decoding, signed link statistics, malformed
+frame accounting, parser recovery, and invalid-argument handling.
+
+The native `crsf_receiver_source_tests` target verifies byte-stream injection,
+link-statistics retention, caller-owned channel publication, malformed and
+hardware-error outcomes, valid-frame precedence, and the 512-byte per-call
+processing bound used to protect the cooperative scheduler.
+
 The native `scheduler_tests` target uses a fake microsecond clock to verify
 ready-task selection, batch fairness, disabled tasks, stable periodic release,
 execution measurements, skipped-release behavior, and overrun detection.

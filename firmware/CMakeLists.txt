@@ -120,6 +120,7 @@ add_library(stm32cube_f4 STATIC
     "${STM32_DEVICE_ROOT}/Source/Templates/system_stm32f4xx.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_cortex.c"
+    "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_dma.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_flash.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_flash_ex.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_gpio.c"
@@ -129,6 +130,7 @@ add_library(stm32cube_f4 STATIC
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_pwr_ex.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_rcc.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_rcc_ex.c"
+    "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_uart.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_ll_usb.c"
     "${STM32_USB_DEVICE_ROOT}/Core/Src/usbd_core.c"
     "${STM32_USB_DEVICE_ROOT}/Core/Src/usbd_ctlreq.c"
@@ -178,12 +180,16 @@ add_executable(flight_firmware
     flight/receiver/receiver_source.h
     peripherals/dshot/dshot_encoder.c
     peripherals/dshot/dshot_timing.c
+    peripherals/crsf/crsf_decoder.c
+    peripherals/crsf/crsf_parser.c
+    peripherals/crsf/crsf_receiver_source.c
     peripherals/usb/newline_framer.c
     peripherals/usb/usb_cdc_transport.c
     peripherals/usb/usb_descriptors.c
     peripherals/usb/usb_json_protocol.c
     hardware/boards/flightcomputer_v1/board.c
     hardware/boards/flightcomputer_v1/board_motor_output.c
+    hardware/boards/flightcomputer_v1/board_receiver.c
     hardware/boards/flightcomputer_v1/motor_output_map.c
     hardware/boards/flightcomputer_v1/rgb_led_safe_state.c
     hardware/boards/flightcomputer_v1/time.c
@@ -205,6 +211,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/dshot"
+    "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/crsf"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/usb"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )

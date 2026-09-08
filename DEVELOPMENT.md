@@ -6,15 +6,15 @@ Phase 2 — ELRS/CRSF receiver input.
 
 ## Current milestone
 
-Milestone 2.4 — receiver channel normalization and freshness:
-**implementation and host verification complete; awaiting owner review**. The
-tester-proven CRSF/UART source remains an independent import.
+Milestone 2.5 — receiver connection/loss transitions, bounded diagnostics, and
+USB inspection. The tester-proven CRSF parser, UART4 circular-DMA backend, and
+receiver source are imported and registered; the tester's ongoing error-rate
+fix must be synchronized before flight-image physical validation.
 
 ## Last completed milestone
 
-Milestone 2.3 — protocol-neutral receiver service and owned raw-channel
-snapshot. Its source boundary, bounded service call, ownership, timestamp, and
-statistics were approved as the foundation for parallel Phase 2 work.
+Milestone 2.4 — receiver normalization and freshness with the measured RP1
+development profile.
 
 ## Current implementation status
 
@@ -434,13 +434,38 @@ can request nonzero throttle.
 
 ## Next step
 
-Owner review of normalization and freshness. After approval, connection/loss
-transitions and bounded USB diagnostics can proceed against the fake source
-while the tester independently proves CRSF parsing and the PC10/PC11 UART
-backend. Do not register the production task or assign receiver-loss `FAILSAFE`
-authority until the corresponding source and Phase 3 command ownership exist.
+Synchronize the tester session's CRSF error-rate fix, then add bounded USB
+receiver inspection and validate the flight image against the connected RP1.
+Receiver connection/loss should become a recoverable Phase 2 fault, but must
+not gain `FAILSAFE` or motor authority until Phase 3 command ownership exists.
 Physical motor heartbeat-loss timing and per-motor direction configuration
 remain explicit pre-flight tasks; DShot600 remains deferred.
+
+## Milestone 2.2 CRSF and V1 receiver backend import
+
+- Adapted the tester's hardware-independent CRSF parser and decoder. CRC-8/
+  DVB-S2 validation precedes publication; packed channel frames produce all 16
+  raw 11-bit values, while link-statistics frames are retained diagnostically.
+- Added a generic CRSF receiver-source adapter over an injected byte stream. It
+  returns at most one channel frame and examines at most 512 bytes per call, so
+  malformed or non-channel traffic cannot monopolize the scheduler.
+- Resolved the V1 route to normal, non-inverted UART4 at 420000 baud: PC10 TX
+  and PC11 RX use alternate function 8, with circular RX on DMA1 Stream 2,
+  Channel 4. The 512-byte buffer holds about 12.2 ms of serial traffic. Parsing
+  stays outside interrupts; UART and DMA interrupts handle errors only.
+- Registered the receiver service every 1 ms at high priority after the
+  highest-priority motor task. It applies the measured normalization profile,
+  classifies freshness at 25/100 ms, records bounded diagnostics, and reports
+  UART/source failure as a recoverable receiver fault. It cannot submit motor
+  commands or trigger `FAILSAFE` in Phase 2.
+- Added host tests for parser/decoder correctness, recovery, source ownership,
+  valid-frame precedence, stream errors, and the processing bound. The
+  in-progress tester error-rate correction remains an explicit synchronization
+  point before the flight image is flashed for receiver validation.
+- All 30 native tests pass normally and under address/undefined-behavior
+  sanitizers. Debug and Release firmware builds pass with warnings as errors.
+  The wired receiver image uses 78,328/51,856 bytes of Flash and 16,408 bytes
+  of RAM in both Debug and Release builds.
 
 ## Milestone 2.4 normalization and freshness
 
@@ -455,27 +480,26 @@ remain explicit pre-flight tasks; DShot600 remains deferred.
   normalized snapshot that preserves the raw reception timestamp and sequence.
 - Added a separate stateless freshness evaluator with injected fresh/loss
   boundaries and `UNAVAILABLE`, `FRESH`, `STALE`, and `LOST` outcomes. Clock
-  rollback fails closed as `LOST`; no production timeout is guessed yet.
+  rollback fails closed as `LOST`. The wired development policy treats data as
+  stale after 25 ms and lost after 100 ms; these values must be validated before
+  receiver data gains control authority.
 - Extended the service so one clock sample drives each invocation, a new raw
   and normalized pair is published atomically only after successful conversion,
   and freshness advances even when no new frame arrives. Callers retrieve the
   normalized snapshot and freshness together.
 - Added dedicated normalizer and freshness unit tests plus service integration
-  coverage. No UART, DMA, CRSF parsing, USB schema, fault, lifecycle, or motor
-  behavior is added, and the production receiver task remains unregistered.
+  coverage. This layer adds no UART, DMA, CRSF parsing, USB schema, lifecycle,
+  or motor behavior.
 - Documented the replaceable calibration and timestamp policy in
   `docs/receiver-normalization.md`.
 - Recorded traceability to tester result
   `20260908T174707Z_002D003E3435471135383539_036e0ee8-81c6-459b-b24e-84487bbbe086.json`.
   Its extrema come only from accepted CRC-valid frames. Its 3,041 CRC and 1,913
-  framing errors remain a blocking investigation for the later UART/CRSF import;
-  they do not define freshness thresholds, and no timeout was inferred from the
-  final 4 ms packet-age sample.
+  framing errors remain an investigation in the tester session and must be
+  synchronized into the imported parser/backend before physical validation.
 - All 28 native host checks pass normally and under address/undefined-behavior
   sanitizers, all 37 Python host-tool tests pass, and Debug/Release firmware
-  builds pass with warnings as errors. Because the receiver service remains
-  uninstantiated, linked image usage remains 64,724/43,332 bytes of Flash and
-  15,344 bytes of RAM.
+  builds passed with warnings as errors before the physical backend import.
 
 ## Milestone 2.3 receiver service
 

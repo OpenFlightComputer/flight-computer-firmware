@@ -87,8 +87,8 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 | PC7 | `ESC_M3` | Output | Physical ESC output 3 | TIM8_CH2 AF3 selected | Route and grouped DMA choice recorded; not initialized |
 | PC8 | `ESC_M2` | Output | Physical ESC output 2 | TIM8_CH3 AF3 selected | Route and grouped DMA choice recorded; not initialized |
 | PC9 | `ESC_M1` | Output | Physical ESC output 1 | TIM8_CH4 AF3 selected | Route and grouped DMA choice recorded; not initialized |
-| PC10 | `RP1_RX` | Output | MCU-to-receiver/telemetry serial | UART4_TX AF8 or USART3_TX AF7 | UART selection unresolved |
-| PC11 | `RP1_TX` | Input | Receiver/telemetry serial to MCU | UART4_RX AF8 or USART3_RX AF7 | UART selection unresolved |
+| PC10 | `RP1_RX` | Output | MCU-to-receiver/telemetry serial | UART4_TX AF8 | Selected and initialized for CRSF |
+| PC11 | `RP1_TX` | Input | Receiver/telemetry serial to MCU | UART4_RX AF8 | Selected with DMA1 Stream 2/Channel 4 |
 | PC12 | `IMU_INT1` | Input | BMI270 interrupt 1 | GPIO/EXTI | EXTI configuration deferred |
 | PD2 | `IMU_CS` | Output | BMI270 chip select | GPIO | Implemented by tester; not initialized here |
 | PH0 | `HSE_IN` | Input | External high-speed clock | OSC_IN | Active in Milestone 0.2/0.3 clock setup |
@@ -111,12 +111,12 @@ Most selections below are established by routing plus the manufacturing-test imp
 | BMI270 | SPI3 AF6 plus GPIO chip select | PB3, PB4, PB5, PD2 |
 | BMP388 | I2C2 AF4 | PB10, PB11 |
 | GPS serial | USART2 AF7 | PA2, PA3 |
+| RP1 receiver | UART4 AF8, 420000 baud, DMA1 Stream 2/Channel 4 | PC10, PC11 |
 | WS2812 | Accepted tester uses DWT-timed GPIO; timer/DMA remains unresolved | PA1 |
 | SWD | STM32 fixed SWD functions plus NRST | PA13, PA14, NRST |
 
 ## Deliberately unresolved decisions
 
-- PC10/PC11 can map to UART4 or USART3. Phase 2 will select the receiver backend after checking protocol, DMA, interrupt, and other UART requirements.
 - PC6–PC9 use TIM8 channels 1–4 with AF3. DShot300 is selected for initial
   SpeedyBee BLS 60A ESC testing, and the pure buffer uses 560 timer ticks per
   bit with current isolation compare values 210/420. The backend updates CCR1–CCR4

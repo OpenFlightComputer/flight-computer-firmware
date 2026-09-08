@@ -66,6 +66,7 @@ static bool module_is_valid(log_module_t module)
     case LOG_MODULE_STATE:
     case LOG_MODULE_FAULT:
     case LOG_MODULE_USB:
+    case LOG_MODULE_RECEIVER:
         return true;
     case LOG_MODULE_COUNT:
         break;
