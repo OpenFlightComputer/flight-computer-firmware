@@ -42,7 +42,7 @@ static void initialization_selects_identity_mapping(void)
     assert(!motor_mapping_is_valid(NULL));
 }
 
-static void configuration_requires_disarmed_and_stopped(void)
+static void configuration_requires_disarmed(void)
 {
     static const uint8_t permutation[MOTOR_COMMAND_MOTOR_COUNT] = {
         3U,
@@ -54,16 +54,10 @@ static void configuration_requires_disarmed_and_stopped(void)
 
     motor_mapping_initialize(&mapping);
 
-    assert(motor_mapping_configure(&mapping, permutation, false, false) ==
+    assert(motor_mapping_configure(&mapping, permutation, false) ==
            MOTOR_MAPPING_CONFIGURE_UNSAFE_STATE);
     assert_identity(&mapping);
-    assert(motor_mapping_configure(&mapping, permutation, false, true) ==
-           MOTOR_MAPPING_CONFIGURE_UNSAFE_STATE);
-    assert_identity(&mapping);
-    assert(motor_mapping_configure(&mapping, permutation, true, false) ==
-           MOTOR_MAPPING_CONFIGURE_UNSAFE_STATE);
-    assert_identity(&mapping);
-    assert(motor_mapping_configure(&mapping, permutation, true, true) ==
+    assert(motor_mapping_configure(&mapping, permutation, true) ==
            MOTOR_MAPPING_CONFIGURE_OK);
     assert(mapping.logical_to_physical[0] == 3U);
     assert(mapping.logical_to_physical[1] == 0U);
@@ -89,15 +83,15 @@ static void invalid_permutations_are_rejected_atomically(void)
 
     motor_mapping_initialize(&mapping);
 
-    assert(motor_mapping_configure(&mapping, duplicate, true, true) ==
+    assert(motor_mapping_configure(&mapping, duplicate, true) ==
            MOTOR_MAPPING_CONFIGURE_INVALID_PERMUTATION);
     assert_identity(&mapping);
-    assert(motor_mapping_configure(&mapping, out_of_range, true, true) ==
+    assert(motor_mapping_configure(&mapping, out_of_range, true) ==
            MOTOR_MAPPING_CONFIGURE_INVALID_PERMUTATION);
     assert_identity(&mapping);
-    assert(motor_mapping_configure(NULL, duplicate, true, true) ==
+    assert(motor_mapping_configure(NULL, duplicate, true) ==
            MOTOR_MAPPING_CONFIGURE_INVALID_ARGUMENT);
-    assert(motor_mapping_configure(&mapping, NULL, true, true) ==
+    assert(motor_mapping_configure(&mapping, NULL, true) ==
            MOTOR_MAPPING_CONFIGURE_INVALID_ARGUMENT);
     assert_identity(&mapping);
 }
@@ -142,7 +136,6 @@ static void all_in_range_assignments_are_classified(void)
                     const motor_mapping_configure_result_t result =
                         motor_mapping_configure(&mapping,
                                                 assignment,
-                                                true,
                                                 true);
 
                     assert((result == MOTOR_MAPPING_CONFIGURE_OK) ==
@@ -174,7 +167,7 @@ static void configured_mapping_reorders_complete_commands(void)
     motor_command_t physical_command;
 
     motor_mapping_initialize(&mapping);
-    assert(motor_mapping_configure(&mapping, permutation, true, true) ==
+    assert(motor_mapping_configure(&mapping, permutation, true) ==
            MOTOR_MAPPING_CONFIGURE_OK);
     motor_command_initialize(&physical_command);
 
@@ -201,7 +194,7 @@ static void mapping_can_be_applied_in_place(void)
     motor_command_t command = command_with_distinct_throttles();
 
     motor_mapping_initialize(&mapping);
-    assert(motor_mapping_configure(&mapping, reverse, true, true) ==
+    assert(motor_mapping_configure(&mapping, reverse, true) ==
            MOTOR_MAPPING_CONFIGURE_OK);
     assert(motor_mapping_apply(&mapping, &command, &command) ==
            MOTOR_MAPPING_APPLY_OK);
@@ -271,7 +264,7 @@ static void manually_corrupted_commands_are_rejected(void)
 int main(void)
 {
     initialization_selects_identity_mapping();
-    configuration_requires_disarmed_and_stopped();
+    configuration_requires_disarmed();
     invalid_permutations_are_rejected_atomically();
     all_in_range_assignments_are_classified();
     configured_mapping_reorders_complete_commands();

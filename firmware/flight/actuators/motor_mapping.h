@@ -28,15 +28,14 @@ typedef enum {
 void motor_mapping_initialize(motor_mapping_t *mapping);
 
 /*
- * Replaces the complete mapping only when the system is disarmed and physical
- * outputs have already accepted a stop. The assignment must be a permutation
- * of physical output indices 0..3.
+ * Replaces the complete mapping only when the system is disarmed. Streaming
+ * DShot stop frames are safe because every throttle value remains zero. The
+ * assignment must be a permutation of physical output indices 0..3.
  */
 motor_mapping_configure_result_t motor_mapping_configure(
     motor_mapping_t *mapping,
     const uint8_t logical_to_physical[MOTOR_COMMAND_MOTOR_COUNT],
-    bool system_disarmed,
-    bool outputs_stopped);
+    bool system_disarmed);
 
 bool motor_mapping_is_valid(const motor_mapping_t *mapping);
 

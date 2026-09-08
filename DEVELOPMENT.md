@@ -6,14 +6,15 @@ Phase 1 — DShot motor subsystem.
 
 ## Current milestone
 
-Milestone 1.10 — constrained USB/Python motor bench command:
-**implementation and software verification complete; awaiting owner review**.
+Milestone 1.11 — propeller-free ESC and motor bench validation:
+**implementation and physical motor-order validation complete; awaiting owner
+review**.
 
 ## Last completed milestone
 
-Milestones 1.8 and 1.9 — synchronized four-channel DShot300 TIM8/DMA backend.
-The complete four-channel implementation, board-owned route/DMA storage, and
-software verification are reviewed, committed, and integrated.
+Milestone 1.10 — constrained USB/Python motor bench command. The firmware and
+host safety limits were reviewed, committed as `5748fd0`, flashed, and entered
+physical validation without accepting a nonzero command.
 
 ## Current implementation status
 
@@ -230,7 +231,8 @@ software verification are reviewed, committed, and integrated.
   as the initial propeller-free validation target. It supports DShot300/600;
   initial output uses ordinary DShot300 with no telemetry request.
 - Added a validated DShot300 timing profile for the V1 168 MHz TIM8 clock:
-  560 ticks per bit, 210 ticks high for zero, and 420 ticks high for one.
+  560 ticks per bit, currently 210 ticks high for zero and 420 ticks high for
+  one for the pulse-width isolation experiment.
 - Added a pure 18-by-4 interleaved compare buffer: 16 MSB-first frame rows
   followed by two all-low rows, with lanes explicitly ordered CCR1 through
   CCR4 (`ESC_M4` through `ESC_M1`). No GPIO, TIM8, DMA, or motor output is
@@ -242,8 +244,9 @@ software verification are reviewed, committed, and integrated.
   No command source can obtain the private output object or backend context.
 - Required exact `ARMED` lifecycle, `OK`/`WARNING`/`DEGRADED` health, complete
   command revalidation, and freshness before mapping and forwarding a command.
-- Added periodic safety synchronization so producer silence expires the last
-  command actually accepted by the backend; a busy result does not refresh it.
+- Added periodic safety synchronization so producer silence expires the
+  retained command. Command acceptance only replaces that complete mapped
+  snapshot; it no longer submits a physical frame from producer/USB context.
 - Made invalid/stale commands and `UNKNOWN` health enter `FAILSAFE` while
   armed and force stop. Critical motor initialization, output, and
   force-stop failures use catalogue-owned IDs and enter terminal `FAULT`.
@@ -280,29 +283,80 @@ software verification are reviewed, committed, and integrated.
 - Extended the generic motor-output interface with backend status so the
   application detects DMA failures that occur after an accepted submission.
 - Registered a highest-priority 1,000 Hz motor-control task for lifecycle,
-  health, timeout, and asynchronous backend-error synchronization.
+  health, timeout, asynchronous backend-error synchronization, and periodic
+  one-shot retransmission of the latest fresh command.
 - Initialized the backend during boot and made an accepted initial zero frame
   mandatory. No USB, receiver, or flight-controller command producer was
   added, so this image has no software path to nonzero throttle.
 - Added adapter, board-ordering, generic-status, and asynchronous safety tests
   plus `docs/dshot-motor-backend.md`.
-- Added the strict `motor_test` USB request with decimal-to-millionths parsing,
-  correlated responses, and firmware-owned limits of logical motor 1 and 10%
-  normalized throttle. The other three command values are always zero.
+- Added the strict `motor_test` USB request with decimal-to-millionths parsing
+  and correlated responses. It accepts logical motors 1 through 4 and the full
+  normalized range while each request keeps the other three motors at zero.
 - Routed every accepted manual request through `motor_control_submit()` and
   extended the source boundary check so USB cannot bypass lifecycle, health,
   freshness, mapping, backend, force-stop, or fault policy.
 - Added reusable host protocol parameters and a motor workflow. It requires a
-  separate arm request, sends one second of zero frames, refreshes the 100 ms
-  command lease every 20 ms for at most one second, then sends five zero
-  requests and disarms even after Ctrl-C or a command failure.
+  separate arm request, sends five seconds of zero frames,
+  refreshes the 100 ms command lease every 20 ms for any positive finite duration, then
+  sends five zero requests and disarms even after Ctrl-C or a command failure.
 - Extended `./ofc` with explicit `device arm`, `device disarm`, and constrained
   `motor run` commands without changing the non-arming smoke workflow.
+- The first physical workflow reached the asynchronous zero-frame preparation
+  stage, then the board backend reported an error. The safety path rejected the
+  later 2% request, forced stop, and entered terminal `FAULT`; health reported
+  critical fault ID 14 with the old generic context 4. No nonzero command was
+  accepted.
+- Temporarily added a first-failure V1 motor snapshot captured before cleanup clears the
+  evidence. It distinguishes precise DMA/setup/timeout reasons and retains DMA
+  `LISR/CR/FCR/NDTR`, TIM8 `SR/DIER/CR1/CNT`, output state, and saturating
+  submission/interrupt/completion/failure counters while reporting the current
+  post-cleanup output state separately.
+- Propagated the stable board reason through the generic output diagnostic
+  callback into motor fault context. The DMA ISR performs no formatting; the
+  1 kHz main-context task emits one `FATAL` `MOTOR` log for the latched failure.
+- Temporarily added the read-only `motor_diagnostics` USB command and
+  `./ofc device motor-diagnostics`, plus a zero-only
+  `./ofc motor verify-zero` workflow that must pass before retrying power.
+- Separated producer heartbeat rate from physical DShot rate after the first
+  4% and 10% motor-1 tests produced only a twitch at roughly 39 USB-triggered
+  frames per second. `motor_control_submit()` now atomically retains a complete
+  validated and mapped command without touching the backend. The existing
+  highest-priority 1 kHz task checks state, health, lease, and prior completion
+  before submitting one fresh DShot frame every millisecond.
+- Physical retransmission preserves the producer timestamp, so it cannot renew
+  the 100 ms safety lease. A preceding frame still busy at the next 1,000 us
+  service deadline is treated as a critical stuck-backend failure and forces
+  stop; a healthy DShot300 frame completes in approximately 60 us.
 
 No receiver input, sensor access, persistent flight-data logging, or
-flight-control behavior has been implemented. Only the constrained development
-USB path can request nonzero throttle. Physical waveform, ESC, and motor
-behavior are not yet claimed.
+flight-control behavior has been implemented. Only the development USB path
+can request nonzero throttle.
+
+- Replaced normal `DISARMED` GPIO-low behavior with Betaflight-style periodic
+  DShot stop traffic. The highest-priority 1 kHz motor task sends a valid
+  all-zero frame in `DISARMED`, `FAILSAFE`, and while armed without a fresh
+  power command. Terminal faults and backend failures retain the separate
+  TIM8/DMA/GPIO hard-stop path.
+- Added a five-second stop-frame preparation latch. USB arm requests return
+  `motor_not_ready` before it completes, and the motor boundary itself rejects
+  nonzero commands if an alternate caller bypasses USB admission. The latch
+  survives ordinary disarm/rearm cycles and resets after an emergency stop.
+- Temporarily added `hard_stopped`, `stop_frames_streaming`, and
+  `arming_preparation_complete` to motor diagnostics. Restored the bench host
+  workflow's five-second zero preparation because hardware isolation proved
+  one second insufficient while five seconds was accepted by the initial
+  SpeedyBee ESC.
+- Removed the temporary USB motor-diagnostics command, frame/register
+  snapshots, configuration-mask checks, zero-only workflow, unused motor log
+  module, and enlarged transport buffers after physical validation. A compact
+  board failure reason remains connected to the existing fault context.
+- All 25 native host checks and all 37 Python host-tool tests pass. The same 25
+  native checks pass under address/undefined-behavior sanitizers, and clangd
+  reports no errors in the changed motor-control, command-processor, or JSON
+  protocol units. Debug and Release firmware builds pass with warnings as
+  errors; Debug uses 64,724 bytes of Flash and 15,344 bytes of RAM, while
+  Release uses 43,332 bytes of Flash and 15,344 bytes of RAM.
 
 ## Known issues and limitations
 
@@ -355,18 +409,19 @@ behavior are not yet claimed.
 - A backend descriptor is copied, but its non-null context object is not; that
   context must have static or otherwise sufficient lifetime. Accepted submission
   likewise promises only an internal copy, not immediate physical application.
-- `motor_mapping_configure()` cannot independently inspect application state or
-  hardware. Its future owner must pass `system_disarmed` only from actual
-  `SYSTEM_STATE_DISARMED` and `outputs_stopped` only after force-stop has been
-  accepted; the mapping module rejects false conditions but cannot detect a
-  dishonest caller.
-- Logical aircraft positions, mixer convention, expected CW/CCW directions,
-  ESC-stored direction, and configuration persistence are not selected. No ESC
-  direction command may be exposed as an ordinary runtime motor command.
-- The selected V1 motor routes and DMA resources are now executable firmware
-  and host-tested data, not proof of PCB continuity, GPIO AF register behavior,
-  TIM8/DMA execution, electrical waveform quality, ESC acceptance, physical
-  motor order, or direction.
+- `motor_mapping_configure()` cannot independently inspect application state.
+  Its owner must pass `system_disarmed` only from actual
+  `SYSTEM_STATE_DISARMED`; the mapping module rejects a false condition but
+  cannot detect a dishonest caller. Physical hard-stop is no longer required
+  because a logical permutation cannot turn all-zero stop frames into power.
+- Logical aircraft positions now match the default output order, but the mixer
+  convention, expected CW/CCW directions, ESC-stored direction, and
+  configuration persistence are not yet selected. Before first flight, add a
+  disarmed-only runtime direction operation; never expose ESC direction as an
+  ordinary power command.
+- The selected V1 routes, DMA execution, DShot300 ESC acceptance, synchronized
+  four-channel operation, and motor positions are physically verified. Exact
+  waveform measurements and motor directions remain open.
 
 ## Open questions
 
@@ -379,20 +434,190 @@ behavior are not yet claimed.
 
 ## Next step
 
-Review Milestone 1.10. After it is accepted and committed, flash the resulting
-image and execute Milestone 1.11's staged propeller-free validation: begin with
-PC9/ESC_M1 at low throttle through `./ofc motor run`, then identify the other
-physical outputs and validate synchronized operation. DShot600 remains a
-roadmap extension after DShot300 works reliably. The outstanding foundation
-stress checks remain flight prerequisites in
-`docs/hardware-validation-checklist.md`.
+Owner review of the cleaned Phase 1 changes, followed by Phase 2 ELRS/CRSF
+receiver input. Physical heartbeat-loss timing and per-motor direction
+configuration remain explicit pre-flight tasks. DShot600 remains deferred.
+
+## Milestone 1.11 bring-up evidence
+
+The detailed experiments below are retained as engineering history. Their
+temporary USB/register/frame diagnostics have been removed from production;
+only compact board failure reasons remain in fault context.
+
+- The normal and address/undefined-behavior sanitizer host builds each run all
+  25 native test executables/checks successfully. The Python package runs 34
+  tests, including zero-only behavior and one-fragment USB attach recovery.
+- Tests prove diagnostic callbacks are mandatory, stable board reason codes
+  reach the critical fault context, structured responses contain the complete
+  snapshot, the new command is read-only, and zero verification never requests
+  nonzero throttle. Board-map coverage now also proves CCR-ordered frame
+  reconstruction and rejection of malformed trailing-low slots; USB tests
+  prove the maximum-width diagnostics response fits its fixed capacity.
+- Debug and Release firmware configurations build with warnings treated as
+  errors using Arm GCC 15.3.1. Debug uses 69,380 bytes of Flash and reserves
+  16,296 bytes of RAM; Release uses 47,312 bytes of Flash and reserves 16,296
+  bytes of RAM.
+- The dirty diagnostic Debug image based on `5748fd0` was programmed,
+  read-back verified, and reset with the ESC battery disconnected. It reports
+  `DISARMED`, current board output state `IDLE`, no latched reason, and zero
+  asynchronous submissions, interrupts, completions, and failures.
+- The first diagnostic ESC-powered zero-only retry captured `FEIF1` after 8 of
+  72 halfword transfers (`NDTR=64`) with no completion. The ISR stopped TIM8
+  and DMA, restored the pins low, and latched `DMA_FIFO_ERROR`; the application
+  correctly entered terminal `FAULT`, and no nonzero throttle was requested.
+- The captured `FCR=0x80` showed that FIFO-error interrupts were enabled while
+  the stream remained in direct mode. The board engine now follows the STM32F4
+  TIM DMA-burst configuration pattern: FIFO mode is enabled with a full
+  threshold for every transfer, and FIFO-error interrupts are enabled only for
+  asynchronous transfers. This correction passed host and firmware builds and
+  was flashed with a clean diagnostic baseline.
+- The next zero-only attempt completed its first 72-halfword table with one
+  completion interrupt and no diagnostic failure. The host nevertheless waited
+  for its 512-byte serial read timeout before sending the next heartbeat, so
+  the firmware's 100 ms command lease expired and correctly entered failsafe;
+  cleanup then disarmed it. The host reader now blocks for one byte and drains
+  only bytes reported as already waiting, allowing a newline-complete response
+  to return immediately. All 34 Python tests pass.
+- The repeated one-second zero-only run completed 38 active refresh requests
+  plus five cleanup zero writes. Diagnostics reported 43 submissions, 43
+  interrupts, 43 completions, zero failures, no latched reason, and final board
+  state `IDLE`; cleanup left the lifecycle `DISARMED`.
+- The separately armed first nonzero workflow completed its one-second zero
+  preparation, 11 logical-motor-1 refresh requests at 2% over 0.25 seconds,
+  five cleanup zeros, and disarm. The cumulative counters advanced from 43 to
+  98 with matching submissions, interrupts, and completions, zero failures,
+  no latched reason, final board state `IDLE`, and lifecycle `DISARMED`.
+  Physical motor motion, identity, and direction await operator confirmation.
+- Later 4%/0.75-second and 10%/one-second tests also completed without firmware
+  or DMA errors, but the motor only twitched. The host produced approximately
+  39 physical frames per second because every frame was still tied to a
+  correlated USB request. This directly motivated the 1 kHz retained-command
+  output change.
+- The 1 kHz image was then flashed and a one-second zero-only run produced
+  1,135 matched submissions/completions from 39 USB heartbeats with no failure.
+  Repeated motor-1 10% runs produced roughly 2,140 frames each, but still only
+  an arming-tone sequence followed by a commutation twitch.
+- Updated motor-control tests prove arming without a command remains stopped,
+  producer acceptance performs no immediate output, each idle service release
+  repeats the retained mapped command, replacement is atomic, retransmission
+  preserves the heartbeat timestamp, the inclusive 100 ms lease still
+  expires, and a transfer busy for 1,000 us becomes a critical fault even when
+  a newer heartbeat arrived meanwhile.
+- After motor 1 produced the same arming tones but only a commutation twitch at
+  10%, the constrained bench selector was moved to logical motor 2. The host
+  and firmware still agree on exactly one permitted motor, with the existing
+  10% throttle and one-second duration limits unchanged.
+- Added explicit `PREPARING`, `ACTIVE`, `CLEANUP`, and `DISARMED` host events.
+  Motor diagnostics now retain the last accepted nonzero physical-order
+  normalized command, DShot values and frames, and timer tick profile across
+  cleanup so the next physical run can distinguish arming-tone movement from
+  the powered phase and verify the runtime encoding.
+- Added independent board-boundary diagnostics from the successful nonzero
+  transfer. The board reconstructs four frames from its owned table after the
+  physical-to-CCR transformation and retains them in CCR1-through-CCR4 order,
+  so the selected motor-2 test must report `[0,0,7950,0]`. It also captures a
+  ten-bit configuration mask before DMA can consume the table, then records
+  that the stream, update request, and timer counter were enabled. A complete
+  mask is `1023` and covers DMA addresses/count/channel/word width/FIFO
+  mode, TIM8 burst/period/PWM outputs, and GPIO alternate functions.
+- After the correctly reordered motor-2 frame still produced only a twitch,
+  aligned the V1 TIM8 DMAR path with Betaflight's STM32F4 burst
+  representation: the application API remains a compact 16-bit compare table,
+  while the board now widens its owned, reordered 72-entry DMA table to
+  32-bit words and configures both DMA memory and peripheral widths as words.
+  No timing, frame encoding, repetition, safety, or timer-lifecycle behavior
+  changed, preserving a single-variable hardware test.
+- Aligned the remaining successful-transfer lifecycle with Betaflight's STM32F4
+  timer-burst pattern. A normal DMA completion now disables only TIM8 update
+  DMA requests and DMA2 Stream 1, leaving TIM8 running and PC6 through PC9 in
+  AF3 at the trailing zero compares between 1 kHz frames. Initialization,
+  explicit force-stop/disarm, transfer-start failure, and interrupt/DMA error
+  paths still stop TIM8, clear all compares, and force every motor pin to
+  GPIO-low. Frame timing, encoding, throttle, repetition rate, and the 100 ms
+  command lease are unchanged.
+- Flashed and physically exercised that lifecycle change with motor 2 at 10%
+  for one second. Diagnostics reported 2,138 matched submissions, interrupts,
+  and completions, zero failures, physical frame `[0,7950,0,0]`, timer frame
+  `[0,0,7950,0]`, and configuration mask `1023`; cleanup stopped TIM8/DMA and
+  returned to `DISARMED`. The motor still only twitched, ruling out per-frame
+  TIM8 stop/restart as the cause of the observed ESC behavior.
+- Prepared a combined follow-up diagnostic at the owner's direction: DShot300
+  duty changes from 37.5%/75% to Betaflight-matched 35%/70% (`196`/`392`
+  ticks), the host sends five seconds of zero preparation, and selector `0`
+  applies the same command to all four motors for up to five active seconds.
+  The firmware still enforces the 10% ceiling, 100 ms renewable lease, complete
+  zero cleanup, and disarm. Because all three variables change together, a
+  successful physical result will require later isolation to identify its
+  cause.
+- Flashed the combined diagnostic with the ESC battery disconnected, verified
+  a clean `DISARMED`/`IDLE` baseline, then ran the explicitly armed all-motors
+  10% workflow after battery reconnection. All motors spun during the active
+  phase. Post-cleanup diagnostics reported 10,141 matched submissions,
+  interrupts, and completions, zero failures, four physical and timer frames
+  of `7950`, timing `560/196/392`, configuration mask `1023`, and final
+  `DISARMED`/`IDLE` state. This physically validates simultaneous four-channel
+  DShot300 output under the combined settings, but does not yet distinguish
+  pulse width, five-second zero preparation, or all-motor activation as the
+  causal fix.
+- Removed only the all-motors diagnostic behavior for the first isolation
+  experiment. The firmware and host again accept only logical motor 2, while
+  retaining the working 35%/70% pulse widths, five-second zero preparation,
+  five-second active limit, 10% ceiling, lease, cleanup, and disarm behavior.
+- The motor-2-only isolation then ran for five seconds and the selected motor
+  spun continuously. Diagnostics reported 10,138 matched submissions,
+  interrupts, and completions, zero failures, physical frame `[0,7950,0,0]`,
+  timer frame `[0,0,7950,0]`, timing `560/196/392`, configuration mask `1023`,
+  and final `DISARMED`/`IDLE`. This rules out simultaneous all-motor activation
+  as necessary for the successful result.
+- Reduced only the zero-frame preparation from five seconds to one second for
+  the next isolation image. Motor selection, pulse widths, active-duration
+  limit, throttle ceiling, lease, cleanup, and disarm remain unchanged.
+- The one-second-preparation motor-2 test did not spin, while retaining the
+  previously successful `560/196/392` timing and five-second active phase.
+  Diagnostics reported 6,144 matched submissions, interrupts, and completions,
+  zero failures, physical frame `[0,7950,0,0]`, timer frame `[0,0,7950,0]`,
+  configuration mask `1023`, and final `DISARMED`/`IDLE`. Together with the
+  successful five-second-preparation motor-2 test, this establishes that the
+  longer zero-frame preparation is necessary in the current ESC power-up test
+  sequence. Pulse-width necessity remains unisolated.
+- Restored five-second zero preparation and reverted only the duty profile to
+  the original 37.5%/75% (`210`/`420` ticks) for the next isolation image.
+  Motor 2 selection, five-second active duration, 10% throttle ceiling, lease,
+  cleanup, and disarm remain unchanged.
+- The original-pulse isolation test spun motor 2 continuously after five
+  seconds of zero preparation. Diagnostics reported 10,144 matched submissions,
+  interrupts, and completions, zero failures, physical frame `[0,7950,0,0]`,
+  timer frame `[0,0,7950,0]`, timing `560/210/420`, configuration mask `1023`,
+  and final `DISARMED`/`IDLE`. This rules out the 35%/70% pulse change as
+  necessary and identifies the longer preparation period as the only tested
+  change correlated with reliable spin. A final wait-versus-zero-frame test is
+  still needed to distinguish simple ESC boot time from required valid DShot
+  zero traffic.
+- For the final distinction, the ESC was freshly power-cycled and left
+  disarmed for more than five seconds with no DShot traffic, after which the
+  unchanged original-pulse firmware ran only one second of zero preparation
+  before the five-second motor-2 command. The motor did not spin. Diagnostics
+  remained clean with cumulative matched submissions, interrupts, and
+  completions, no failures, physical frame `[0,7950,0,0]`, timer frame
+  `[0,0,7950,0]`, timing `560/210/420`, configuration mask `1023`, and final
+  `DISARMED`/`IDLE`. This proves elapsed ESC boot time alone is insufficient:
+  the current ESC requires more than one and no more than five seconds of valid
+  zero DShot frames before accepting throttle reliably.
+- Returned only the host preparation interval to one second for the final
+  boot-time-versus-zero-traffic isolation. The already-flashed firmware remains
+  unchanged at original `560/210/420` timing and logical motor 2; no flash is
+  required for this host-only change.
+- Expanded each fixed USB transmit entry and the command processor's owned
+  pending response from 768 to 1,024 bytes so the bounded diagnostics response
+  still fits without allocation. This adds fixed RAM only; receive bounds and
+  backpressure behavior are unchanged.
 
 ## Milestone 1.10 software verification
 
 - Native USB protocol tests cover valid motor/throttle fields, strict decimal
   grammar, malformed or extra fields, integer bounds, and exact accepted and
   rejected response serialization.
-- Command-processor tests prove the 10% and motor-one policies are enforced in
+- Command-processor tests prove the 10% and selected-motor policies are enforced in
   firmware, only the selected logical command entry is nonzero, all accepted
   traffic uses the motor-control safety gate, and rejection statistics and
   errors are correlated.
@@ -468,7 +693,7 @@ stress checks remain flight prerequisites in
 - The normal and address/undefined-behavior sanitizer builds each run all 21
   host test executables successfully.
 - DShot timing tests prove the exact 168 MHz DShot300 profile: 560 timer ticks
-  per bit, a 210-tick zero high, and a 420-tick one high.
+  per bit, a 196-tick zero high, and a 392-tick one high.
 - Tests cover all 16 bit positions in all four timer lanes, MSB-first output,
   the exact documented 25%/50% mixed frame, two trailing all-low slots, source
   and destination overlap, invalid pointers, unsupported rates/clocks,

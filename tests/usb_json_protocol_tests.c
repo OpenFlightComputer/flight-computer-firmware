@@ -96,7 +96,7 @@ static void malformed_or_noncanonical_requests_are_rejected(void)
 
 static void response_builders_are_exact_and_bounded(void)
 {
-    char output[192];
+    char output[1280];
     size_t length;
     static const char status[] =
         "{\"type\":\"response\",\"request_id\":42,"

@@ -36,12 +36,14 @@ typedef motor_output_backend_stop_result_t
     (*motor_output_backend_force_stop_t)(void *context);
 typedef motor_output_backend_status_t
     (*motor_output_backend_status_fn_t)(void *context);
+typedef uint32_t (*motor_output_backend_diagnostic_context_t)(void *context);
 
 typedef struct {
     motor_output_backend_initialize_t initialize;
     motor_output_backend_submit_t submit;
     motor_output_backend_force_stop_t force_stop;
     motor_output_backend_status_fn_t status;
+    motor_output_backend_diagnostic_context_t diagnostic_context;
     void *context;
 } motor_output_backend_t;
 
@@ -89,5 +91,6 @@ motor_output_submit_result_t motor_output_submit(
     const motor_command_t *command);
 motor_output_stop_result_t motor_output_force_stop(motor_output_t *output);
 motor_output_status_t motor_output_status(const motor_output_t *output);
+uint32_t motor_output_diagnostic_context(const motor_output_t *output);
 
 #endif

@@ -54,9 +54,10 @@ reported/active count distinction, and invalid destination handling.
 The native `usb_command_processor_tests` target uses a fake line source and
 transport to verify status/structured-health responses, health-aware arm
 admission, state-machine arm/disarm transitions, malformed/unsupported errors,
-and pending-response backpressure. The STM32 USB device library, interrupt
-behavior, pins, enumeration, and physical transfer remain firmware-build or
-board-level checks.
+all four manual motor selectors, the full normalized throttle range, and
+pending-response backpressure. The STM32 USB device library, interrupt behavior,
+pins, enumeration, and physical transfer remain firmware-build or board-level
+checks.
 
 The native `foundation_integration_tests` target verifies complete
 state/fault/health chains for successful and degraded startup, fatal startup,
@@ -68,9 +69,11 @@ The native `motor_safety_policy_tests` target verifies all health outcomes:
 
 The native `motor_control_tests` target uses an injected copying backend to
 verify fail-closed initialization, mandatory initial stop, singleton ownership,
-private mapping, state/health/validity/freshness gates, accepted and busy
-ownership, periodic timeout enforcement, failsafe entry, critical backend
-faults, and force-stop uncertainty.
+private mapping, state/health/validity/freshness gates, command acceptance
+without immediate output, retained-command replacement, periodic 1 kHz-style
+retransmission, inclusive lease enforcement, stuck-transfer detection,
+failsafe entry,
+critical backend faults, and force-stop uncertainty.
 
 The motor architecture check runs in every normal build and as the named
 `motor_architecture` CTest. It scans production sources and rejects raw
@@ -85,8 +88,8 @@ without replacement, invalidation, timeout boundaries, future timestamps, and
 freshness near the 64-bit time limit.
 
 The native `motor_mapping_tests` target verifies identity defaults, exhaustively
-classifies all 256 in-range assignments, rejects configuration unless both
-disarmed and stopped conditions are supplied, preserves mappings atomically on
+classifies all 256 in-range assignments, rejects configuration unless the
+disarmed condition is supplied, preserves mappings atomically on
 failure, reorders complete logical-to-physical commands, supports in-place use,
 and rejects corrupted commands and mappings.
 
@@ -100,7 +103,8 @@ mapping.
 The native `dshot_motor_backend_tests` target replaces the V1 board engine with
 a fake and verifies DShot300 initialization, normalized-throttle conversion,
 exact physical `M1`-through-`M4` table order, caller-independent copying, busy
-behavior, all-zero force-stop storage, and board result/status error mapping.
+behavior, all-zero force-stop storage, board result/status error mapping, and
+compact board failure-context propagation.
 
 The native `dshot_encoder_tests` target exhaustively covers all 2,048 protocol
 values with telemetry both clear and set, independently verifies the checksum

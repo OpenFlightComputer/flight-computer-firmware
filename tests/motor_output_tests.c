@@ -10,6 +10,7 @@ typedef struct {
     motor_output_backend_submit_result_t submit_result;
     motor_output_backend_stop_result_t stop_result;
     motor_output_backend_status_t status_result;
+    uint32_t diagnostic_context;
     const motor_command_t *expected_caller_command;
     motor_command_t copied_command;
     uint32_t initialize_count;
@@ -60,6 +61,13 @@ static motor_output_backend_status_t fake_status(void *context)
     return fake->status_result;
 }
 
+static uint32_t fake_diagnostic_context(void *context)
+{
+    const fake_backend_t *fake = context;
+
+    return fake->diagnostic_context;
+}
+
 static fake_backend_t successful_fake(void)
 {
     return (fake_backend_t){
@@ -77,6 +85,7 @@ static motor_output_backend_t backend_for(fake_backend_t *fake)
         .submit = fake_submit,
         .force_stop = fake_force_stop,
         .status = fake_status,
+        .diagnostic_context = fake_diagnostic_context,
         .context = fake,
     };
 }
@@ -127,6 +136,10 @@ static void initialization_requires_complete_backend(void)
            MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
     backend = backend_for(&fake);
     backend.status = NULL;
+    assert(motor_output_initialize(&output, &backend) ==
+           MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
+    backend = backend_for(&fake);
+    backend.diagnostic_context = NULL;
     assert(motor_output_initialize(&output, &backend) ==
            MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
     assert(fake.initialize_count == 0U);
@@ -310,6 +323,12 @@ static void status_maps_backend_results(void)
     assert(motor_output_status(&output) ==
            MOTOR_OUTPUT_STATUS_BACKEND_ERROR);
     assert(fake.status_count == 4U);
+
+    fake.diagnostic_context = UINT32_C(108);
+    assert(motor_output_diagnostic_context(&output) == UINT32_C(108));
+    assert(motor_output_diagnostic_context(NULL) == 0U);
+    output.initialized = false;
+    assert(motor_output_diagnostic_context(&output) == 0U);
 }
 
 static void force_stop_has_no_busy_outcome(void)

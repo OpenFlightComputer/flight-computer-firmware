@@ -15,6 +15,7 @@ typedef struct {
     motor_output_backend_submit_result_t submit_result;
     motor_output_backend_stop_result_t stop_result;
     motor_output_backend_status_t status_result;
+    uint32_t diagnostic_context;
     motor_command_t last_command;
     uint32_t initialize_count;
     uint32_t submit_count;
@@ -66,6 +67,13 @@ static motor_output_backend_status_t fake_status(void *context)
     return fake->status_result;
 }
 
+static uint32_t fake_diagnostic_context(void *context)
+{
+    const fake_backend_t *fake = context;
+
+    return fake->diagnostic_context;
+}
+
 static motor_output_backend_t backend_for(fake_backend_t *fake)
 {
     return (motor_output_backend_t){
@@ -73,6 +81,7 @@ static motor_output_backend_t backend_for(fake_backend_t *fake)
         .submit = fake_submit,
         .force_stop = fake_force_stop,
         .status = fake_status,
+        .diagnostic_context = fake_diagnostic_context,
         .context = fake,
     };
 }
@@ -132,6 +141,34 @@ static void leave_failsafe(system_state_machine_t *state_machine)
            SYSTEM_STATE_TRANSITION_OK);
 }
 
+static void prepare_arming(system_state_machine_t *state_machine,
+                           fake_backend_t *fake)
+{
+    uint32_t submits_before = fake->submit_count;
+
+    assert(state_machine->current == SYSTEM_STATE_DISARMED);
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
+    fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
+    fake->stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED;
+    if (motor_control_ready_for_arm()) {
+        return;
+    }
+    assert(!motor_control_ready_for_arm());
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->submit_count == submits_before + 1U);
+    assert(fake->last_command.throttle[0] == 0.0f);
+    assert(fake->last_command.throttle[1] == 0.0f);
+    assert(fake->last_command.throttle[2] == 0.0f);
+    assert(fake->last_command.throttle[3] == 0.0f);
+    assert(!motor_control_outputs_stopped());
+    assert(!motor_control_ready_for_arm());
+
+    current_time_us += MOTOR_CONTROL_ARMING_PREPARATION_US;
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->submit_count == submits_before + 2U);
+    assert(motor_control_ready_for_arm());
+}
+
 static motor_command_t make_command(float m0,
                                     float m1,
                                     float m2,
@@ -164,6 +201,7 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
 
     assert(!motor_control_is_initialized());
     assert(!motor_control_outputs_stopped());
+    assert(!motor_control_ready_for_arm());
     assert(motor_control_submit(&command) ==
            MOTOR_CONTROL_SUBMIT_NOT_INITIALIZED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_NOT_INITIALIZED);
@@ -236,6 +274,7 @@ static void successful_initialization_is_stopped_and_singleton(
                                        &backend) == MOTOR_CONTROL_INIT_OK);
     assert(motor_control_is_initialized());
     assert(motor_control_outputs_stopped());
+    assert(!motor_control_ready_for_arm());
     assert(motor_control_initialize(state_machine,
                                        fault_system,
                                        fake_clock,
@@ -244,7 +283,28 @@ static void successful_initialization_is_stopped_and_singleton(
            MOTOR_CONTROL_INIT_ALREADY_INITIALIZED);
 }
 
-static void mapping_is_private_and_requires_disarmed_stopped_output(
+static void nonzero_commands_are_blocked_before_stop_preparation(
+    system_state_machine_t *state_machine,
+    fake_backend_t *fake)
+{
+    const motor_command_t command =
+        make_command(0.1f, 0.0f, 0.0f, 0.0f, current_time_us);
+
+    enter_armed(state_machine);
+    assert(motor_control_submit(&command) ==
+           MOTOR_CONTROL_SUBMIT_BLOCKED_PREPARATION);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->last_command.throttle[0] == 0.0f);
+    assert(fake->last_command.throttle[1] == 0.0f);
+    assert(fake->last_command.throttle[2] == 0.0f);
+    assert(fake->last_command.throttle[3] == 0.0f);
+    assert(system_state_machine_handle_event(
+               state_machine,
+               SYSTEM_STATE_EVENT_DISARM_REQUESTED) ==
+           SYSTEM_STATE_TRANSITION_OK);
+}
+
+static void mapping_is_private_and_requires_disarmed_output(
     system_state_machine_t *state_machine)
 {
     static const uint8_t reverse[MOTOR_COMMAND_MOTOR_COUNT] = {3U, 2U, 1U, 0U};
@@ -260,6 +320,10 @@ static void mapping_is_private_and_requires_disarmed_stopped_output(
     enter_armed(state_machine);
     assert(motor_control_configure_mapping(reverse) ==
            MOTOR_CONTROL_MAPPING_CONFIGURE_UNSAFE_STATE);
+    assert(system_state_machine_handle_event(
+               state_machine,
+               SYSTEM_STATE_EVENT_DISARM_REQUESTED) ==
+           SYSTEM_STATE_TRANSITION_OK);
 }
 
 static void allowed_health_passes_fresh_commands_with_mapping(
@@ -270,15 +334,22 @@ static void allowed_health_passes_fresh_commands_with_mapping(
     motor_command_t command;
     uint32_t submits_before;
 
-    current_time_us = UINT64_C(500000);
+    prepare_arming(state_machine, fake);
+    enter_armed(state_machine);
+
+    current_time_us += UINT64_C(500000);
     command = make_command(0.1f, 0.2f, 0.3f, 0.4f, current_time_us);
+    submits_before = fake->submit_count;
     assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(fake->submit_count == submits_before);
+    assert(!motor_control_outputs_stopped());
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->submit_count == submits_before + 1U);
     assert(fake->last_command.throttle[0] == 0.4f);
     assert(fake->last_command.throttle[1] == 0.3f);
     assert(fake->last_command.throttle[2] == 0.2f);
     assert(fake->last_command.throttle[3] == 0.1f);
     assert(!motor_control_outputs_stopped());
-    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
 
     assert(fault_system_report(fault_system,
                                TEST_WARNING_FAULT_ID,
@@ -299,7 +370,9 @@ static void allowed_health_passes_fresh_commands_with_mapping(
     assert(motor_control_submit(&command) ==
            MOTOR_CONTROL_SUBMIT_BLOCKED_STATE);
     assert(fake->submit_count == submits_before);
-    assert(motor_control_outputs_stopped());
+    assert(!motor_control_outputs_stopped());
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->last_command.throttle[0] == 0.0f);
 }
 
 static void invalid_and_stale_commands_enter_failsafe(
@@ -313,6 +386,7 @@ static void invalid_and_stale_commands_enter_failsafe(
     current_time_us = UINT64_C(700000);
     command = make_command(0.2f, 0.2f, 0.2f, 0.2f, current_time_us);
     assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
     command.throttle[2] = NAN;
     stop_before = fake->stop_count;
     assert(motor_control_submit(&command) ==
@@ -322,6 +396,7 @@ static void invalid_and_stale_commands_enter_failsafe(
     assert(motor_control_outputs_stopped());
 
     leave_failsafe(state_machine);
+    prepare_arming(state_machine, fake);
     enter_armed(state_machine);
     command = make_command(0.3f, 0.3f, 0.3f, 0.3f,
                            current_time_us - COMMAND_TIMEOUT_US - 1U);
@@ -331,28 +406,82 @@ static void invalid_and_stale_commands_enter_failsafe(
     assert(motor_control_outputs_stopped());
 }
 
-static void busy_does_not_refresh_the_last_accepted_command(
+static void periodic_service_repeats_the_latest_fresh_command(
     system_state_machine_t *state_machine,
     fake_backend_t *fake)
 {
     motor_command_t command;
+    uint32_t submits_before;
 
     leave_failsafe(state_machine);
+    prepare_arming(state_machine, fake);
     enter_armed(state_machine);
     current_time_us = UINT64_C(900000);
     command = make_command(0.4f, 0.4f, 0.4f, 0.4f, current_time_us);
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
+    submits_before = fake->submit_count;
     assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(fake->submit_count == submits_before);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->submit_count == submits_before + 1U);
+    assert(fake->last_command.timestamp_us == UINT64_C(900000));
+
+    current_time_us += UINT64_C(1000);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->submit_count == submits_before + 2U);
+    assert(fake->last_command.timestamp_us == UINT64_C(900000));
+
+    current_time_us += UINT64_C(1000);
+    command = make_command(0.5f, 0.5f, 0.5f, 0.5f, current_time_us);
+    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(fake->submit_count == submits_before + 2U);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->submit_count == submits_before + 3U);
+    assert(fake->last_command.throttle[0] == 0.5f);
+    assert(fake->last_command.timestamp_us == current_time_us);
 
     current_time_us += COMMAND_TIMEOUT_US;
-    command = make_command(0.5f, 0.5f, 0.5f, 0.5f, current_time_us);
-    fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_BUSY;
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_BUSY);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->submit_count == submits_before + 4U);
     current_time_us++;
     assert(motor_control_synchronize() ==
            MOTOR_CONTROL_SYNC_FAILSAFE_ENTERED);
     assert(state_machine->current == SYSTEM_STATE_FAILSAFE);
+    assert(!motor_control_outputs_stopped());
+}
+
+static void stuck_busy_output_becomes_critical(
+    system_state_machine_t *state_machine,
+    fault_system_t *fault_system,
+    fake_backend_t *fake)
+{
+    motor_command_t command;
+
+    initialize_fault_system(state_machine, fault_system);
+    enter_disarmed(state_machine);
+    prepare_arming(state_machine, fake);
+    enter_armed(state_machine);
+    current_time_us = UINT64_C(1050000);
+    command = make_command(0.5f, 0.5f, 0.5f, 0.5f, current_time_us);
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
+    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_BUSY;
+    current_time_us += MOTOR_CONTROL_OUTPUT_COMPLETION_TIMEOUT_US / 2U;
+    command = make_command(0.6f, 0.6f, 0.6f, 0.6f, current_time_us);
+    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    current_time_us +=
+        (MOTOR_CONTROL_OUTPUT_COMPLETION_TIMEOUT_US / 2U) - 1U;
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    current_time_us++;
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_BACKEND_ERROR);
+    assert(state_machine->current == SYSTEM_STATE_FAULT);
+    assert(fault_system_record_for_id(fault_system,
+                                      FAULT_ID_MOTOR_OUTPUT) != NULL);
     assert(motor_control_outputs_stopped());
+    fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
 }
 
 static void unknown_health_stops_and_enters_failsafe(
@@ -363,20 +492,23 @@ static void unknown_health_stops_and_enters_failsafe(
     motor_command_t command;
 
     leave_failsafe(state_machine);
+    prepare_arming(state_machine, fake);
     enter_armed(state_machine);
     current_time_us = UINT64_C(1100000);
     command = make_command(0.6f, 0.6f, 0.6f, 0.6f, current_time_us);
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
     assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
 
     fault_system->dropped_record_count = 1U;
     assert(motor_control_synchronize() ==
            MOTOR_CONTROL_SYNC_FAILSAFE_ENTERED);
     assert(state_machine->current == SYSTEM_STATE_FAILSAFE);
-    assert(motor_control_outputs_stopped());
+    assert(!motor_control_outputs_stopped());
     fault_system->dropped_record_count = 0U;
 
     leave_failsafe(state_machine);
+    prepare_arming(state_machine, fake);
     enter_armed(state_machine);
     assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
     fault_system->dropped_record_count = 1U;
@@ -395,12 +527,13 @@ static void backend_and_stop_failures_become_critical(
     motor_command_t command;
 
     leave_failsafe(state_machine);
+    prepare_arming(state_machine, fake);
     enter_armed(state_machine);
     current_time_us = UINT64_C(1300000);
     command = make_command(0.7f, 0.7f, 0.7f, 0.7f, current_time_us);
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ERROR;
-    assert(motor_control_submit(&command) ==
-           MOTOR_CONTROL_SUBMIT_BACKEND_ERROR);
+    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_BACKEND_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(fault_system,
                                       FAULT_ID_MOTOR_OUTPUT) != NULL);
@@ -408,16 +541,14 @@ static void backend_and_stop_failures_become_critical(
     /* Reinitialize the referenced state/fault objects to isolate stop failure. */
     initialize_fault_system(state_machine, fault_system);
     enter_disarmed(state_machine);
+    prepare_arming(state_machine, fake);
     enter_armed(state_machine);
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
+    command = make_command(0.7f, 0.7f, 0.7f, 0.7f, current_time_us);
     assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
     fake->stop_result = MOTOR_OUTPUT_BACKEND_STOP_ERROR;
-    assert(system_state_machine_handle_event(
-               state_machine,
-               SYSTEM_STATE_EVENT_DISARM_REQUESTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
-    assert(motor_control_synchronize() ==
-           MOTOR_CONTROL_SYNC_FORCE_STOP_ERROR);
+    assert(motor_control_force_stop() == MOTOR_CONTROL_STOP_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(fault_system,
                                       FAULT_ID_MOTOR_FORCE_STOP) != NULL);
@@ -433,6 +564,7 @@ static void asynchronous_backend_error_becomes_critical(
 
     initialize_fault_system(state_machine, fault_system);
     enter_disarmed(state_machine);
+    prepare_arming(state_machine, fake);
     enter_armed(state_machine);
     current_time_us = UINT64_C(1500000);
     command = make_command(0.4f, 0.3f, 0.2f, 0.1f, current_time_us);
@@ -440,15 +572,19 @@ static void asynchronous_backend_error_becomes_critical(
     fake->stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED;
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
     assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
 
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_ERROR;
+    fake->diagnostic_context = UINT32_C(108);
     assert(motor_control_synchronize() ==
            MOTOR_CONTROL_SYNC_BACKEND_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(fault_system,
-                                      FAULT_ID_MOTOR_OUTPUT) != NULL);
+                                      FAULT_ID_MOTOR_OUTPUT)->context ==
+           UINT32_C(108));
     assert(motor_control_outputs_stopped());
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
+    fake->diagnostic_context = 0U;
 }
 
 int main(void)
@@ -467,16 +603,20 @@ int main(void)
         &state_machine, &fault_system, &fake);
     successful_initialization_is_stopped_and_singleton(
         &state_machine, &fault_system, &fake);
-    mapping_is_private_and_requires_disarmed_stopped_output(&state_machine);
+    nonzero_commands_are_blocked_before_stop_preparation(
+        &state_machine, &fake);
+    mapping_is_private_and_requires_disarmed_output(&state_machine);
     allowed_health_passes_fresh_commands_with_mapping(
         &state_machine, &fault_system, &fake);
     invalid_and_stale_commands_enter_failsafe(&state_machine, &fake);
-    busy_does_not_refresh_the_last_accepted_command(&state_machine, &fake);
+    periodic_service_repeats_the_latest_fresh_command(&state_machine, &fake);
     unknown_health_stops_and_enters_failsafe(
         &state_machine, &fault_system, &fake);
     backend_and_stop_failures_become_critical(
         &state_machine, &fault_system, &fake);
     asynchronous_backend_error_becomes_critical(
+        &state_machine, &fault_system, &fake);
+    stuck_busy_output_becomes_critical(
         &state_machine, &fault_system, &fake);
     return 0;
 }

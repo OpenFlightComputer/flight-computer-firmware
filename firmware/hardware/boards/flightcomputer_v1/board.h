@@ -1,6 +1,7 @@
 #ifndef OPENFLIGHTCOMPUTER_BOARD_H
 #define OPENFLIGHTCOMPUTER_BOARD_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -37,6 +38,20 @@ typedef enum {
     BOARD_MOTOR_OUTPUT_STATUS_ERROR,
 } board_motor_output_status_t;
 
+typedef enum {
+    BOARD_MOTOR_DIAGNOSTIC_NONE = 0,
+    BOARD_MOTOR_DIAGNOSTIC_INVALID_TABLE = 101,
+    BOARD_MOTOR_DIAGNOSTIC_REORDER_FAILED = 102,
+    BOARD_MOTOR_DIAGNOSTIC_DMA_DISABLE_TIMEOUT = 103,
+    BOARD_MOTOR_DIAGNOSTIC_TRANSFER_START_FAILED = 104,
+    BOARD_MOTOR_DIAGNOSTIC_STOP_TRANSFER_TIMEOUT = 105,
+    BOARD_MOTOR_DIAGNOSTIC_DMA_FIFO_ERROR = 106,
+    BOARD_MOTOR_DIAGNOSTIC_DMA_DIRECT_MODE_ERROR = 107,
+    BOARD_MOTOR_DIAGNOSTIC_DMA_TRANSFER_ERROR = 108,
+    BOARD_MOTOR_DIAGNOSTIC_IRQ_MISSING_COMPLETION = 109,
+    BOARD_MOTOR_DIAGNOSTIC_IRQ_UNEXPECTED_STATE = 110,
+} board_motor_output_diagnostic_reason_t;
+
 board_init_result_t board_initialize(void);
 _Noreturn void board_halt(void);
 
@@ -52,5 +67,6 @@ board_motor_output_stop_result_t board_motor_output_force_stop(
     const uint16_t *stop_compare_values,
     size_t compare_value_count);
 board_motor_output_status_t board_motor_output_status(void);
+uint32_t board_motor_output_error_context(void);
 
 #endif

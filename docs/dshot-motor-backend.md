@@ -14,7 +14,10 @@ motor_command_t in logical order
         v
 motor_control: lifecycle + health + validity + freshness + mapping
         |
-        v physical order ESC_M1..ESC_M4
+        v retained physical order ESC_M1..ESC_M4
+1 kHz motor-control service
+        |
+        v one fresh physical submission per millisecond
 dshot_motor_backend: float -> value -> frame -> physical-order table
         |
         v 18 rows x ESC_M1..ESC_M4
@@ -39,16 +42,17 @@ Exact normalized zero uses DShot value zero. Telemetry requests remain clear.
 
 ## Buffer ownership
 
-The application adapter builds each normal 18-by-4 halfword table in physical
+The application adapter builds each normal 18-by-4 `uint16_t` table in physical
 `ESC_M1`-through-`ESC_M4` order and owns a prebuilt stop table in that same
 order. The board accepts a normal submission only while idle, copies every row
 into its private static DMA buffer, and changes columns according to the V1
-physical routes. DMA therefore never retains an application pointer. `BUSY`
+physical routes while widening every compare value into a `uint32_t` DMA
+entry. DMA therefore never retains an application pointer. `BUSY`
 returns before either the board DMA buffer or hardware is changed.
 
 The source and board tables are row-major. For every row, the board converts
 `[M1, M2, M3, M4]` into `[CCR1/M4, CCR2/M3, CCR3/M2, CCR4/M1]`. DMA sees the
-resulting 72 consecutive board-owned halfwords. Each TIM8 update request
+resulting 72 consecutive board-owned words. Each TIM8 update request
 consumes four values through `TIM8->DMAR`; `DCR` selects CCR1 as the base and a
 four-register burst, so one row updates CCR1 through CCR4 together. DMA uses
 normal rather than circular mode and cannot autonomously repeat stale throttle.
@@ -58,33 +62,52 @@ normal rather than circular mode and cannot autonomously repeat stale throttle.
 - TIM8 input: 168 MHz, verified from APB2 at runtime.
 - Prescaler: zero.
 - Auto reload: 559, producing 560 ticks or 3.333 microseconds per bit.
+- Compare values: 210 ticks for zero and 420 ticks for one. The current
+  isolation image restores the original 37.5%/75% duty profile.
 - PWM mode 1 with compare preload on channels 1 through 4.
 - Active-high push-pull AF3 on PC6 through PC9 at very-high GPIO speed.
-- Timer DMA base: CCR1; burst length: four halfwords.
-- DMA2 Stream 1, Channel 7, memory-to-peripheral, halfword widths, incrementing
+- Timer DMA base: CCR1; burst length: four register transfers.
+- DMA2 Stream 1, Channel 7, memory-to-peripheral, word widths, incrementing
   memory, fixed `TIM8->DMAR` peripheral address, very-high DMA priority.
 - DMA transfer-complete, transfer-error, direct-mode-error, and FIFO-error
   detection at NVIC priority 1. TIM5 overflow remains priority 0 and USB
   remains priority 6.
 
-At rest, PC6 through PC9 are ordinary GPIO outputs driven low. A submission
-switches all four pins to AF3 only after zero compare values and the DMA source
-are ready. The first timer period is deliberately low while the first table
-row enters the CCR preloads. The two trailing zero rows ensure the active CCRs
-are low when transfer completion stops TIM8 and returns the pins to GPIO-low.
+After initialization or an explicit emergency stop, PC6 through PC9 are
+ordinary GPIO outputs driven low and TIM8 is stopped. The 1 kHz motor task then
+begins submitting stop frames in `DISARMED`; the first submission switches all four
+pins to AF3 only after zero compare values and the DMA source are ready. Its
+first timer period is deliberately low while the first table row enters the
+CCR preloads. The two trailing zero rows ensure the active CCRs are low at
+transfer completion. Successful normal completions leave TIM8 running and the
+pins in AF3 with those zero compares; subsequent frames therefore require only
+a new DMA table submission. DMA uses normal mode, so the timer cannot replay a
+completed table while it waits for the next 1 kHz submission.
 
 ## Completion, errors, and stop
 
 Normal transfers are asynchronous. While DMA reads the board-owned table,
-backend status is busy. The DMA interrupt disables the timer request, timer, and DMA,
-loads zero compares, drives all pins low, and publishes either idle or error.
-It performs no state-machine, fault-system, logging, or table-generation work.
+backend status is busy. On successful completion, the DMA interrupt disables
+the timer's update-DMA request and the DMA stream, then publishes idle while
+leaving TIM8 and AF3 active at zero compare. On any interrupt validation or DMA
+error it performs the full safe shutdown: TIM8 is stopped, compare values are
+cleared, and all four pins become GPIO outputs driven low. The interrupt
+performs no state-machine, fault-system, logging, or table-generation work.
 
 The 1 kHz highest-priority `motor-control` task calls
-`motor_control_synchronize()`. It observes asynchronous backend error status
-in main context and converts it to the existing critical motor-output fault.
-The task also bounds lifecycle, health, and 100 ms command-timeout response to
-one additional millisecond.
+`motor_control_synchronize()`. A command producer only replaces the retained
+validated snapshot and renews its 100 ms lease. Every service release observes
+the preceding asynchronous completion, rechecks lifecycle, health, and lease,
+then starts one new frame when safe. This produces a nominal 1 kHz frame rate
+independent of USB/radio update timing. A frame still busy after 1,000
+microseconds or any asynchronous error becomes a critical motor-output fault
+in main context.
+
+The board retains only a compact failure reason for setup, DMA, interrupt, and
+timeout failures. The application copies that reason into the existing motor
+fault context before forcing the outputs low. Detailed peripheral-register and
+frame-table inspection remains available through the debugger without adding a
+permanent diagnostic protocol or duplicate runtime state.
 
 Force-stop aborts any normal transfer, transmits the prebuilt four-motor DShot
 zero frame synchronously with a bounded poll, and then leaves TIM8 stopped and
@@ -102,9 +125,9 @@ behavior, initialization failures, status/result mapping, and asynchronous-
 error propagation through the safety gate. Debug and Release builds prove the
 selected STM32 register names, interrupt symbol, and static linkage.
 
-They do not prove pin voltage, timer/DMA request behavior, preload timing,
-waveform widths, synchronous edges, ESC recognition, force-stop latency, motor
-order, or direction. Those require the propeller-free hardware procedure. The
-first observation should be PC9/ESC_M1, followed by PC8, PC7, and PC6; the
-implementation itself always treats the command and DMA burst as one atomic
-four-channel operation.
+Physical testing confirmed DShot300 acceptance, synchronized four-channel
+operation, and the default motor order on the initial SpeedyBee BLS 60A ESC.
+Pin voltage, exact waveform widths, force-stop latency, heartbeat-loss behavior,
+and motor direction still require separate measurement or propeller-free
+validation. The implementation always treats the command and DMA burst as one
+atomic four-channel operation.

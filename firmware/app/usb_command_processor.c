@@ -1,17 +1,15 @@
 #include "usb_command_processor.h"
 
-#include "motor_safety_policy.h"
 #include "health.h"
 #include "logging.h"
 #include "motor_control.h"
+#include "motor_safety_policy.h"
 #include "usb_health_response.h"
 #include "usb_json_protocol.h"
 
 #include <limits.h>
 #include <stddef.h>
 
-#define USB_MOTOR_TEST_ALLOWED_MOTOR 1U
-#define USB_MOTOR_TEST_MAX_THROTTLE_MILLIONTHS 100000U
 #define USB_MOTOR_TEST_THROTTLE_SCALE 1000000.0f
 
 static void saturating_increment(uint32_t *value)
@@ -68,17 +66,16 @@ static bool build_error(usb_command_processor_t *processor,
 static const char *motor_test_error(motor_control_submit_result_t result)
 {
     switch (result) {
-    case MOTOR_CONTROL_SUBMIT_BUSY:
-        return "busy";
     case MOTOR_CONTROL_SUBMIT_BLOCKED_STATE:
         return "state_rejected";
+    case MOTOR_CONTROL_SUBMIT_BLOCKED_PREPARATION:
+        return "motor_not_ready";
     case MOTOR_CONTROL_SUBMIT_BLOCKED_HEALTH:
         return "health_rejected";
     case MOTOR_CONTROL_SUBMIT_NOT_INITIALIZED:
     case MOTOR_CONTROL_SUBMIT_INVALID_COMMAND:
     case MOTOR_CONTROL_SUBMIT_STALE_COMMAND:
     case MOTOR_CONTROL_SUBMIT_MAPPING_ERROR:
-    case MOTOR_CONTROL_SUBMIT_BACKEND_ERROR:
     case MOTOR_CONTROL_SUBMIT_FORCE_STOP_ERROR:
         return "motor_output_error";
     case MOTOR_CONTROL_SUBMIT_ACCEPTED:
@@ -97,7 +94,8 @@ static bool build_motor_test_response(
     motor_control_submit_result_t result;
 
     saturating_increment(&processor->statistics.motor_test_count);
-    if (request->motor != USB_MOTOR_TEST_ALLOWED_MOTOR) {
+    if ((request->motor == 0U) ||
+        (request->motor > MOTOR_COMMAND_MOTOR_COUNT)) {
         saturating_increment(&processor->statistics.motor_test_rejected_count);
         return usb_json_build_motor_test_response(
             request->request_id,
@@ -110,21 +108,6 @@ static bool build_motor_test_response(
             sizeof(processor->pending_response),
             &processor->pending_response_length);
     }
-    if (request->throttle_millionths >
-        USB_MOTOR_TEST_MAX_THROTTLE_MILLIONTHS) {
-        saturating_increment(&processor->statistics.motor_test_rejected_count);
-        return usb_json_build_motor_test_response(
-            request->request_id,
-            false,
-            request->motor,
-            request->throttle_millionths,
-            system_state_name(processor->state_machine->current),
-            "throttle_out_of_range",
-            processor->pending_response,
-            sizeof(processor->pending_response),
-            &processor->pending_response_length);
-    }
-
     throttles[request->motor - 1U] =
         (float)request->throttle_millionths /
         USB_MOTOR_TEST_THROTTLE_SCALE;
@@ -193,8 +176,12 @@ static bool build_command_response(usb_command_processor_t *processor,
         const bool arm_health_rejected =
             (request->command == USB_JSON_COMMAND_ARM) &&
             !motor_fault_state_allows_arm(processor->fault_system);
+        const bool arm_motor_not_ready =
+            (request->command == USB_JSON_COMMAND_ARM) &&
+            (processor->state_machine->current == SYSTEM_STATE_DISARMED) &&
+            !arm_health_rejected && !motor_control_ready_for_arm();
 
-        if (arm_health_rejected) {
+        if (arm_health_rejected || arm_motor_not_ready) {
             processor->last_transition_result =
                 SYSTEM_STATE_TRANSITION_REJECTED;
         } else {
@@ -229,7 +216,9 @@ static bool build_command_response(usb_command_processor_t *processor,
             false,
             system_state_name(processor->state_machine->current),
             arm_health_rejected ? "health_rejected"
-                                : "transition_rejected",
+                                : (arm_motor_not_ready
+                                       ? "motor_not_ready"
+                                       : "transition_rejected"),
             processor->pending_response,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
@@ -283,7 +272,8 @@ usb_command_process_result_t usb_command_processor_process_once(
         (processor->state_machine == NULL) ||
         !processor->state_machine->initialized ||
         (processor->fault_system == NULL) ||
-        !processor->fault_system->initialized || (processor->clock == NULL) ||
+        !processor->fault_system->initialized ||
+        (processor->clock == NULL) ||
         (processor->firmware_version == NULL) ||
         (processor->build_id == NULL)) {
         return USB_COMMAND_PROCESS_INVALID_STATE;

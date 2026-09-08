@@ -47,14 +47,24 @@ Phase 1, Milestones 1.8 and 1.9 add the complete four-channel DShot300 backend.
 The private motor safety owner is the only raw-submission caller; its adapter
 creates an `M1`-through-`M4` 18-by-4 table. The V1 board alone reorders it into
 its owned DMA buffer, and one DMA2 Stream 1 update burst feeds TIM8 CCR1
-through CCR4 synchronously. PC6 through PC9 are GPIO-low at rest. A
-highest-priority 1 kHz task observes state, health, freshness, and asynchronous
-DMA errors. Milestone 1.10 adds one deliberately constrained nonzero producer
-for propeller-free testing: USB may request only logical motor 1, no more than
-10% throttle, under a 100 ms renewable firmware lease. The reusable `./ofc
-motor run` workflow bounds duration to one second and performs explicit
+through CCR4 synchronously. A highest-priority 1 kHz task continuously sends
+valid stop frames while disarmed and observes state, health, freshness, and
+asynchronous DMA errors. GPIO-low is reserved for initialization, terminal
+faults, and emergency hardware stops. Milestone 1.10 adds a single-motor USB
+producer for propeller-free testing. It accepts motors 1 through 4 and the full
+normalized throttle range under a 100 ms renewable firmware lease. The
+reusable `./ofc motor run` workflow accepts any positive finite duration,
+prepares the ESC with five seconds of zero frames, and performs explicit
 stop/disarm cleanup. There is still no receiver or flight-control command
 producer.
+
+Milestone 1.11 physically validated DShot300 against the initial SpeedyBee BLS
+60A ESC. Commands are retained under the producer lease while the
+highest-priority motor task independently submits one DShot frame every
+millisecond. All four outputs spun their expected frame-position motors, and a
+four-motor synchronized test also succeeded. Temporary DMA/frame snapshot
+instrumentation used during bring-up has been removed; compact backend failure
+reasons remain integrated with the fault system.
 
 Milestone 1.3 completed its planned implementation and initial physical V1
 bring-up evidence. VBUS behavior is an explicit board capability: V1 assumes

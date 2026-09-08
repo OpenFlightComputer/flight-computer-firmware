@@ -89,9 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
     motor_commands = motor.add_subparsers(dest="motor_command", required=True)
     motor_run = motor_commands.add_parser("run", help="run one short motor test")
     _add_device_options(motor_run)
-    motor_run.add_argument("--motor", type=int, required=True, metavar="NUMBER")
+    motor_run.add_argument("--motor", type=int, choices=range(1, 5), required=True)
     motor_run.add_argument(
-        "--throttle", type=float, required=True, metavar=">0.001..0.10"
+        "--throttle", type=float, required=True, metavar=">0.001..1.0"
     )
     motor_run.add_argument("--duration", type=float, required=True, metavar="SECONDS")
 
@@ -170,6 +170,7 @@ def _motor_run(arguments: argparse.Namespace) -> int:
         arguments.duration,
         requested_port=arguments.port,
         timeout_seconds=arguments.timeout,
+        progress=lambda message: print(message, file=sys.stderr, flush=True),
     )
     print(
         f"Completed safely: {frames} active refresh requests; motor stopped and disarmed."

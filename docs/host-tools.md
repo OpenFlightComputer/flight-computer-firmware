@@ -10,7 +10,7 @@ ofc device status [--port PATH]
 ofc device arm [--port PATH]
 ofc device disarm [--port PATH]
 ofc device monitor [--port PATH]
-ofc motor run --motor 1 --throttle VALUE --duration SECONDS [--port PATH]
+ofc motor run --motor 1|2|3|4 --throttle VALUE --duration SECONDS [--port PATH]
 ofc smoke [--profile debug|release] [--no-flash]
 ```
 
@@ -28,13 +28,23 @@ stream until interrupted.
 
 `device arm` and `device disarm` expose the existing lifecycle commands without
 combining them with output. `motor run` is a separate propeller-free bench
-workflow and refuses to arm implicitly. Both the host and firmware restrict it
-to logical motor 1 and at most 10% normalized throttle; the host additionally
-bounds one run to one second and requires an active request above the command
-model's 0.001 stop threshold. The workflow prepares the ESC with zero commands,
-refreshes the firmware's 100 ms command lease, and attempts repeated zero plus
-disarm cleanup after completion, an error, or Ctrl-C. The firmware lease is the
-independent stop mechanism if host cleanup cannot reach the board.
+workflow and refuses to arm implicitly. It selects exactly one logical motor,
+accepts the command model's full normalized range above the inclusive `0.001`
+stop threshold through `1.0`, and accepts any positive finite duration. The
+workflow prepares the ESC with five seconds of zero commands, refreshes the
+firmware's 100 ms command lease, and attempts repeated zero plus disarm cleanup
+after completion, an error, or Ctrl-C. The firmware lease is the independent
+stop mechanism if host cleanup cannot reach the board.
+The CLI prints `PREPARING`, `ACTIVE`, `CLEANUP`, and `DISARMED` markers at the
+actual workflow boundaries so motor movement and tones can be correlated with
+zero preparation versus powered output. The reusable service exposes the same
+events through a callback for a future frontend.
+Each accepted host command replaces the retained throttle snapshot; it does
+not directly determine the physical frame cadence. The highest-priority 1 kHz
+motor task repeats that snapshot while its producer timestamp remains fresh.
+The serial reader blocks for the first byte and then drains only bytes already
+available, so a short correlated response returns at its newline rather than
+waiting for the 100 ms read slice to fill a 512-byte request.
 
 ## Smoke safety and reports
 

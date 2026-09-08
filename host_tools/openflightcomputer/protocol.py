@@ -36,6 +36,18 @@ class JsonProtocolClient:
             raise ValueError("request ID must fit uint32")
         self._connection = connection
         self._next_request_id = first_request_id
+        self._allow_initial_fragment = True
+
+    def _decode_line(self, line: bytes) -> dict[str, Any] | None:
+        try:
+            message = decode_message(line)
+        except ProtocolError:
+            if not self._allow_initial_fragment:
+                raise
+            self._allow_initial_fragment = False
+            return None
+        self._allow_initial_fragment = False
+        return message
 
     def request(
         self,
@@ -70,9 +82,11 @@ class JsonProtocolClient:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ProtocolError(f"timed out waiting for {command} response")
-            message = decode_message(
+            message = self._decode_line(
                 self._connection.read_line(timeout_seconds=remaining)
             )
+            if message is None:
+                continue
             if observer is not None:
                 observer(message)
             message_id = message.get("request_id")
@@ -87,4 +101,8 @@ class JsonProtocolClient:
 
     def messages(self, *, timeout_seconds: float = 3600.0) -> Iterator[dict[str, Any]]:
         while True:
-            yield decode_message(self._connection.read_line(timeout_seconds=timeout_seconds))
+            message = self._decode_line(
+                self._connection.read_line(timeout_seconds=timeout_seconds)
+            )
+            if message is not None:
+                yield message

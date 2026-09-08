@@ -142,9 +142,10 @@ Milestone 1.7 adds the application-owned `motor_control` safety boundary. It
 privately owns the one production motor-output instance and mapping, and is the
 only production module permitted to call raw motor submission. State, health,
 complete-command validity, and freshness must all pass before forwarding. A
-periodic synchronization call expires the last accepted command even when
-producers fall silent. CTest scans production sources for accidental raw motor
-or DShot calls outside their allowed owner files. See
+periodic synchronization call retransmits the retained command independently
+of producer timing and expires it when producers fall silent. CTest scans
+production sources for accidental raw motor or DShot calls outside their
+allowed owner files. See
 `docs/motor-safety-gate.md`.
 
 Milestones 1.8 and 1.9 attach the one production motor backend. The

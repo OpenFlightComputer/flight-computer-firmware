@@ -14,6 +14,8 @@
 #define MOTOR_GPIO_MODE_ALTERNATE 2U
 #define MOTOR_TIMER_DMA_BASE_CCR1 13U
 #define MOTOR_TIMER_DMA_BURST_LENGTH_MINUS_ONE 3U
+#define MOTOR_DMA_FIFO_CONFIGURATION \
+    (DMA_SxFCR_DMDIS | DMA_SxFCR_FTH)
 #define MOTOR_DMA_DISABLE_WAIT_LIMIT 100000U
 #define MOTOR_STOP_TRANSFER_WAIT_LIMIT 1000000U
 
@@ -26,8 +28,10 @@
 static volatile board_motor_output_status_t board_output_state =
     BOARD_MOTOR_OUTPUT_STATUS_UNINITIALIZED;
 static uint16_t motor_bit_period_ticks;
-static uint16_t motor_dma_compare_values[
+static uint32_t motor_dma_compare_values[
     FLIGHTCOMPUTER_V1_MOTOR_DMA_COMPARE_VALUE_CAPACITY];
+static volatile board_motor_output_diagnostic_reason_t motor_error_reason =
+    BOARD_MOTOR_DIAGNOSTIC_NONE;
 
 _Static_assert(offsetof(TIM_TypeDef, CCR1) / sizeof(uint32_t) ==
                    MOTOR_TIMER_DMA_BASE_CCR1,
@@ -36,6 +40,33 @@ _Static_assert(
     (FLIGHTCOMPUTER_V1_MOTOR_DMA_COMPARE_VALUE_CAPACITY %
      FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT) == 0U,
     "The motor DMA buffer must contain complete four-output rows");
+
+static board_motor_output_diagnostic_reason_t interrupt_failure_reason(
+    uint32_t flags,
+    board_motor_output_status_t state,
+    bool dma_stopped)
+{
+    if ((flags & DMA_LISR_TEIF1) != 0U) {
+        return BOARD_MOTOR_DIAGNOSTIC_DMA_TRANSFER_ERROR;
+    }
+    if ((flags & DMA_LISR_DMEIF1) != 0U) {
+        return BOARD_MOTOR_DIAGNOSTIC_DMA_DIRECT_MODE_ERROR;
+    }
+    if ((flags & DMA_LISR_FEIF1) != 0U) {
+        return BOARD_MOTOR_DIAGNOSTIC_DMA_FIFO_ERROR;
+    }
+    if ((flags & DMA_LISR_TCIF1) == 0U) {
+        return BOARD_MOTOR_DIAGNOSTIC_IRQ_MISSING_COMPLETION;
+    }
+    if (state != BOARD_MOTOR_OUTPUT_STATUS_ACTIVE) {
+        return BOARD_MOTOR_DIAGNOSTIC_IRQ_UNEXPECTED_STATE;
+    }
+    if (!dma_stopped) {
+        return BOARD_MOTOR_DIAGNOSTIC_DMA_DISABLE_TIMEOUT;
+    }
+
+    return BOARD_MOTOR_DIAGNOSTIC_NONE;
+}
 
 static uint32_t tim8_input_clock_frequency_hz(void)
 {
@@ -158,6 +189,16 @@ static bool stop_transfer_hardware(void)
     return dma_disabled;
 }
 
+static bool stop_dma_transfer(void)
+{
+    bool dma_disabled;
+
+    TIM8->DIER &= ~TIM_DIER_UDE;
+    dma_disabled = disable_dma_stream();
+    DMA2->LIFCR = MOTOR_DMA_STREAM_FLAGS;
+    return dma_disabled;
+}
+
 static bool compare_values_are_valid(const uint16_t *compare_values,
                                      size_t compare_value_count)
 {
@@ -189,46 +230,64 @@ static bool copy_physical_values_to_dma_order(
     for (row_offset = 0U;
          row_offset < compare_value_count;
          row_offset += FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT) {
+        uint16_t timer_order[FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT];
+        size_t lane;
+
         if (!flightcomputer_v1_motor_output_order_compare_row(
                 &physical_compare_values[row_offset],
-                &motor_dma_compare_values[row_offset])) {
+                timer_order)) {
             return false;
+        }
+        for (lane = 0U;
+             lane < FLIGHTCOMPUTER_V1_MOTOR_OUTPUT_COUNT;
+             lane++) {
+            motor_dma_compare_values[row_offset + lane] = timer_order[lane];
         }
     }
 
     return true;
 }
 
-static bool start_transfer(const uint16_t *compare_values,
+static bool start_transfer(const uint32_t *compare_values,
                            size_t compare_value_count,
                            bool interrupt_enabled)
 {
     const flightcomputer_v1_motor_output_group_t *group =
         flightcomputer_v1_motor_output_group();
     uint32_t dma_configuration;
+    uint32_t dma_fifo_configuration = MOTOR_DMA_FIFO_CONFIGURATION;
 
-    if (!stop_transfer_hardware()) {
+    if (!stop_dma_transfer()) {
         return false;
     }
 
     dma_configuration =
         ((uint32_t)group->dma_channel << DMA_SxCR_CHSEL_Pos) |
-        DMA_SxCR_PL | DMA_SxCR_MSIZE_0 | DMA_SxCR_PSIZE_0 |
+        DMA_SxCR_PL | DMA_SxCR_MSIZE_1 | DMA_SxCR_PSIZE_1 |
         DMA_SxCR_MINC | DMA_SxCR_DIR_0;
     if (interrupt_enabled) {
         dma_configuration |=
             DMA_SxCR_TCIE | DMA_SxCR_TEIE | DMA_SxCR_DMEIE;
+        dma_fifo_configuration |= DMA_SxFCR_FEIE;
     }
 
     DMA2_Stream1->CR = dma_configuration;
     DMA2_Stream1->NDTR = (uint32_t)compare_value_count;
     DMA2_Stream1->PAR = (uint32_t)(uintptr_t)&TIM8->DMAR;
     DMA2_Stream1->M0AR = (uint32_t)(uintptr_t)compare_values;
-    DMA2_Stream1->FCR = interrupt_enabled ? DMA_SxFCR_FEIE : 0U;
+    /*
+     * A TIM DMA burst consumes four consecutive words per update event.
+     * Keep the stream in FIFO mode with a full threshold so those writes are
+     * buffered as a group. FEIE is meaningful only when FIFO mode is enabled.
+     */
+    DMA2_Stream1->FCR = dma_fifo_configuration;
 
-    TIM8->CNT = 0U;
-    TIM8->SR = 0U;
-    set_motor_gpio_mode(MOTOR_GPIO_MODE_ALTERNATE);
+    if ((TIM8->CR1 & TIM_CR1_CEN) == 0U) {
+        clear_timer_compare_values();
+        TIM8->CNT = 0U;
+        TIM8->SR = 0U;
+        set_motor_gpio_mode(MOTOR_GPIO_MODE_ALTERNATE);
+    }
     DMA2_Stream1->CR |= DMA_SxCR_EN;
     TIM8->DIER |= TIM_DIER_UDE;
     TIM8->CR1 |= TIM_CR1_CEN;
@@ -265,6 +324,7 @@ board_motor_output_init_result_t board_motor_output_initialize(
         FLIGHTCOMPUTER_V1_MOTOR_TIMER_CLOCK_FREQUENCY_HZ) {
         return BOARD_MOTOR_OUTPUT_INIT_CLOCK_ERROR;
     }
+    motor_error_reason = BOARD_MOTOR_DIAGNOSTIC_NONE;
 
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_DMA2_CLK_ENABLE();
@@ -316,6 +376,7 @@ board_motor_output_init_result_t board_motor_output_initialize(
     clear_timer_compare_values();
 
     if (!disable_dma_stream()) {
+        motor_error_reason = BOARD_MOTOR_DIAGNOSTIC_DMA_DISABLE_TIMEOUT;
         drive_motor_pins_low();
         board_output_state = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
         return BOARD_MOTOR_OUTPUT_INIT_HARDWARE_ERROR;
@@ -343,6 +404,7 @@ board_motor_output_submit_result_t board_motor_output_submit(
 
     if ((board_output_state == BOARD_MOTOR_OUTPUT_STATUS_UNINITIALIZED) ||
         !compare_values_are_valid(compare_values, compare_value_count)) {
+        motor_error_reason = BOARD_MOTOR_DIAGNOSTIC_INVALID_TABLE;
         return BOARD_MOTOR_OUTPUT_SUBMIT_ERROR;
     }
 
@@ -363,6 +425,7 @@ board_motor_output_submit_result_t board_motor_output_submit(
 
     if (!copy_physical_values_to_dma_order(compare_values,
                                            compare_value_count)) {
+        motor_error_reason = BOARD_MOTOR_DIAGNOSTIC_REORDER_FAILED;
         board_output_state = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
         if (interrupt_state == 0U) {
             __enable_irq();
@@ -374,6 +437,8 @@ board_motor_output_submit_result_t board_motor_output_submit(
     if (!start_transfer(motor_dma_compare_values,
                         compare_value_count,
                         true)) {
+        (void)stop_transfer_hardware();
+        motor_error_reason = BOARD_MOTOR_DIAGNOSTIC_TRANSFER_START_FAILED;
         board_output_state = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
         if (interrupt_state == 0U) {
             __enable_irq();
@@ -395,6 +460,7 @@ board_motor_output_stop_result_t board_motor_output_force_stop(
     uint32_t flags = 0U;
     bool transfer_started;
     bool hardware_stopped;
+    board_motor_output_diagnostic_reason_t reason;
 
     if (board_output_state == BOARD_MOTOR_OUTPUT_STATUS_UNINITIALIZED) {
         return BOARD_MOTOR_OUTPUT_STOP_ERROR;
@@ -407,6 +473,7 @@ board_motor_output_stop_result_t board_motor_output_force_stop(
 
     if (!compare_values_are_valid(stop_compare_values,
                                   compare_value_count)) {
+        motor_error_reason = BOARD_MOTOR_DIAGNOSTIC_INVALID_TABLE;
         board_output_state = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
         if (interrupt_state == 0U) {
             __enable_irq();
@@ -415,6 +482,7 @@ board_motor_output_stop_result_t board_motor_output_force_stop(
     }
     if (!copy_physical_values_to_dma_order(stop_compare_values,
                                            compare_value_count)) {
+        motor_error_reason = BOARD_MOTOR_DIAGNOSTIC_REORDER_FAILED;
         board_output_state = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
         if (interrupt_state == 0U) {
             __enable_irq();
@@ -448,6 +516,17 @@ board_motor_output_stop_result_t board_motor_output_force_stop(
         return BOARD_MOTOR_OUTPUT_STOP_ACCEPTED;
     }
 
+    if (!transfer_started) {
+        reason = BOARD_MOTOR_DIAGNOSTIC_TRANSFER_START_FAILED;
+    } else if ((flags & MOTOR_DMA_ERROR_FLAGS) != 0U) {
+        reason = interrupt_failure_reason(
+            flags, BOARD_MOTOR_OUTPUT_STATUS_ACTIVE, hardware_stopped);
+    } else if (remaining == 0U) {
+        reason = BOARD_MOTOR_DIAGNOSTIC_STOP_TRANSFER_TIMEOUT;
+    } else {
+        reason = BOARD_MOTOR_DIAGNOSTIC_DMA_DISABLE_TIMEOUT;
+    }
+    motor_error_reason = reason;
     board_output_state = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
     return BOARD_MOTOR_OUTPUT_STOP_ERROR;
 }
@@ -457,15 +536,22 @@ board_motor_output_status_t board_motor_output_status(void)
     return board_output_state;
 }
 
+uint32_t board_motor_output_error_context(void)
+{
+    return (uint32_t)motor_error_reason;
+}
+
 void DMA2_Stream1_IRQHandler(void)
 {
     const uint32_t flags = DMA2->LISR;
-    const bool transfer_error = (flags & MOTOR_DMA_ERROR_FLAGS) != 0U;
-    const bool transfer_complete = (flags & DMA_LISR_TCIF1) != 0U;
-    const bool hardware_stopped = stop_transfer_hardware();
+    const board_motor_output_status_t state = board_output_state;
+    const bool dma_stopped = stop_dma_transfer();
+    const board_motor_output_diagnostic_reason_t reason =
+        interrupt_failure_reason(flags, state, dma_stopped);
 
-    if (transfer_error || !transfer_complete || !hardware_stopped ||
-        (board_output_state != BOARD_MOTOR_OUTPUT_STATUS_ACTIVE)) {
+    if (reason != BOARD_MOTOR_DIAGNOSTIC_NONE) {
+        (void)stop_transfer_hardware();
+        motor_error_reason = reason;
         board_output_state = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
     } else {
         board_output_state = BOARD_MOTOR_OUTPUT_STATUS_IDLE;

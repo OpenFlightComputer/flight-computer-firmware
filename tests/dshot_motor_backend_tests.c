@@ -24,6 +24,7 @@ typedef struct {
 } fake_board_t;
 
 static fake_board_t fake_board;
+static uint32_t fake_error_context;
 
 static void reset_fake_board(void)
 {
@@ -34,6 +35,7 @@ static void reset_fake_board(void)
         .stop_result = BOARD_MOTOR_OUTPUT_STOP_ACCEPTED,
         .status = BOARD_MOTOR_OUTPUT_STATUS_IDLE,
     };
+    fake_error_context = 0U;
 }
 
 uint32_t board_motor_output_timer_clock_frequency_hz(void)
@@ -80,6 +82,11 @@ board_motor_output_stop_result_t board_motor_output_force_stop(
 board_motor_output_status_t board_motor_output_status(void)
 {
     return fake_board.status;
+}
+
+uint32_t board_motor_output_error_context(void)
+{
+    return fake_error_context;
 }
 
 static uint16_t independently_encode(uint16_t value)
@@ -185,10 +192,15 @@ static void complete_commands_reach_the_board_in_physical_order(void)
                                  3U,
                                  independently_encode(UINT16_C(2047)));
 
-    command.throttle[3] = 0.0f;
+    command = (motor_command_t){
+        .timestamp_us = UINT64_C(5678),
+        .valid = true,
+    };
+    assert(motor_output_submit(&output, &command) ==
+           MOTOR_OUTPUT_SUBMIT_ACCEPTED);
     expect_physical_output_frame(fake_board.submitted_values,
                                  3U,
-                                 independently_encode(UINT16_C(2047)));
+                                 independently_encode(UINT16_C(0)));
 }
 
 static void busy_error_status_and_stop_results_are_mapped(void)
@@ -207,8 +219,11 @@ static void busy_error_status_and_stop_results_are_mapped(void)
     assert(fake_board.submit_count == 0U);
 
     fake_board.status = BOARD_MOTOR_OUTPUT_STATUS_ERROR;
+    fake_error_context = BOARD_MOTOR_DIAGNOSTIC_DMA_TRANSFER_ERROR;
     assert(motor_output_status(&output) ==
            MOTOR_OUTPUT_STATUS_BACKEND_ERROR);
+    assert(motor_output_diagnostic_context(&output) ==
+           (uint32_t)BOARD_MOTOR_DIAGNOSTIC_DMA_TRANSFER_ERROR);
     assert(motor_output_submit(&output, &command) ==
            MOTOR_OUTPUT_SUBMIT_BACKEND_ERROR);
 

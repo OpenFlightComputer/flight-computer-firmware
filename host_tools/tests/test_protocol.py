@@ -37,6 +37,22 @@ def test_request_demultiplexes_log_and_correlates_response():
     }
 
 
+def test_request_discards_one_partial_line_when_attaching_mid_transmission():
+    connection = FakeConnection(
+        [
+            b'module":"STATE","message":"partial"}',
+            b'{"type":"response","request_id":1,"command":"status","ok":true}',
+        ]
+    )
+    assert JsonProtocolClient(connection).request("status")["ok"] is True
+
+
+def test_request_rejects_invalid_json_after_the_initial_fragment():
+    connection = FakeConnection([b"partial", b"still-invalid"])
+    with pytest.raises(ProtocolError, match="invalid JSON"):
+        JsonProtocolClient(connection).request("status")
+
+
 def test_request_adds_command_parameters_without_replacing_envelope():
     connection = FakeConnection(
         [b'{"type":"response","request_id":1,"command":"motor_test","ok":true}']

@@ -12,7 +12,7 @@ from openflightcomputer.cli import build_parser
         ["device", "arm"],
         ["device", "disarm"],
         ["device", "monitor"],
-        ["motor", "run", "--motor", "1", "--throttle", "0.02", "--duration", "0.25"],
+        ["motor", "run", "--motor", "1", "--throttle", "1.0", "--duration", "60"],
         ["smoke", "--no-flash"],
     ],
 )

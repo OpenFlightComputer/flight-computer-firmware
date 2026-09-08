@@ -6,7 +6,8 @@ static bool backend_is_valid(const motor_output_backend_t *backend)
 {
     return (backend != NULL) && (backend->initialize != NULL) &&
            (backend->submit != NULL) && (backend->force_stop != NULL) &&
-           (backend->status != NULL);
+           (backend->status != NULL) &&
+           (backend->diagnostic_context != NULL);
 }
 
 motor_output_init_result_t motor_output_initialize(
@@ -122,4 +123,14 @@ motor_output_status_t motor_output_status(const motor_output_t *output)
     }
 
     return MOTOR_OUTPUT_STATUS_BACKEND_ERROR;
+}
+
+uint32_t motor_output_diagnostic_context(const motor_output_t *output)
+{
+    if ((output == NULL) || !output->initialized ||
+        !backend_is_valid(&output->backend)) {
+        return 0U;
+    }
+
+    return output->backend.diagnostic_context(output->backend.context);
 }

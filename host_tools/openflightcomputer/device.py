@@ -18,6 +18,7 @@ FLIGHT_USB_PID = 0x4002
 SERIAL_BAUD_RATE = 115200
 SERIAL_READ_SLICE_SECONDS = 0.1
 MAXIMUM_LINE_BYTES = 4096
+MAXIMUM_READ_CHUNK_BYTES = 512
 
 
 class DeviceError(RuntimeError):
@@ -172,7 +173,12 @@ class UsbCdcConnection:
                 raise DeviceTimeoutError("USB read timed out")
             self._device.timeout = min(SERIAL_READ_SLICE_SECONDS, remaining)
             try:
-                chunk = self._device.read(512)
+                waiting = int(getattr(self._device, "in_waiting", 0))
+                read_size = min(
+                    MAXIMUM_READ_CHUNK_BYTES,
+                    max(1, waiting),
+                )
+                chunk = self._device.read(read_size)
             except (serial.SerialException, OSError) as error:
                 raise DeviceError(f"USB read failed: {error}") from error
             if chunk:

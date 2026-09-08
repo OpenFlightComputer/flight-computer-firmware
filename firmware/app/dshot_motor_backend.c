@@ -162,6 +162,17 @@ static motor_output_backend_status_t backend_status(void *context)
     return MOTOR_OUTPUT_BACKEND_STATUS_ERROR;
 }
 
+static uint32_t diagnostic_context(void *context)
+{
+    const dshot_motor_backend_t *backend = context;
+
+    if ((backend == NULL) || !backend->initialized) {
+        return 0U;
+    }
+
+    return board_motor_output_error_context();
+}
+
 bool dshot_motor_backend_prepare(dshot_motor_backend_t *backend,
                                  motor_output_backend_t *output_backend)
 {
@@ -177,6 +188,7 @@ bool dshot_motor_backend_prepare(dshot_motor_backend_t *backend,
         .submit = submit_command,
         .force_stop = force_stop,
         .status = backend_status,
+        .diagnostic_context = diagnostic_context,
         .context = backend,
     };
     return true;

@@ -44,9 +44,11 @@ Phase 0 does not control motors, decode receiver input, or use sensor data for f
    four-channel implementation and host/build verification complete.
 9. Four-channel synchronized output — implemented with Milestone 1.8 because
    all channels share one table, timer, DMA stream, and completion path.
-10. USB manual motor commands through the shared command model — implementation
-    and software verification complete; awaiting owner review.
-11. Propeller-free ESC and motor bench validation.
+10. USB manual motor commands through the shared command model — complete.
+11. Propeller-free ESC and motor bench validation — complete; DShot300,
+    continuous stop-frame preparation, retained-command 1 kHz output,
+    synchronized four-channel output, and the default physical motor mapping
+    are verified with the initial SpeedyBee ESC.
 
 Phase 1 does not route receiver data to motors or implement stabilization.
 
@@ -58,7 +60,7 @@ first-flight prerequisite and must not be selectable until separately tested.
 
 | Phase | Objective |
 | --- | --- |
-| 1 | DShot motor subsystem controlled by safe USB bench commands — in progress |
+| 1 | DShot motor subsystem controlled by leased USB bench commands — complete |
 | 2 | ELRS/CRSF receiver input, normalization, freshness, and diagnostics |
 | 3 | Open-loop receiver-to-motor integration and first controlled physical response |
 | 4 | BMI270-based estimation and stabilized flight, followed by optional BMP388 use |
@@ -91,3 +93,9 @@ older deployed firmware, define protocol-version identifiers, compatibility
 rules, and migration behavior. USB authentication or cryptography is likewise
 deferred until after first-flight capability and a concrete threat model; the
 current USB interface remains a physically trusted bench/development channel.
+
+Before first flight, physically validate loss of the 100 ms motor-command
+heartbeat and record actual stop latency. Also add a disarmed-only runtime ESC
+direction configuration so each motor can be reversed without recompiling or
+changing wiring; direction commands must require zero throttle, use the
+ESC-required repetition sequence, and be verified before arming.

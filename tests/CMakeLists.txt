@@ -477,6 +477,7 @@ add_executable(usb_command_processor_tests
 target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
 

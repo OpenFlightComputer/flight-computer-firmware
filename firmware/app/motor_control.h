@@ -6,16 +6,20 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define MOTOR_CONTROL_FRAME_PERIOD_US UINT64_C(1000)
+#define MOTOR_CONTROL_OUTPUT_COMPLETION_TIMEOUT_US \
+    MOTOR_CONTROL_FRAME_PERIOD_US
+#define MOTOR_CONTROL_ARMING_PREPARATION_US UINT64_C(5000000)
+
 typedef enum {
     MOTOR_CONTROL_SUBMIT_ACCEPTED = 0,
-    MOTOR_CONTROL_SUBMIT_BUSY,
     MOTOR_CONTROL_SUBMIT_NOT_INITIALIZED,
     MOTOR_CONTROL_SUBMIT_BLOCKED_STATE,
+    MOTOR_CONTROL_SUBMIT_BLOCKED_PREPARATION,
     MOTOR_CONTROL_SUBMIT_BLOCKED_HEALTH,
     MOTOR_CONTROL_SUBMIT_INVALID_COMMAND,
     MOTOR_CONTROL_SUBMIT_STALE_COMMAND,
     MOTOR_CONTROL_SUBMIT_MAPPING_ERROR,
-    MOTOR_CONTROL_SUBMIT_BACKEND_ERROR,
     MOTOR_CONTROL_SUBMIT_FORCE_STOP_ERROR,
 } motor_control_submit_result_t;
 
@@ -55,5 +59,6 @@ motor_control_mapping_configure_result_t motor_control_configure_mapping(
 
 bool motor_control_is_initialized(void);
 bool motor_control_outputs_stopped(void);
+bool motor_control_ready_for_arm(void);
 
 #endif

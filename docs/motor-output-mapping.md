@@ -80,11 +80,9 @@ logical 2 -> physical output 2 / ESC_M3
 logical 3 -> physical output 3 / ESC_M4
 ```
 
-A proposed runtime mapping is accepted only when both conditions supplied by
-the future motor owner are true:
-
-1. the lifecycle state is `DISARMED`;
-2. the physical output backend has accepted force-stop.
+A proposed runtime mapping is accepted only when the motor owner supplies the
+actual `DISARMED` lifecycle condition. Periodic stop-frame output is compatible
+with remapping because all four physical throttle values remain zero.
 
 The mapping must be a complete permutation of `0, 1, 2, 3`. Duplicate,
 missing, and out-of-range outputs are rejected without modifying the previous
@@ -92,16 +90,16 @@ mapping. A complete command is reordered through temporary local storage, so
 in-place application is safe and no partially remapped motor set is exposed.
 
 The module does not read application lifecycle state or operate hardware. The
-Milestone 1.7 application-owned motor controller derives both safety
-conditions from the actual state machine and its private output state rather
-than accepting optimistic booleans from command producers.
+application-owned motor controller derives the safety condition from the actual
+state machine rather than accepting an optimistic boolean from command
+producers.
 
 ## Motor direction
 
 Logical expected CW/CCW direction and the actual direction stored by each ESC
 are separate concepts. Neither is guessed here. Expected direction belongs to
 the later aircraft/mixer configuration. Changing an ESC's stored direction
-requires an explicit disarmed maintenance operation, exact stopped output,
+requires an explicit disarmed maintenance operation, enforced zero output,
 the ESC-specific DShot command sequence, and propeller-free confirmation.
 
 ## Resource review
@@ -119,13 +117,29 @@ the ESC-specific DShot command sequence, and propeller-free confirmation.
 ## Verification boundary
 
 Host tests prove the recorded route table, selected grouped resources,
-permutation validation, disarmed/stopped configuration gate, atomic rejection,
-and complete command reordering. They do not prove the PCB trace, alternate-
-function register configuration, waveform timing, voltage, DMA execution, ESC
-acceptance, motor order, or motor direction.
+permutation validation, disarmed configuration gate, atomic rejection,
+and complete command reordering. Physical testing with the initial SpeedyBee
+ESC confirmed DShot acceptance, DMA-driven output, synchronized four-channel
+operation, and motor order. Exact waveform measurement, voltage margin, and
+motor direction remain open.
 
 Physical validation remains staged and propeller-free: the implementation
 always runs one synchronized four-channel transaction, while the host-side
 bench command must allow nonzero throttle for only one selected motor. Observe
 PC9/ESC_M1 first, identify each motor in turn, and only then test multiple
 nonzero channels.
+
+Physical identification has established:
+
+| Host motor | Logical index | Default output | Frame position |
+| --- | --- | --- | --- |
+| 1 | 0 | `ESC_M1` | Front left |
+| 2 | 1 | `ESC_M2` | Rear left |
+| 3 | 2 | `ESC_M3` | Front right |
+| 4 | 3 | `ESC_M4` | Rear right |
+
+All four physical positions therefore match the default identity mapping. The
+bench command now accepts any motor from 1 through 4 while still constructing
+exactly one nonzero logical command entry. Rotation direction will be a
+disarmed-only runtime ESC configuration, so it will not require recompilation
+or wiring changes.

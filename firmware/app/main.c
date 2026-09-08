@@ -117,7 +117,7 @@ static const task_definition_t usb_service_task_definition = {
 
 static const task_definition_t motor_control_task_definition = {
     .name = "motor-control",
-    .period_us = 1000U,
+    .period_us = MOTOR_CONTROL_FRAME_PERIOD_US,
     .priority = TASK_PRIORITY_HIGHEST,
     .callback = motor_control_task,
 };

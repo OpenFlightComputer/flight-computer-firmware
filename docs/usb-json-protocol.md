@@ -24,7 +24,7 @@ The supported commands are:
 | `health` | Report derived overall health, lifecycle state, severity counts, and bounded active-fault details |
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
-| `motor_test` | Submit a short-lived, constrained motor-one command through the production safety gate |
+| `motor_test` | Submit a leased single-motor command through the production safety gate |
 
 `arm` changes only the software lifecycle state and does not itself request
 nonzero output. The application safety policy first requires `OK`, `WARNING`,
@@ -37,17 +37,18 @@ is accepted only in `DISARMED`, while disarm is accepted in `ARMED` or
 The only accepted manual output request is:
 
 ```json
-{"type":"command","request_id":48,"command":"motor_test","motor":1,"throttle":0.020000}
+{"type":"command","request_id":48,"command":"motor_test","motor":2,"throttle":0.100000}
 ```
 
-Firmware—not merely the host tool—restricts this path to logical motor 1 and a
-normalized throttle from zero through `0.100000`. The decimal has at most six
-fractional digits and is converted to integer millionths before any float is
-created. Motors 2–4 are always submitted as zero. Every request passes through
+Firmware accepts logical motors 1 through 4 and a normalized throttle from
+zero through `1.000000`. The decimal has at most six fractional digits and is
+converted to integer millionths before any float is created. Each request sets
+exactly one selected motor and submits zero for the other three. Every request
+passes through
 `motor_control_submit()`, so lifecycle, health, freshness, mapping, backend,
 and fault behavior are identical to other future command producers. An
 accepted command is a 100 ms lease: without a fresh accepted request, the
-1 kHz motor-control task forces stop and enters failsafe.
+1 kHz motor-control task transmits stop frames and enters failsafe.
 
 ## Responses
 
@@ -59,10 +60,11 @@ Examples, each followed by one newline:
 {"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
 {"type":"response","request_id":46,"command":"arm","ok":false,"state":"DISARMED","error":"health_rejected"}
-{"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":1,"throttle":0.020000}
-{"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":2,"throttle":0.020000,"error":"motor_not_allowed"}
+{"type":"response","request_id":47,"command":"arm","ok":false,"state":"DISARMED","error":"motor_not_ready"}
+{"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":2,"throttle":0.100000}
+{"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":0,"throttle":0.020000,"error":"motor_not_allowed"}
 {"type":"error","request_id":null,"error":"invalid_request"}
-{"type":"error","request_id":47,"error":"unsupported_command"}
+{"type":"error","request_id":50,"error":"unsupported_command"}
 ```
 
 Milestone 0.12 derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or `CRITICAL`
@@ -149,16 +151,21 @@ V1 VBUS workaround.
 ## Propeller-free host workflow
 
 The reusable host workflow behind `./ofc motor run` requires the board to
-already report `ARMED`; it never arms implicitly. It sends zero-throttle frames
-for one second so the ESC can recognize the DShot stream, refreshes the selected
-throttle every 20 ms for at most one second, then sends five explicit zero
-requests and disarms. The same cleanup is attempted after Ctrl-C or a command
-error. Firmware remains authoritative if the process, USB connection, or host
-computer disappears because the 100 ms lease expires independently.
+already report `ARMED`; it never arms implicitly. It sends zero-throttle
+commands for five seconds so the ESC can recognize the DShot stream, refreshes
+the selected throttle every 20 ms for the requested positive finite duration,
+then sends five explicit zero requests and disarms. The same cleanup is
+attempted after Ctrl-C or a command error. Firmware remains authoritative if the process, USB
+connection, or host computer disappears because the 100 ms lease expires
+independently.
 
-Initial sequence with all propellers removed:
+An accepted `motor_test` request updates one complete retained command and its
+producer timestamp. It does not directly emit one physical frame. The existing
+highest-priority 1 kHz motor task rechecks lifecycle, health, lease freshness,
+and prior DMA completion before emitting each one-shot DShot frame. Thus USB
+refresh rate renews authority while the onboard task owns waveform cadence.
 
-```bash
-./ofc device arm
-./ofc motor run --motor 1 --throttle 0.02 --duration 0.25
-```
+The public protocol deliberately omits raw DMA register snapshots and retained
+frame dumps. Backend failures are represented by compact numeric context in
+the existing fault system, while detailed register inspection remains a
+debugger activity rather than a permanent USB API.

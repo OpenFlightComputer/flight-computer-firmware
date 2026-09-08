@@ -45,9 +45,10 @@ bit period          = 560 / 168,000,000 = 3.333... us
 1 high time         = 560 * 6/8 = 420 ticks = 2.50 us
 ```
 
-TIM8 will therefore use a period of 560 timer ticks (`ARR = 559` when the
-register setup is added). Compare value 210 represents a zero bit, and 420
-represents a one bit.
+TIM8 therefore uses a period of 560 timer ticks (`ARR = 559`). Compare value
+210 represents a zero bit, and 420 represents a one bit. This isolation image
+restores the original 37.5%/75% duty values while retaining the proven longer
+ESC zero-frame preparation; the DShot300 bit rate is unchanged.
 
 DShot600 is intentionally a roadmap item, not a selectable current profile.
 After DShot300 is physically validated, DShot600 can be added as another timing
@@ -76,9 +77,10 @@ creates the final DMA table in timer-register order:
 | 3 | CCR4 | `ESC_M1` |
 
 The two zero rows force every PWM output low after the frame. The board backend
-uses the first period to load preloads, completes with a zero row active, then
-stops TIM8 and changes all pins back to GPIO-low. Physical validation must
-still confirm the intended pipeline and waveform.
+uses the first period to load preloads and completes with a zero row active.
+Normal completion leaves TIM8 running at zero compare between frames; explicit
+stop and every failure path stop TIM8 and change all pins back to GPIO-low.
+Physical validation must still confirm the intended pipeline and waveform.
 
 ## Worked 50% and 25% examples
 

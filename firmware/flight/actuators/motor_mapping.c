@@ -43,8 +43,7 @@ void motor_mapping_initialize(motor_mapping_t *mapping)
 motor_mapping_configure_result_t motor_mapping_configure(
     motor_mapping_t *mapping,
     const uint8_t logical_to_physical[MOTOR_COMMAND_MOTOR_COUNT],
-    bool system_disarmed,
-    bool outputs_stopped)
+    bool system_disarmed)
 {
     motor_mapping_t candidate;
     size_t logical_motor;
@@ -52,7 +51,7 @@ motor_mapping_configure_result_t motor_mapping_configure(
     if ((mapping == NULL) || (logical_to_physical == NULL)) {
         return MOTOR_MAPPING_CONFIGURE_INVALID_ARGUMENT;
     }
-    if (!system_disarmed || !outputs_stopped) {
+    if (!system_disarmed) {
         return MOTOR_MAPPING_CONFIGURE_UNSAFE_STATE;
     }
     if (!assignment_is_permutation(logical_to_physical)) {

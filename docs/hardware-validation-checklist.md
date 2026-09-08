@@ -89,8 +89,9 @@ firmware link must not be recorded as proof that the flight image works.
   power cycle and an MCU-only reset.
 - [ ] Measure WS2812 3.3 V-to-5 V logic margin and the scheduling impact of its
   roughly 30 microsecond interrupt-masked update before allowing in-flight use.
-- [ ] Confirm PC6-PC9 remain low after cold boot, MCU reset, normal frame
-  completion, forced stop, and injected DMA failure.
+- [ ] Confirm PC6-PC9 begin GPIO-low during cold boot and MCU reset; remain AF3
+  with zero compares between normal stop frames; and return GPIO-low after an
+  emergency force-stop or injected DMA failure.
 - [ ] Validate PC6-PC9 TIM8 motor routing, CCR1/M4 through CCR4/M1 channel
   order, DShot300 pulse widths, synchronized edges, and DMA completion/error
   behavior; the tester did not validate DShot.
@@ -98,12 +99,50 @@ firmware link must not be recorded as proof that the flight image works.
   interrupt masking does not lose USB service or TIM5 overflow state.
 - [ ] Confirm the 1 kHz motor-control task detects an injected asynchronous DMA
   error and command expiry within the documented scheduler bound.
-- [ ] With propellers removed, validate DShot300 first against the SpeedyBee
+- [x] With propellers removed, validate DShot300 first against the SpeedyBee
   BLS 60A 30x30 4-in-1 ESC (stock BLHeli_S J-H-40): begin with only
   PC9/ESC_M1 nonzero through the constrained host command, confirm ESC
   recognition, identify S1-S4/motor order one at a time, then exercise multiple
   synchronized nonzero channels. Keep the telemetry request clear because the
   stock ESC has no separate telemetry output.
+- [x] With the diagnostic image and ESC battery disconnected, confirm
+  `motor_diagnostics` starts invalid with zero asynchronous counters. After
+  reconnecting the battery, run the zero-only workflow before any nonzero
+  command and preserve the diagnostic response before resetting.
+- [x] After the selected motor-2 nonzero test, confirm the retained physical
+  frames are `[0,7950,0,0]`, the post-reordering timer frames are
+  `[0,0,7950,0]` in CCR1-through-CCR4 order, and the runtime configuration
+  flags equal the expected mask `1023`.
+- [x] For the combined all-motors diagnostic, confirm five seconds of zero
+  preparation precede five seconds at 10%, all four retained physical and
+  timer frames equal `7950`, timing reports `560/196/392`, configuration flags
+  equal `1023`, all counters match, and cleanup returns to `DISARMED`.
+- [x] Repeat with only logical motor 2 while retaining five-second preparation
+  and `560/196/392` timing, to isolate whether simultaneous motor activation
+  contributed to the successful run.
+- [x] Repeat logical motor 2 with one-second preparation while retaining
+  `560/196/392` timing and the five-second active phase, to isolate whether the
+  extended zero preparation contributed to the successful run.
+- [x] Restore five-second preparation and original `560/210/420` timing while
+  retaining logical motor 2 and the five-second active phase, to isolate whether
+  narrower pulse widths contributed to the successful run.
+- [x] Distinguish ESC boot time from zero-frame conditioning: after a fresh ESC
+  power cycle, wait five seconds without arming or DShot traffic, then use only
+  one second of zero preparation before the motor-2 test.
+- [x] Flash the continuous-stop-stream image with the ESC battery disconnected.
+  After five seconds in `DISARMED`, confirm diagnostics report
+  `hard_stopped=false`, `stop_frames_streaming=true`,
+  `arming_preparation_complete=true`, matching submission/completion counts,
+  and no failure.
+- [x] Reconnect the ESC battery while the USB-powered FC remains `DISARMED`,
+  wait five seconds, then arm and run logical motor 2 at 10%. Confirm continuous
+  rotation, automatic zero/disarm cleanup, and no new diagnostic failure.
+- [ ] Physically validate loss of the 100 ms producer heartbeat and record the
+  actual motor-stop latency. This is deferred by owner decision while receiver
+  development begins.
+- [ ] Record every motor's rotation direction and implement a disarmed-only
+  runtime direction configuration before first flight. Do not require firmware
+  recompilation or wiring changes to reverse one motor.
 
 ## Flight-image evidence log
 
@@ -123,3 +162,55 @@ firmware link must not be recorded as proof that the flight image works.
   faults, complete fault data, and zero dropped records. Fragmented, CRLF,
   coalesced, malformed/unsupported-command handling, log/response interleaving,
   and host close/reopen checks passed.
+
+### 2026-09-05 — First DShot bench attempt at commit `5748fd0`
+
+- Props were removed and motors secured. USB and SWD were connected; the ESC
+  was battery powered for the test.
+- USB arm was accepted. During the motor workflow's zero-frame preparation,
+  the asynchronous backend entered error. The following request was rejected
+  by state, cleanup ran, and no 2% command was accepted.
+- Status reported terminal `FAULT`. Health reported one complete critical
+  application fault: ID 14 (`MOTOR_OUTPUT`), occurrence one, context 4. That
+  context identified only generic backend status, motivating the latched
+  pre-cleanup diagnostic snapshot before repetition.
+
+### 2026-09-05 — Diagnostic zero-frame attempt based on commit `5748fd0`
+
+- The diagnostic build started `DISARMED` with the board output `IDLE`, no
+  latched reason, and all asynchronous counters at zero.
+- After arming, the zero-only workflow submitted one 72-halfword table. DMA2
+  Stream 1 asserted `FEIF1` after consuming 8 halfwords (`NDTR=64`) and before
+  any completion. The ISR stopped the transfer, drove PC6-PC9 low, and the
+  application entered terminal `FAULT`; no nonzero command was requested.
+- The retained `FCR=0x80` exposed FIFO-error interrupts enabled while direct
+  mode was selected. The subsequent software correction enables FIFO mode with
+  a full threshold, matching the bundled STM32F4 TIM DMA-burst configuration
+  pattern.
+- After flashing that correction, one complete 72-halfword zero table finished
+  with one DMA completion interrupt and no failure. The host did not refresh
+  the 100 ms command lease in time because its 512-byte serial read waited for
+  the 100 ms read slice after receiving the short response. Firmware entered
+  failsafe and host cleanup disarmed it as designed. The host read path was
+  corrected.
+- The repeated one-second zero-only test then completed 38 requested refreshes
+  plus five cleanup writes. The retained counters reported 43 submissions, 43
+  interrupts, 43 completions, and zero failures; no diagnostic reason was
+  latched, the output returned to `IDLE`, and cleanup left the system
+  `DISARMED`.
+- The first separately authorized nonzero workflow completed 11 logical-motor-1
+  requests at 2% over 0.25 seconds after its zero preparation, then sent five
+  cleanup zeros and disarmed. Cumulative diagnostics reached 98 submissions,
+  interrupts, and completions with zero failures and no latched reason.
+  Operator confirmation of which motor moved and in which direction remains
+  pending.
+- Follow-up logical-motor-1 tests at 4% for 0.75 seconds and 10% for one second
+  also completed with matching DMA submission/completion counts and no fault,
+  but produced only a small physical twitch. The one-second active phase sent
+  39 USB-triggered physical frames, showing that command/response timing was
+  incorrectly controlling the DShot repetition rate.
+- The follow-up software change retains each accepted producer command and
+  makes the existing highest-priority 1 kHz motor task submit the next one-shot
+  frame after checking state, health, 100 ms lease, and prior completion. It
+  requires a new battery-disconnected flash, zero-only run, and physical motor
+  retry before the twitch cause is considered resolved.
