@@ -91,6 +91,24 @@ target_compile_options(receiver_freshness_tests PRIVATE
 
 add_test(NAME receiver_freshness COMMAND receiver_freshness_tests)
 
+add_executable(receiver_failsafe_tests
+    receiver_failsafe_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
+)
+
+target_include_directories(receiver_failsafe_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+
+target_compile_options(receiver_failsafe_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME receiver_failsafe COMMAND receiver_failsafe_tests)
+
 add_executable(crsf_tests
     crsf_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf/crsf_decoder.c"

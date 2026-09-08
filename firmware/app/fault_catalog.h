@@ -23,6 +23,7 @@ enum {
     FAULT_ID_MOTOR_FORCE_STOP = 15U,
     FAULT_ID_RECEIVER_INITIALIZATION = 16U,
     FAULT_ID_RECEIVER_SOURCE = 17U,
+    FAULT_ID_RECEIVER_CONNECTION_LOST = 18U,
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count);

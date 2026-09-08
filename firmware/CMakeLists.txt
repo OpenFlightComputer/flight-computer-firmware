@@ -176,6 +176,7 @@ add_executable(flight_firmware
     flight/actuators/motor_mapping.c
     flight/actuators/motor_output.c
     flight/receiver/receiver_freshness.c
+    flight/receiver/receiver_failsafe.c
     flight/receiver/receiver_normalization.c
     flight/receiver/receiver_source.h
     peripherals/dshot/dshot_encoder.c

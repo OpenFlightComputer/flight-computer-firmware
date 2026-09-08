@@ -6,6 +6,8 @@ injected, non-blocking source that returns at most one frame per call.
 `receiver_normalization` validates and copies channel/calibration configuration
 and converts a raw frame into a timestamp-preserving normalized control
 snapshot. `receiver_freshness` classifies that timestamp without owning state.
+`receiver_failsafe` owns the protocol-independent staged receiver-loss policy
+and produces a requested action without applying it to any actuator.
 
 The CRSF parser/source adapter sits below this interface and owns framing, CRC
 validation, and protocol values. The selected board backend separately owns
@@ -14,6 +16,6 @@ all 16 channels have been decoded and validated. It writes into caller-owned
 storage and must not retain that pointer after returning.
 
 The application receiver service owns timestamps, raw and normalized snapshots,
-freshness configuration, and service statistics. Display formatting, USB
-serialization, fault policy, motor commands, and lifecycle transitions do not
-belong here.
+freshness configuration, and service statistics. The application observes the
+failsafe decision and owns fault reporting. Display formatting, USB
+serialization, motor commands, and lifecycle transitions do not belong here.

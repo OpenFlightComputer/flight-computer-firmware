@@ -8,6 +8,7 @@
 #include "logging.h"
 #include "motor_control.h"
 #include "motor_control_internal.h"
+#include "receiver_failsafe.h"
 #include "receiver_service.h"
 #include "scheduler.h"
 #include "system_state.h"
@@ -21,8 +22,6 @@
 
 #define USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT UINT32_C(100)
 #define RECEIVER_TASK_PERIOD_US UINT32_C(1000)
-#define RECEIVER_FRESH_THROUGH_US UINT32_C(25000)
-#define RECEIVER_LOST_AFTER_US UINT32_C(100000)
 
 volatile boot_status_t firmware_boot_status = BOOT_STATUS_RESET;
 volatile uint32_t firmware_main_loop_iterations;
@@ -49,6 +48,16 @@ volatile uint32_t firmware_receiver_uart_bytes;
 volatile uint32_t firmware_receiver_valid_frames;
 volatile uint32_t firmware_receiver_crc_errors;
 volatile uint32_t firmware_receiver_framing_errors;
+volatile uint32_t firmware_receiver_dma_overruns;
+volatile uint32_t firmware_receiver_dma_dropped_bytes;
+volatile uint32_t firmware_receiver_failsafe_state =
+    (uint32_t)RECEIVER_FAILSAFE_UNAVAILABLE;
+volatile uint32_t firmware_receiver_failsafe_action =
+    (uint32_t)RECEIVER_FAILSAFE_ACTION_NONE;
+volatile uint64_t firmware_receiver_link_age_us;
+volatile uint32_t firmware_receiver_failsafe_transitions;
+volatile bool firmware_receiver_stage_two_latched;
+volatile bool firmware_receiver_recovery_ready;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
@@ -57,9 +66,14 @@ fault_system_t firmware_fault_system;
 usb_command_processor_t firmware_usb_command_processor;
 static dshot_motor_backend_t firmware_dshot_motor_backend;
 receiver_service_t firmware_receiver_service;
+receiver_failsafe_t firmware_receiver_failsafe;
+receiver_failsafe_decision_t firmware_receiver_failsafe_decision;
 static receiver_freshness_state_t logged_receiver_freshness =
     RECEIVER_FRESHNESS_UNAVAILABLE;
+static receiver_failsafe_state_t logged_receiver_failsafe_state =
+    RECEIVER_FAILSAFE_UNAVAILABLE;
 static bool receiver_source_fault_reported;
+static bool receiver_connection_fault_reported;
 
 static void motor_control_task(void *context)
 {
@@ -76,6 +90,8 @@ static void receiver_task(void *context)
     receiver_control_state_t control;
     board_receiver_statistics_t statistics = {0};
     receiver_service_result_t result;
+    receiver_failsafe_decision_t decision;
+    const receiver_control_snapshot_t *control_snapshot = NULL;
 
     result = receiver_service_process_once(service);
     firmware_receiver_service_last_result = (uint32_t)result;
@@ -86,6 +102,9 @@ static void receiver_task(void *context)
         firmware_receiver_valid_frames = statistics.valid_frame_count;
         firmware_receiver_crc_errors = statistics.crc_error_count;
         firmware_receiver_framing_errors = statistics.framing_error_count;
+        firmware_receiver_dma_overruns = statistics.dma_overrun_count;
+        firmware_receiver_dma_dropped_bytes =
+            statistics.dma_dropped_byte_count;
     }
 
     if ((result == RECEIVER_SERVICE_SOURCE_ERROR) &&
@@ -112,6 +131,70 @@ static void receiver_task(void *context)
                 LOG_ERROR(LOG_MODULE_RECEIVER, "receiver data lost");
             }
             logged_receiver_freshness = control.freshness;
+        }
+
+        if (control.snapshot.valid) {
+            control_snapshot = &control.snapshot;
+        }
+    }
+
+    if (!receiver_failsafe_update(&firmware_receiver_failsafe,
+                                  control_snapshot,
+                                  time_us(),
+                                  &decision)) {
+        return;
+    }
+
+    firmware_receiver_failsafe_decision = decision;
+    firmware_receiver_failsafe_state = (uint32_t)decision.state;
+    firmware_receiver_failsafe_action = (uint32_t)decision.action;
+    firmware_receiver_link_age_us = decision.link_age_us;
+    firmware_receiver_failsafe_transitions = decision.transition_count;
+    firmware_receiver_stage_two_latched = decision.stage_two_latched;
+    firmware_receiver_recovery_ready = decision.recovery_ready;
+
+    if (decision.state != logged_receiver_failsafe_state) {
+        if ((decision.state == RECEIVER_FAILSAFE_LIVE) ||
+            (decision.state == RECEIVER_FAILSAFE_STALE_HOLD)) {
+            LOG_INFO(LOG_MODULE_RECEIVER,
+                     "failsafe state=%s action=%s",
+                     receiver_failsafe_state_name(decision.state),
+                     receiver_failsafe_action_name(decision.action));
+        } else if ((decision.state == RECEIVER_FAILSAFE_LOSS_HOLD) ||
+                   (decision.state == RECEIVER_FAILSAFE_STAGE_ONE)) {
+            LOG_WARN(LOG_MODULE_RECEIVER,
+                     "failsafe state=%s action=%s",
+                     receiver_failsafe_state_name(decision.state),
+                     receiver_failsafe_action_name(decision.action));
+        } else {
+            LOG_ERROR(LOG_MODULE_RECEIVER,
+                      "failsafe state=%s action=%s",
+                      receiver_failsafe_state_name(decision.state),
+                      receiver_failsafe_action_name(decision.action));
+        }
+        logged_receiver_failsafe_state = decision.state;
+    }
+
+    if (decision.receiver_loss_detected &&
+        !receiver_connection_fault_reported) {
+        const fault_report_result_t report_result =
+            fault_system_report(&firmware_fault_system,
+                                FAULT_ID_RECEIVER_CONNECTION_LOST,
+                                true,
+                                (uint32_t)decision.state);
+
+        firmware_fault_last_result = (uint32_t)report_result;
+        receiver_connection_fault_reported =
+            (report_result == FAULT_REPORT_RECORDED) ||
+            (report_result == FAULT_REPORT_UPDATED);
+    } else if (!decision.receiver_loss_detected &&
+               receiver_connection_fault_reported) {
+        const fault_clear_result_t clear_result =
+            fault_system_clear(&firmware_fault_system,
+                               FAULT_ID_RECEIVER_CONNECTION_LOST);
+
+        if (clear_result == FAULT_CLEAR_OK) {
+            receiver_connection_fault_reported = false;
         }
     }
 }
@@ -333,10 +416,8 @@ int main(void)
     motor_control_init_result_t motor_control_result;
     receiver_source_t receiver_source;
     receiver_normalization_config_t receiver_normalization_config;
-    const receiver_freshness_config_t receiver_freshness_config = {
-        .fresh_through_us = RECEIVER_FRESH_THROUGH_US,
-        .lost_after_us = RECEIVER_LOST_AFTER_US,
-    };
+    receiver_freshness_config_t receiver_freshness_config;
+    receiver_failsafe_config_t receiver_failsafe_config;
     board_receiver_init_result_t receiver_init_result;
     bool usb_service_available = false;
     bool receiver_service_available = false;
@@ -431,11 +512,19 @@ int main(void)
     } else {
         receiver_normalization_default_config(
             &receiver_normalization_config);
+        receiver_failsafe_default_config(&receiver_failsafe_config);
+        receiver_freshness_config = (receiver_freshness_config_t){
+            .fresh_through_us = receiver_failsafe_config.stale_after_us,
+            .lost_after_us = receiver_failsafe_config.loss_detected_after_us,
+        };
         if (receiver_service_initialize(&firmware_receiver_service,
                                         &receiver_source,
                                         time_us,
                                         &receiver_normalization_config,
-                                        &receiver_freshness_config)) {
+                                        &receiver_freshness_config) &&
+            receiver_failsafe_initialize(&firmware_receiver_failsafe,
+                                         &receiver_failsafe_config,
+                                         time_us())) {
             receiver_service_available = true;
             LOG_INFO(LOG_MODULE_RECEIVER,
                      "UART4 CRSF receiver initialized");

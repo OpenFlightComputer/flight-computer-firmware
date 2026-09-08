@@ -10,19 +10,37 @@
 
 static UART_HandleTypeDef receiver_uart;
 static DMA_HandleTypeDef receiver_dma;
-static uint8_t receiver_dma_buffer[FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY];
+static volatile uint8_t
+    receiver_dma_buffer[FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY];
 static crsf_receiver_source_t receiver_crsf_source;
-static size_t receiver_read_position;
+static uint32_t receiver_dma_read_count;
+static volatile uint32_t receiver_dma_wrap_count;
+static uint32_t receiver_dma_overrun_count;
+static uint32_t receiver_dma_dropped_byte_count;
 static uint32_t receiver_received_byte_count;
 static volatile uint32_t receiver_last_error;
 static bool receiver_dma_initialized;
 static bool receiver_uart_initialized;
 static bool receiver_initialized;
 
-static size_t receiver_dma_write_position(void)
+static uint32_t receiver_dma_produced_byte_count(void)
 {
-    return FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY -
-           (size_t)__HAL_DMA_GET_COUNTER(&receiver_dma);
+    uint32_t wraps_before;
+    uint32_t wraps_after;
+    uint32_t write_position;
+
+    /* Retry if the completion interrupt changes the epoch during the sample. */
+    do {
+        wraps_before = receiver_dma_wrap_count;
+        __DMB();
+        write_position = FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY -
+                         (uint32_t)__HAL_DMA_GET_COUNTER(&receiver_dma);
+        __DMB();
+        wraps_after = receiver_dma_wrap_count;
+    } while (wraps_before != wraps_after);
+
+    return wraps_before * FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY +
+           write_position;
 }
 
 static void saturating_increment(uint32_t *value)
@@ -32,23 +50,50 @@ static void saturating_increment(uint32_t *value)
     }
 }
 
+static void saturating_add(uint32_t *value, uint32_t increment)
+{
+    if (increment > UINT32_MAX - *value) {
+        *value = UINT32_MAX;
+    } else {
+        *value += increment;
+    }
+}
+
 static bool receiver_read_byte(void *context, uint8_t *byte)
 {
-    size_t write_position;
+    uint32_t produced;
+    uint32_t backlog;
 
     (void)context;
     if (!receiver_initialized || (byte == NULL)) {
         return false;
     }
 
-    write_position = receiver_dma_write_position();
-    if (write_position == receiver_read_position) {
+    produced = receiver_dma_produced_byte_count();
+
+    /* NDTR may reload just before its completion IRQ advances the epoch. */
+    if (produced < receiver_dma_read_count) {
         return false;
     }
 
-    *byte = receiver_dma_buffer[receiver_read_position];
-    receiver_read_position = (receiver_read_position + 1U) %
-                             FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY;
+    backlog = produced - receiver_dma_read_count;
+    if (backlog > FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY) {
+        const uint32_t dropped =
+            backlog - FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY;
+
+        saturating_increment(&receiver_dma_overrun_count);
+        saturating_add(&receiver_dma_dropped_byte_count, dropped);
+        receiver_dma_read_count += dropped;
+        backlog = FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY;
+    }
+    if (backlog == 0U) {
+        return false;
+    }
+
+    __DMB();
+    *byte = receiver_dma_buffer[
+        receiver_dma_read_count % FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY];
+    receiver_dma_read_count++;
     saturating_increment(&receiver_received_byte_count);
     return true;
 }
@@ -93,7 +138,10 @@ board_receiver_init_result_t board_receiver_initialize(
     }
     *source = (receiver_source_t){0};
 
-    receiver_read_position = 0U;
+    receiver_dma_read_count = 0U;
+    receiver_dma_wrap_count = 0U;
+    receiver_dma_overrun_count = 0U;
+    receiver_dma_dropped_byte_count = 0U;
     receiver_received_byte_count = 0U;
     receiver_last_error = HAL_UART_ERROR_NONE;
     receiver_dma_initialized = false;
@@ -154,14 +202,15 @@ board_receiver_init_result_t board_receiver_initialize(
     HAL_NVIC_EnableIRQ(UART4_IRQn);
 
     if (HAL_UART_Receive_DMA(&receiver_uart,
-                             receiver_dma_buffer,
+                             (uint8_t *)receiver_dma_buffer,
                              FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY) !=
         HAL_OK) {
         receiver_last_error = 3U;
         receiver_release_hardware();
         return BOARD_RECEIVER_INIT_RECEIVE_ERROR;
     }
-    __HAL_DMA_DISABLE_IT(&receiver_dma, DMA_IT_HT | DMA_IT_TC);
+    /* Half-transfer adds no information; transfer-complete counts wraps. */
+    __HAL_DMA_DISABLE_IT(&receiver_dma, DMA_IT_HT);
     receiver_initialized = true;
 
     if (!crsf_receiver_source_initialize(&receiver_crsf_source,
@@ -191,6 +240,8 @@ bool board_receiver_statistics(board_receiver_statistics_t *statistics)
         .crc_error_count = receiver_crsf_source.parser.crc_error_count,
         .framing_error_count =
             receiver_crsf_source.parser.framing_error_count,
+        .dma_overrun_count = receiver_dma_overrun_count,
+        .dma_dropped_byte_count = receiver_dma_dropped_byte_count,
     };
     return true;
 }
@@ -213,5 +264,12 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *handle)
 {
     if (handle == &receiver_uart) {
         receiver_last_error = handle->ErrorCode;
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *handle)
+{
+    if (handle == &receiver_uart) {
+        receiver_dma_wrap_count++;
     }
 }

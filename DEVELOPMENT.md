@@ -6,17 +6,38 @@ Phase 2 — ELRS/CRSF receiver input.
 
 ## Current milestone
 
-Milestone 2.5 — receiver connection/loss transitions, bounded diagnostics, and
-USB inspection. The tester-proven CRSF parser, UART4 circular-DMA backend, and
-receiver source are imported and registered; the tester's ongoing error-rate
-fix must be synchronized before flight-image physical validation.
+Milestone 2.6 — USB inspection and physical receiver validation. The
+tester-proven CRSF parser, UART4 circular-DMA backend, receiver source, and
+observational receiver-loss policy are integrated. The corrected DMA accounting
+is synchronized; flight-image USB inspection and physical RP1 validation remain.
 
 ## Last completed milestone
 
-Milestone 2.4 — receiver normalization and freshness with the measured RP1
-development profile.
+Milestone 2.5 — staged receiver connection/loss policy, bounded diagnostics,
+and recoverable connection-loss fault reporting without motor or lifecycle
+authority.
 
 ## Current implementation status
+
+- Added a hardware-independent, configurable receiver-loss policy with exact
+  fresh, stale-hold, loss-hold, Stage 1 fallback, and latched Stage 2 timing.
+- Set the initial Stage 1 request to neutral roll/pitch/yaw and 5% throttle,
+  with the explicit roadmap requirement to replace it with measured,
+  stabilized vehicle recovery later.
+- Required fresh, arm-low, low-throttle input for a continuous recovery window
+  before Stage 2 can be explicitly released; clock rollback fails closed.
+- Integrated transition-only logging, debugger-visible policy diagnostics,
+  and recoverable receiver-connection fault reporting into the 1 kHz receiver
+  task while preserving the Phase 2 prohibition on motor commands.
+- Added host coverage for configuration validation, exact timing boundaries,
+  fallback values, automatic short-loss recovery, Stage 2 recovery/reset,
+  unavailable input, and clock rollback.
+- Ported the tester-proven UART4 circular-DMA accounting correction: absolute
+  producer/consumer counts, a transfer-complete wrap epoch, volatile DMA-owned
+  memory, explicit barriers, and detectable overruns with dropped-byte totals.
+- Confirmed the 1 kHz high-priority receiver task is independent of the
+  background USB/logging task. The corrected tester received 135,014 bytes
+  without DMA drops, overruns, UART faults, CRC errors, or framing errors.
 
 - Added the generic `board.h` contract selected by the firmware build.
 - Added Flight Computer V1 board support owning board identity, manufacturing/schematic revision, expected clock, initialization policy, and translation of MCU failures into board-level results.
@@ -434,10 +455,9 @@ can request nonzero throttle.
 
 ## Next step
 
-Synchronize the tester session's CRSF error-rate fix, then add bounded USB
-receiver inspection and validate the flight image against the connected RP1.
-Receiver connection/loss should become a recoverable Phase 2 fault, but must
-not gain `FAILSAFE` or motor authority until Phase 3 command ownership exists.
+Add bounded USB receiver inspection and validate the flight image against the
+connected RP1. Receiver connection/loss is a recoverable Phase 2 fault, but
+must not gain `FAILSAFE` or motor authority until Phase 3 command ownership exists.
 Physical motor heartbeat-loss timing and per-motor direction configuration
 remain explicit pre-flight tasks; DShot600 remains deferred.
 
@@ -452,16 +472,17 @@ remain explicit pre-flight tasks; DShot600 remains deferred.
 - Resolved the V1 route to normal, non-inverted UART4 at 420000 baud: PC10 TX
   and PC11 RX use alternate function 8, with circular RX on DMA1 Stream 2,
   Channel 4. The 512-byte buffer holds about 12.2 ms of serial traffic. Parsing
-  stays outside interrupts; UART and DMA interrupts handle errors only.
+  stays outside interrupts; the DMA transfer-complete interrupt counts buffer
+  wrap epochs and the UART interrupt retains error handling.
 - Registered the receiver service every 1 ms at high priority after the
   highest-priority motor task. It applies the measured normalization profile,
   classifies freshness at 25/100 ms, records bounded diagnostics, and reports
   UART/source failure as a recoverable receiver fault. It cannot submit motor
   commands or trigger `FAILSAFE` in Phase 2.
 - Added host tests for parser/decoder correctness, recovery, source ownership,
-  valid-frame precedence, stream errors, and the processing bound. The
-  in-progress tester error-rate correction remains an explicit synchronization
-  point before the flight image is flashed for receiver validation.
+  valid-frame precedence, stream errors, and the processing bound. The later
+  physically proven absolute DMA accounting correction is now synchronized
+  before flight-image receiver validation.
 - All 30 native tests pass normally and under address/undefined-behavior
   sanitizers. Debug and Release firmware builds pass with warnings as errors.
   The wired receiver image uses 78,328/51,856 bytes of Flash and 16,408 bytes

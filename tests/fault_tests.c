@@ -167,7 +167,11 @@ static void validates_initialization_and_catalogs(void)
 
     firmware_definitions =
         firmware_fault_catalog(&firmware_definition_count);
-    assert(firmware_definition_count == 17U);
+    assert(firmware_definition_count == 18U);
+    assert(firmware_definitions[17].id ==
+           FAULT_ID_RECEIVER_CONNECTION_LOST);
+    assert(firmware_definitions[17].severity == FAULT_SEVERITY_FAULT);
+    assert(firmware_definitions[17].source == FAULT_SOURCE_RECEIVER);
     assert(fault_system_initialize(&system,
                                    &state_machine,
                                    firmware_definitions,

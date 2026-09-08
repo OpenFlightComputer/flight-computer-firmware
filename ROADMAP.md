@@ -64,19 +64,28 @@ tester independently proves the physical receiver path:
 1. Tester-to-flight receiver boundary — complete; the portable source returns
    at most one complete decoded 16-channel frame per non-blocking call.
 2. Tester-proven CRSF parser and V1 UART backend import — implementation
-   complete; the tester's error-rate fix must be synchronized before final
-   flight-image validation.
+   complete, including the physically proven absolute DMA producer/consumer
+   accounting and overrun-detection correction.
 3. Receiver service and owned raw-channel snapshot — complete and registered
    as a 1 kHz high-priority task below motor output.
 4. Channel assignment, replaceable calibration, normalized control snapshot,
    and configurable freshness — complete and wired to the physical source.
 5. Connection/loss transitions, bounded diagnostics, and non-critical Phase 2
-   fault reporting — UART/parser diagnostics and recoverable source failures
-   are implemented; data-unavailable/stale/lost fault transitions remain.
+   fault reporting — complete; the staged policy is observed but has no motor
+   or lifecycle authority until Phase 3.
 6. USB inspection and flight-firmware physical validation against the receiver.
 
 Phase 2 never submits motor commands. Receiver-loss authority over `FAILSAFE`
 begins in Phase 3 when the receiver becomes a motor-command source.
+
+The initial configurable receiver-loss policy will retain the last controls
+through the short validation window, then use neutral roll/pitch/yaw and 5%
+normalized throttle during Stage 1 before the configured Stage 2 deadline.
+This is only a deterministic development fallback: 5% throttle is not a
+measured hover or climb setting, and neutral rate commands cannot guarantee a
+level climb. After stabilized attitude control exists, determine a safe
+vehicle-specific hover/light-climb throttle from physical testing and replace
+the Stage 1 fallback with a validated level/stabilized recovery behavior.
 
 ## Later phases
 

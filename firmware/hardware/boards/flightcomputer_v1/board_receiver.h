@@ -23,6 +23,8 @@ typedef struct {
     uint32_t link_statistics_frame_count;
     uint32_t crc_error_count;
     uint32_t framing_error_count;
+    uint32_t dma_overrun_count;
+    uint32_t dma_dropped_byte_count;
 } board_receiver_statistics_t;
 
 board_receiver_init_result_t board_receiver_initialize(

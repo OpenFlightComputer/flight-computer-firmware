@@ -15,7 +15,7 @@ V1 UART4 circular DMA + portable CRSF parser
              one decoded frame per call
                          |
                          v
-                receiver_service_t
+                 receiver_service_t
               /          |          \
              v           v           v
       raw snapshot  normalization  freshness
@@ -23,6 +23,10 @@ V1 UART4 circular DMA + portable CRSF parser
                          +-----+-----+
                                v
                     combined control state
+                               |
+                               v
+                  receiver-loss policy decision
+                  (observed only during Phase 2)
 ```
 
 `receiver_source_t` is a non-blocking injected callback. One invocation returns
@@ -47,16 +51,31 @@ wire bytes arrive per millisecond; the circular DMA buffer holds 512 bytes and
 the CRSF adapter processes at most 512 bytes per invocation. The task normally
 returns after the first decoded channel frame and cannot control motors.
 
-## Deliberately deferred
+The V1 DMA reader uses an absolute consumer count and an absolute producer
+count formed from the current `NDTR` position plus a wrap epoch advanced by the
+DMA transfer-complete interrupt. It samples the volatile epoch around `NDTR`
+with memory barriers and retries if the epoch changes. This removes the
+full-wrap ambiguity of equal modulo positions. If producer minus consumer
+exceeds the 512-byte capacity, the reader counts one overrun and the exact
+number of overwritten bytes, advances to the oldest retained byte, and
+continues parsing. Overrun and dropped-byte totals are debugger-visible beside
+the UART and parser diagnostics. The receiver task is independent of the
+lower-priority USB/logging service, so output backpressure cannot decide when
+receiver input is drained.
 
-USB serialization, connection/loss fault policy, lifecycle transitions, and
-motor authority remain deferred. In particular, receiver loss cannot enter
-`FAILSAFE` during Phase 2 because the receiver does not control motors until
-Phase 3. See `receiver-normalization.md`.
+The separate receiver-loss policy now classifies the latest snapshot into
+live, hold, Stage 1 fallback, or latched Stage 2 stop actions. The application
+logs transitions and reports a recoverable connection-loss fault, but neither
+the decision nor its requested controls can reach motor output during Phase 2.
+Lifecycle and motor authority remain deferred to Phase 3. See
+`receiver-normalization.md` and `receiver-failsafe.md`.
 
 Host tests use a fake source and clock to prove dependency validation,
 single-call boundedness, caller-storage independence, timestamp and sequence
 replacement, preservation across invalid/error results, task-callback behavior,
-normalization, freshness transitions, and counter saturation. Parser/source
+normalization, freshness transitions, and counter saturation. Dedicated
+policy tests cover exact timeout boundaries, requested controls, invalid
+configuration, short-loss recovery, Stage 2 latching and recovery, unsafe
+recovery interruption, unavailable input, and clock rollback. Parser/source
 tests additionally cover CRC, packed-channel decoding, recovery, link
 statistics, malformed frames, stream errors, and the bounded byte budget.

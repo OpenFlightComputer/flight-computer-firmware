@@ -88,6 +88,11 @@ static const fault_definition_t definitions[] = {
         .severity = FAULT_SEVERITY_FAULT,
         .source = FAULT_SOURCE_RECEIVER,
     },
+    {
+        .id = FAULT_ID_RECEIVER_CONNECTION_LOST,
+        .severity = FAULT_SEVERITY_FAULT,
+        .source = FAULT_SOURCE_RECEIVER,
+    },
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count)

@@ -17,9 +17,14 @@ CCR4 order and copies it into the private buffer subsequently read by DMA.
 UART4 TX and PC11 is UART4 RX on alternate function 8. UART4 uses normal,
 non-inverted 420000-baud 8-N-1 serial data from the 42 MHz APB1 clock. DMA1
 Stream 2/Channel 4 continuously fills a 512-byte circular RX buffer. The 1 ms
-application task polls its write position and parses outside interrupts; UART
-and DMA interrupts are retained only for error handling. The buffer represents
-about 12.2 ms of wire time at 420000 baud.
+high-priority application task parses independently of the background USB and
+logging service. A transfer-complete interrupt increments the DMA wrap epoch;
+the reader combines that epoch with `NDTR` to compare absolute producer and
+consumer counts. The DMA-owned buffer and interrupt-owned epoch are volatile,
+barriers make their ordering explicit, and backlog beyond 512 bytes is counted
+as an overrun with the exact dropped-byte count before reading resumes at the
+oldest retained byte. The buffer represents about 12.2 ms of wire time at
+420000 baud.
 
 `time.c` exposes the generic `time_us()` API without leaking the STM32 backend. Milestone 0.10 adds `usb_device_port.c`, closely adapted from the proven tester, to own PA11/PA12 OTG FS routing, the device-controller/FIFO configuration, static USB class storage, and the OTG FS interrupt handler. The V1 PA9 divider cannot drive valid hardware VBUS detection, so the board-selected assume-present mode leaves PA9 untouched and disables sensing. A corrected board can select sense-input mode through the same hardware contract. All other deferred peripheral pins remain untouched. See `docs/flightcomputer-v1-hardware.md` for the reviewed physical map and unresolved choices.
 
