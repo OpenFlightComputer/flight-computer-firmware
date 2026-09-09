@@ -49,7 +49,8 @@ wraps it with bounded diagnostics and runs it every 1 ms at high priority,
 below the highest-priority 1 kHz motor-output task. At 420000 baud, about 42
 wire bytes arrive per millisecond; the circular DMA buffer holds 512 bytes and
 the CRSF adapter processes at most 512 bytes per invocation. The task normally
-returns after the first decoded channel frame and cannot control motors.
+returns after the first decoded channel frame. Its arming interlock may request
+lifecycle changes, but it cannot submit a motor command.
 
 The V1 DMA reader uses an absolute consumer count and an absolute producer
 count formed from the current `NDTR` position plus a wrap epoch advanced by the
@@ -63,12 +64,14 @@ the UART and parser diagnostics. The receiver task is independent of the
 lower-priority USB/logging service, so output backpressure cannot decide when
 receiver input is drained.
 
-The separate receiver-loss policy now classifies the latest snapshot into
-live, hold, Stage 1 fallback, or latched Stage 2 stop actions. The application
-logs transitions and reports a recoverable connection-loss fault, but neither
-the decision nor its requested controls can reach motor output during Phase 2.
-Lifecycle and motor authority remain deferred to Phase 3. See
-`receiver-normalization.md` and `receiver-failsafe.md`.
+The separate receiver-loss policy classifies the latest snapshot into live,
+hold, Stage 1 fallback, or latched Stage 2 stop actions. The application logs
+transitions and reports a recoverable connection-loss fault. Phase 3.2 now
+allows only a live, fresh, startup-low-qualified arm-switch edge to request
+receiver ownership, and a fresh low switch to disarm that receiver-owned
+session. Receiver control values still cannot reach motor output. See
+`receiver-normalization.md`, `receiver-failsafe.md`, and
+`receiver-arming.md`.
 
 ## On-demand USB inspection
 
@@ -86,10 +89,12 @@ while also showing the flight firmware's normalized controls. The host owns
 the display-only extrema; firmware publishes no continuously maintained
 inspection snapshot.
 
-The Release flight image was flashed to Flight Computer V1 and the live view
-displayed the connected RP1's raw and normalized controls, freshness, failsafe
-state, and diagnostics. This closes the Phase 2 physical receiver-inspection
-boundary; receiver-to-motor authority remains Phase 3 work.
+The Phase 2 Release flight image was flashed to Flight Computer V1 and the
+live view displayed the connected RP1's raw and normalized controls,
+freshness, failsafe state, and diagnostics. This closes the Phase 2 physical
+receiver-inspection boundary. Phase 3.2 subsequently added receiver arm/disarm
+authority while retaining the prohibition on receiver motor-command
+submission.
 
 Host tests use a fake source and clock to prove dependency validation,
 single-call boundedness, caller-storage independence, timestamp and sequence

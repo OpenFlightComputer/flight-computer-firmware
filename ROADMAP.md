@@ -92,11 +92,12 @@ the Stage 1 fallback with a validated level/stabilized recovery behavior.
 
 ## Phase 3 — Open-loop receiver-to-motor integration
 
-1. Exclusive motor-command source authority — implemented for review; a
+1. Exclusive motor-command source authority — complete; a
    successful arm latches `USB_TEST` or `RECEIVER`, and every stop path releases
    it without adding lifecycle states.
 2. Safe receiver arming and disarming with startup-low and low-throttle
-   interlocks.
+   interlocks — implemented for review; receiver motor submission remains
+   prohibited.
 3. Runtime-safe motor direction configuration and physical direction record.
 4. Hardware-independent open-loop quad-X mixer.
 5. Dedicated receiver-control producer task through the existing motor gate.

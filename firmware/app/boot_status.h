@@ -39,6 +39,7 @@ extern volatile uint32_t firmware_motor_control_sync_last_result;
 extern volatile uint32_t firmware_motor_control_task_executions;
 extern volatile uint32_t firmware_receiver_initialization_result;
 extern volatile uint32_t firmware_receiver_service_last_result;
+extern volatile uint32_t firmware_receiver_arming_last_result;
 extern volatile uint32_t firmware_receiver_task_executions;
 extern volatile uint32_t firmware_receiver_freshness;
 extern volatile uint32_t firmware_receiver_uart_bytes;

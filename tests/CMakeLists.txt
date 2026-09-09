@@ -109,6 +109,26 @@ target_compile_options(receiver_failsafe_tests PRIVATE
 
 add_test(NAME receiver_failsafe COMMAND receiver_failsafe_tests)
 
+add_executable(receiver_arming_tests
+    receiver_arming_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/receiver_arming.c"
+)
+
+target_include_directories(receiver_arming_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+
+target_compile_options(receiver_arming_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME receiver_arming COMMAND receiver_arming_tests)
+
 add_executable(crsf_tests
     crsf_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/crsf/crsf_decoder.c"

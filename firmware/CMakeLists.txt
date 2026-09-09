@@ -157,6 +157,7 @@ add_executable(flight_firmware
     app/dshot_motor_backend.c
     app/motor_control.c
     app/motor_safety_policy.c
+    app/receiver_arming.c
     app/receiver_service.c
     app/fault.c
     app/fault_catalog.c

@@ -53,6 +53,8 @@ The `status` USB response includes `control_source`, and
 diagnostics. `NONE` is reported whenever the lifecycle is not `ARMED`, so the
 observable combinations stay simple.
 
-Milestone 3.1 wires USB arm and motor-test commands to `USB_TEST`. The
-`RECEIVER` source and common arm API are present for Milestone 3.2, but no
-receiver code arms or submits motor commands yet.
+Milestone 3.1 wires USB arm and motor-test commands to `USB_TEST`. Milestone
+3.2 uses the `RECEIVER` source only after a fresh, startup-low-qualified,
+low-throttle switch edge. It can release receiver ownership through the common
+disarm path, but it still cannot submit motor commands. See
+`receiver-arming.md`.

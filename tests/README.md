@@ -25,6 +25,12 @@ The native `receiver_freshness_tests` target verifies configuration bounds,
 unavailable data, inclusive fresh/lost boundaries, stale and lost transitions,
 clock rollback, and stable diagnostic names.
 
+The native `receiver_arming_tests` target verifies startup-low qualification,
+fresh/live input requirements, one-shot low-to-high arming, low-throttle
+admission, mandatory retoggle after rejection, receiver-owned disarming, USB
+source isolation, and rejected lifecycle operations. It uses fake common
+motor-control entry points and never constructs or submits a motor command.
+
 The native `crsf_tests` target verifies the tester-derived CRC-8/DVB-S2
 implementation, packed 16-channel decoding, signed link statistics, malformed
 frame accounting, parser recovery, and invalid-argument handling.

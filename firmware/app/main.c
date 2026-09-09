@@ -8,6 +8,7 @@
 #include "logging.h"
 #include "motor_control.h"
 #include "motor_control_internal.h"
+#include "receiver_arming.h"
 #include "receiver_failsafe.h"
 #include "receiver_service.h"
 #include "scheduler.h"
@@ -42,6 +43,7 @@ volatile uint32_t firmware_motor_control_sync_last_result = UINT32_MAX;
 volatile uint32_t firmware_motor_control_task_executions;
 volatile uint32_t firmware_receiver_initialization_result = UINT32_MAX;
 volatile uint32_t firmware_receiver_service_last_result = UINT32_MAX;
+volatile uint32_t firmware_receiver_arming_last_result = UINT32_MAX;
 volatile uint32_t firmware_receiver_task_executions;
 volatile uint32_t firmware_receiver_freshness =
     (uint32_t)RECEIVER_FRESHNESS_UNAVAILABLE;
@@ -67,6 +69,7 @@ fault_system_t firmware_fault_system;
 usb_command_processor_t firmware_usb_command_processor;
 static dshot_motor_backend_t firmware_dshot_motor_backend;
 receiver_service_t firmware_receiver_service;
+receiver_arming_t firmware_receiver_arming;
 receiver_failsafe_t firmware_receiver_failsafe;
 receiver_failsafe_decision_t firmware_receiver_failsafe_decision;
 static receiver_freshness_state_t logged_receiver_freshness =
@@ -88,7 +91,7 @@ static void motor_control_task(void *context)
 static void receiver_task(void *context)
 {
     receiver_service_t *service = context;
-    receiver_control_state_t control;
+    receiver_control_state_t control = {0};
     board_receiver_statistics_t statistics = {0};
     receiver_service_result_t result;
     receiver_failsafe_decision_t decision;
@@ -153,6 +156,31 @@ static void receiver_task(void *context)
     firmware_receiver_failsafe_transitions = decision.transition_count;
     firmware_receiver_stage_two_latched = decision.stage_two_latched;
     firmware_receiver_recovery_ready = decision.recovery_ready;
+
+    firmware_receiver_arming_last_result =
+        (uint32_t)receiver_arming_process(&firmware_receiver_arming,
+                                          &control,
+                                          &decision);
+    if (firmware_receiver_arming_last_result ==
+        (uint32_t)RECEIVER_ARMING_ARM_ACCEPTED) {
+        LOG_INFO(LOG_MODULE_RECEIVER, "receiver arm accepted");
+    } else if (firmware_receiver_arming_last_result ==
+               (uint32_t)RECEIVER_ARMING_DISARM_ACCEPTED) {
+        LOG_INFO(LOG_MODULE_RECEIVER, "receiver disarm accepted");
+    } else if (firmware_receiver_arming_last_result ==
+               (uint32_t)RECEIVER_ARMING_BLOCKED_THROTTLE) {
+        LOG_WARN(LOG_MODULE_RECEIVER,
+                 "receiver arm blocked: throttle not at stop");
+    } else if ((firmware_receiver_arming_last_result ==
+                (uint32_t)RECEIVER_ARMING_ARM_REJECTED) ||
+               (firmware_receiver_arming_last_result ==
+                (uint32_t)RECEIVER_ARMING_DISARM_REJECTED)) {
+        LOG_ERROR(LOG_MODULE_RECEIVER,
+                  "receiver lifecycle request rejected result=%s",
+                  receiver_arming_result_name(
+                      (receiver_arming_result_t)
+                          firmware_receiver_arming_last_result));
+    }
 
     if (decision.state != logged_receiver_failsafe_state) {
         if ((decision.state == RECEIVER_FAILSAFE_LIVE) ||
@@ -489,6 +517,7 @@ int main(void)
     receiver_normalization_config_t receiver_normalization_config;
     receiver_freshness_config_t receiver_freshness_config;
     receiver_failsafe_config_t receiver_failsafe_config;
+    receiver_arming_config_t receiver_arming_config;
     board_receiver_init_result_t receiver_init_result;
     bool usb_service_available = false;
     bool receiver_service_available = false;
@@ -584,6 +613,7 @@ int main(void)
         receiver_normalization_default_config(
             &receiver_normalization_config);
         receiver_failsafe_default_config(&receiver_failsafe_config);
+        receiver_arming_default_config(&receiver_arming_config);
         receiver_freshness_config = (receiver_freshness_config_t){
             .fresh_through_us = receiver_failsafe_config.stale_after_us,
             .lost_after_us = receiver_failsafe_config.loss_detected_after_us,
@@ -595,7 +625,9 @@ int main(void)
                                         &receiver_freshness_config) &&
             receiver_failsafe_initialize(&firmware_receiver_failsafe,
                                          &receiver_failsafe_config,
-                                         time_us())) {
+                                         time_us()) &&
+            receiver_arming_initialize(&firmware_receiver_arming,
+                                       &receiver_arming_config)) {
             receiver_service_available = true;
             LOG_INFO(LOG_MODULE_RECEIVER,
                      "UART4 CRSF receiver initialized");

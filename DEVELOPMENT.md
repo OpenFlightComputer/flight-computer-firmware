@@ -6,17 +6,41 @@ Phase 3 — open-loop receiver-to-motor integration.
 
 ## Current milestone
 
-Milestone 3.1 — exclusive motor-command source authority — implemented and
-awaiting owner review.
+Milestone 3.2 — safe receiver arming and disarming — implemented and awaiting
+owner review.
 
 ## Last completed milestone
 
-Milestone 2.6 — on-demand USB receiver inspection and physical flight-image RP1
-validation. The tester-proven parser, corrected circular-DMA accounting,
-receiver service, normalization, freshness, failsafe observation, and live host
-view are integrated without granting receiver motor authority.
+Milestone 3.1 — exclusive motor-command source authority. A successful arm
+latches `USB_TEST` or `RECEIVER`; wrong-source commands cannot replace the
+owner's retained command; disarm and every fail-closed stop path release
+authority.
 
 ## Current implementation status
+
+- Added a receiver arming interlock called by the existing 1 kHz receiver task
+  after normalization, freshness, and failsafe evaluation; no new scheduler
+  task or lifecycle state was added.
+- Required valid, fresh, `LIVE` input, a previously observed low arm switch, a
+  subsequent low-to-high edge, and normalized throttle at or below `0.001`
+  before requesting `motor_control_arm(RECEIVER)`.
+- Cleared arm qualification across stale/unavailable input and while another
+  source owns motor control. Startup-high, reconnect-high, and lowering
+  throttle while the switch remains high therefore cannot arm unexpectedly.
+- Routed a fresh low switch through the common disarm method only when the
+  receiver owns control. USB test ownership is isolated, and successful
+  disarm leaves `NONE` available for either source's next explicit arm.
+- Added bounded result/counter diagnostics and transition-only action logging.
+  Receiver motor-command submission remains deliberately absent until the
+  later mixer and producer milestones.
+- Added host coverage for configuration, startup-high rejection, safe
+  low-to-high arming, repeated frames, throttle rejection and retoggle,
+  freshness/failsafe reset, receiver disarming, USB isolation, and common
+  lifecycle rejection.
+- All 33 native tests and 48 host-tool tests pass. Debug and Release firmware
+  build with Arm GCC 15.3.1 and warnings as errors; Release uses 59,072 bytes
+  of Flash and 16,656 bytes of RAM. Physical switch validation and flashing
+  remain pending owner review.
 
 - Added a single `NONE`/`USB_TEST`/`RECEIVER` authority latch inside the
   existing motor-control safety owner; this is orthogonal metadata, not a new
@@ -32,8 +56,9 @@ view are integrated without granting receiver motor authority.
   emergency force-stop.
 - Added `control_source` to the USB `status` response and host coverage for
   exclusive ownership, rejection, handoff after disarm, admission failures,
-  and readable source names. Receiver arming and motor submission remain
-  deliberately disconnected until Milestone 3.2.
+  and readable source names. Milestone 3.2 now connects receiver arming;
+  receiver motor submission remains deliberately disconnected until the later
+  mixer and producer milestones.
 
 - Added a read-only `receiver` USB command which copies the receiver service's
   existing raw and normalized snapshots only when requested. It reports packet
@@ -483,9 +508,10 @@ can request nonzero throttle.
 
 ## Next step
 
-Review Milestone 3.1, then implement Milestone 3.2's receiver arming/disarming
-interlock. Receiver motor submission remains prohibited until the later mixer
-and producer milestones.
+Review Milestone 3.2, then implement Milestone 3.3's disarmed-only runtime
+motor-direction configuration and physically record each motor's direction.
+Receiver motor submission remains prohibited until the later mixer and
+producer milestones.
 Physical motor heartbeat-loss timing and per-motor direction configuration
 remain explicit pre-flight tasks; DShot600 remains deferred.
 
