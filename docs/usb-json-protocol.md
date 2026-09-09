@@ -56,7 +56,7 @@ accepted command is a 100 ms lease: without a fresh accepted request, the
 Examples, each followed by one newline:
 
 ```json
-{"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","uptime_us":123456,"firmware_version":"0.1.0","build_id":"5db525a"}
+{"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","control_source":"NONE","uptime_us":123456,"firmware_version":"0.1.0","build_id":"5db525a"}
 {"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
 {"type":"response","request_id":44,"command":"receiver","ok":true,"available":true,"sequence":7,"age_us":1250,"freshness":"FRESH","channels":[174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189],"normalized":{"roll":-0.500000,"pitch":0.250000,"yaw":0.000000,"throttle":1.000000,"arm":true},"failsafe":{"state":"LIVE","action":"LIVE","stage_two_latched":false,"recovery_ready":false},"link_statistics_present":true,"uplink_rssi_dbm":-42,"uplink_link_quality_percent":99,"uplink_snr_db":8,"uart_bytes":135014,"valid_frames":5000,"crc_errors":0,"framing_errors":0,"dma_overruns":0,"dma_bytes_dropped":0}
 {"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
@@ -102,6 +102,11 @@ Git `build_id`. A clean build uses a seven-character commit such as `5db525a`;
 an image built with local changes uses `5db525a-dirty`. These fields identify
 the exact image for diagnostics, but they are not a protocol-version or
 compatibility guarantee.
+
+`control_source` is `NONE`, `USB_TEST`, or `RECEIVER`. A successful USB arm
+selects `USB_TEST`, so only USB motor-test commands can renew output until
+disarm. Commands from another source cannot replace the retained command.
+Disarm and all fail-safe stop paths remain source-independent.
 
 ## Log events
 

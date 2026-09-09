@@ -20,6 +20,10 @@ static size_t captured_length;
 static size_t write_count;
 static uint64_t current_time_us;
 static motor_control_submit_result_t motor_submit_result;
+static motor_control_arm_result_t motor_arm_result;
+static motor_control_disarm_result_t motor_disarm_result;
+static motor_control_source_t active_motor_source;
+static system_state_machine_t *motor_state_machine;
 static motor_command_t captured_motor_command;
 static uint32_t motor_submit_count;
 static bool motor_ready_for_arm;
@@ -29,12 +33,68 @@ static bool receiver_inspection_read_result;
 static uint32_t receiver_inspection_read_count;
 
 motor_control_submit_result_t motor_control_submit(
+    motor_control_source_t source,
     const motor_command_t *command)
 {
     assert(command != NULL);
+    if (source != active_motor_source) {
+        return MOTOR_CONTROL_SUBMIT_BLOCKED_SOURCE;
+    }
     captured_motor_command = *command;
     motor_submit_count++;
     return motor_submit_result;
+}
+
+motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
+{
+    if (motor_arm_result != MOTOR_CONTROL_ARM_ACCEPTED) {
+        return motor_arm_result;
+    }
+    if ((motor_state_machine == NULL) ||
+        (system_state_machine_handle_event(
+             motor_state_machine,
+             SYSTEM_STATE_EVENT_ARM_REQUESTED) !=
+         SYSTEM_STATE_TRANSITION_OK)) {
+        return MOTOR_CONTROL_ARM_BLOCKED_STATE;
+    }
+    active_motor_source = source;
+    return MOTOR_CONTROL_ARM_ACCEPTED;
+}
+
+motor_control_disarm_result_t motor_control_disarm(void)
+{
+    if (motor_disarm_result != MOTOR_CONTROL_DISARM_ACCEPTED) {
+        return motor_disarm_result;
+    }
+    if ((motor_state_machine == NULL) ||
+        (system_state_machine_handle_event(
+             motor_state_machine,
+             SYSTEM_STATE_EVENT_DISARM_REQUESTED) !=
+         SYSTEM_STATE_TRANSITION_OK)) {
+        return MOTOR_CONTROL_DISARM_BLOCKED_STATE;
+    }
+    active_motor_source = MOTOR_CONTROL_SOURCE_NONE;
+    return MOTOR_CONTROL_DISARM_ACCEPTED;
+}
+
+motor_control_source_t motor_control_active_source(void)
+{
+    return active_motor_source;
+}
+
+const char *motor_control_source_name(motor_control_source_t source)
+{
+    switch (source) {
+    case MOTOR_CONTROL_SOURCE_NONE:
+        return "NONE";
+    case MOTOR_CONTROL_SOURCE_USB_TEST:
+        return "USB_TEST";
+    case MOTOR_CONTROL_SOURCE_RECEIVER:
+        return "RECEIVER";
+    case MOTOR_CONTROL_SOURCE_COUNT:
+        break;
+    }
+    return "UNKNOWN";
 }
 
 bool motor_control_ready_for_arm(void)
@@ -116,6 +176,10 @@ static void reset_fakes(void)
     write_count = 0U;
     current_time_us = UINT64_C(123456);
     motor_submit_result = MOTOR_CONTROL_SUBMIT_ACCEPTED;
+    motor_arm_result = MOTOR_CONTROL_ARM_ACCEPTED;
+    motor_disarm_result = MOTOR_CONTROL_DISARM_ACCEPTED;
+    active_motor_source = MOTOR_CONTROL_SOURCE_NONE;
+    motor_state_machine = NULL;
     motor_command_initialize(&captured_motor_command);
     motor_submit_count = 0U;
     motor_ready_for_arm = true;
@@ -143,6 +207,7 @@ static void initialize_system(usb_command_processor_t *processor,
     };
 
     system_state_machine_initialize(state_machine);
+    motor_state_machine = state_machine;
     assert(fault_system_initialize(fault_system,
                                    state_machine,
                                    definitions,
@@ -222,7 +287,8 @@ static void status_and_health_report_current_summary(void)
     static const char status[] =
         "{\"type\":\"response\",\"request_id\":10,"
         "\"command\":\"status\",\"ok\":true,"
-        "\"state\":\"DISARMED\",\"uptime_us\":123456,"
+        "\"state\":\"DISARMED\",\"control_source\":\"NONE\","
+        "\"uptime_us\":123456,"
         "\"firmware_version\":\"0.1.0\","
         "\"build_id\":\"test-build\"}\n";
     static const char health[] =
@@ -273,6 +339,7 @@ static void arm_and_disarm_use_the_state_machine(void)
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(state_machine.current == SYSTEM_STATE_ARMED);
+    assert(active_motor_source == MOTOR_CONTROL_SOURCE_USB_TEST);
     assert(strstr(captured_response, "\"ok\":true") != NULL);
     assert(strstr(captured_response, "\"request_id\":20") != NULL);
     assert(processor.last_transition_valid);
@@ -284,6 +351,7 @@ static void arm_and_disarm_use_the_state_machine(void)
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(state_machine.current == SYSTEM_STATE_DISARMED);
+    assert(active_motor_source == MOTOR_CONTROL_SOURCE_NONE);
     assert(processor.statistics.transition_accepted_count == 2U);
 }
 
@@ -314,6 +382,7 @@ static void unknown_health_rejects_arm_before_the_state_machine(void)
     initialize_system(&processor, &state_machine, &fault_system);
     enter_disarmed(&state_machine);
     fault_system.dropped_record_count = 1U;
+    motor_arm_result = MOTOR_CONTROL_ARM_BLOCKED_HEALTH;
 
     queue_input("{\"type\":\"command\",\"request_id\":31,"
                 "\"command\":\"arm\"}");
@@ -328,6 +397,7 @@ static void unknown_health_rejects_arm_before_the_state_machine(void)
     assert(logging_queue_count() == 0U);
 
     fault_system.dropped_record_count = 0U;
+    motor_arm_result = MOTOR_CONTROL_ARM_ACCEPTED;
     queue_input("{\"type\":\"command\",\"request_id\":32,"
                 "\"command\":\"arm\"}");
     assert(usb_command_processor_process_once(&processor) ==
@@ -345,6 +415,7 @@ static void motor_preparation_rejects_arm_before_the_state_machine(void)
     initialize_system(&processor, &state_machine, &fault_system);
     enter_disarmed(&state_machine);
     motor_ready_for_arm = false;
+    motor_arm_result = MOTOR_CONTROL_ARM_BLOCKED_PREPARATION;
 
     queue_input("{\"type\":\"command\",\"request_id\":33,"
                 "\"command\":\"arm\"}");
@@ -356,6 +427,7 @@ static void motor_preparation_rejects_arm_before_the_state_machine(void)
            SYSTEM_STATE_TRANSITION_REJECTED);
 
     motor_ready_for_arm = true;
+    motor_arm_result = MOTOR_CONTROL_ARM_ACCEPTED;
     queue_input("{\"type\":\"command\",\"request_id\":34,"
                 "\"command\":\"arm\"}");
     assert(usb_command_processor_process_once(&processor) ==
@@ -372,9 +444,8 @@ static void motor_test_is_bounded_and_uses_the_motor_gate(void)
     reset_fakes();
     initialize_system(&processor, &state_machine, &fault_system);
     enter_disarmed(&state_machine);
-    assert(system_state_machine_handle_event(
-               &state_machine, SYSTEM_STATE_EVENT_ARM_REQUESTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST) ==
+           MOTOR_CONTROL_ARM_ACCEPTED);
 
     queue_input("{\"type\":\"command\",\"request_id\":33,"
                 "\"command\":\"motor_test\",\"motor\":4,"
@@ -391,6 +462,16 @@ static void motor_test_is_bounded_and_uses_the_motor_gate(void)
     assert(captured_motor_command.throttle[3] < 0.0201f);
     assert(strstr(captured_response, "\"ok\":true") != NULL);
     assert(strstr(captured_response, "\"throttle\":0.020000") != NULL);
+
+    active_motor_source = MOTOR_CONTROL_SOURCE_RECEIVER;
+    queue_input("{\"type\":\"command\",\"request_id\":37,"
+                "\"command\":\"motor_test\",\"motor\":1,"
+                "\"throttle\":0.02}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(motor_submit_count == 1U);
+    assert(strstr(captured_response, "control_source_rejected") != NULL);
+    active_motor_source = MOTOR_CONTROL_SOURCE_USB_TEST;
 
     queue_input("{\"type\":\"command\",\"request_id\":34,"
                 "\"command\":\"motor_test\",\"motor\":0,"
@@ -418,9 +499,9 @@ static void motor_test_is_bounded_and_uses_the_motor_gate(void)
     assert(motor_submit_count == 3U);
     assert(strstr(captured_response,
                   "\"error\":\"motor_output_error\"") != NULL);
-    assert(processor.statistics.motor_test_count == 4U);
+    assert(processor.statistics.motor_test_count == 5U);
     assert(processor.statistics.motor_test_accepted_count == 2U);
-    assert(processor.statistics.motor_test_rejected_count == 2U);
+    assert(processor.statistics.motor_test_rejected_count == 3U);
 }
 
 static void invalid_unsupported_and_busy_responses_are_bounded(void)

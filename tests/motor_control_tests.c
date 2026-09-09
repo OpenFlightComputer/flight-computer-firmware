@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #define COMMAND_TIMEOUT_US UINT64_C(100000)
 #define TEST_WARNING_FAULT_ID UINT16_C(100)
@@ -126,19 +127,28 @@ static void enter_disarmed(system_state_machine_t *state_machine)
 
 static void enter_armed(system_state_machine_t *state_machine)
 {
-    assert(system_state_machine_handle_event(
-               state_machine,
-               SYSTEM_STATE_EVENT_ARM_REQUESTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
+    assert(state_machine->current == SYSTEM_STATE_DISARMED);
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST) ==
+           MOTOR_CONTROL_ARM_ACCEPTED);
+    assert(state_machine->current == SYSTEM_STATE_ARMED);
+    assert(motor_control_active_source() ==
+           MOTOR_CONTROL_SOURCE_USB_TEST);
 }
 
 static void leave_failsafe(system_state_machine_t *state_machine)
 {
     assert(state_machine->current == SYSTEM_STATE_FAILSAFE);
-    assert(system_state_machine_handle_event(
-               state_machine,
-               SYSTEM_STATE_EVENT_DISARM_REQUESTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
+    assert(state_machine->current == SYSTEM_STATE_DISARMED);
+    assert(motor_control_active_source() == MOTOR_CONTROL_SOURCE_NONE);
+    assert(strcmp(motor_control_source_name(MOTOR_CONTROL_SOURCE_NONE),
+                  "NONE") == 0);
+    assert(strcmp(motor_control_source_name(MOTOR_CONTROL_SOURCE_USB_TEST),
+                  "USB_TEST") == 0);
+    assert(strcmp(motor_control_source_name(MOTOR_CONTROL_SOURCE_RECEIVER),
+                  "RECEIVER") == 0);
+    assert(strcmp(motor_control_source_name(MOTOR_CONTROL_SOURCE_COUNT),
+                  "UNKNOWN") == 0);
 }
 
 static void prepare_arming(system_state_machine_t *state_machine,
@@ -202,7 +212,11 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
     assert(!motor_control_is_initialized());
     assert(!motor_control_outputs_stopped());
     assert(!motor_control_ready_for_arm());
-    assert(motor_control_submit(&command) ==
+    assert(motor_control_active_source() == MOTOR_CONTROL_SOURCE_NONE);
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST) ==
+           MOTOR_CONTROL_ARM_NOT_INITIALIZED);
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_NOT_INITIALIZED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
            MOTOR_CONTROL_SUBMIT_NOT_INITIALIZED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_NOT_INITIALIZED);
     assert(motor_control_force_stop() == MOTOR_CONTROL_STOP_NOT_INITIALIZED);
@@ -283,25 +297,26 @@ static void successful_initialization_is_stopped_and_singleton(
            MOTOR_CONTROL_INIT_ALREADY_INITIALIZED);
 }
 
-static void nonzero_commands_are_blocked_before_stop_preparation(
+static void arming_is_blocked_before_stop_preparation(
     system_state_machine_t *state_machine,
     fake_backend_t *fake)
 {
-    const motor_command_t command =
-        make_command(0.1f, 0.0f, 0.0f, 0.0f, current_time_us);
-
-    enter_armed(state_machine);
-    assert(motor_control_submit(&command) ==
-           MOTOR_CONTROL_SUBMIT_BLOCKED_PREPARATION);
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_NONE) ==
+           MOTOR_CONTROL_ARM_INVALID_SOURCE);
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_COUNT) ==
+           MOTOR_CONTROL_ARM_INVALID_SOURCE);
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST) ==
+           MOTOR_CONTROL_ARM_BLOCKED_PREPARATION);
+    assert(state_machine->current == SYSTEM_STATE_DISARMED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
     assert(fake->last_command.throttle[0] == 0.0f);
     assert(fake->last_command.throttle[1] == 0.0f);
     assert(fake->last_command.throttle[2] == 0.0f);
     assert(fake->last_command.throttle[3] == 0.0f);
-    assert(system_state_machine_handle_event(
-               state_machine,
-               SYSTEM_STATE_EVENT_DISARM_REQUESTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
+    current_time_us += MOTOR_CONTROL_ARMING_PREPARATION_US;
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    enter_armed(state_machine);
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
 }
 
 static void mapping_is_private_and_requires_disarmed_output(
@@ -320,10 +335,49 @@ static void mapping_is_private_and_requires_disarmed_output(
     enter_armed(state_machine);
     assert(motor_control_configure_mapping(reverse) ==
            MOTOR_CONTROL_MAPPING_CONFIGURE_UNSAFE_STATE);
-    assert(system_state_machine_handle_event(
-               state_machine,
-               SYSTEM_STATE_EVENT_DISARM_REQUESTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
+}
+
+static void command_source_is_exclusive_and_hands_off_after_disarm(
+    system_state_machine_t *state_machine,
+    fake_backend_t *fake)
+{
+    const motor_command_t owner_command =
+        make_command(0.1f, 0.2f, 0.3f, 0.4f, current_time_us);
+    const motor_command_t other_command =
+        make_command(0.9f, 0.9f, 0.9f, 0.9f, current_time_us);
+
+    enter_armed(state_machine);
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_RECEIVER) ==
+           MOTOR_CONTROL_ARM_BLOCKED_STATE);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST,
+                                &owner_command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_RECEIVER,
+                                &other_command) ==
+           MOTOR_CONTROL_SUBMIT_BLOCKED_SOURCE);
+    assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    assert(fake->last_command.throttle[0] == 0.4f);
+    assert(fake->last_command.throttle[1] == 0.3f);
+    assert(fake->last_command.throttle[2] == 0.2f);
+    assert(fake->last_command.throttle[3] == 0.1f);
+
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
+    assert(motor_control_active_source() == MOTOR_CONTROL_SOURCE_NONE);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST,
+                                &owner_command) ==
+           MOTOR_CONTROL_SUBMIT_BLOCKED_STATE);
+
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_RECEIVER) ==
+           MOTOR_CONTROL_ARM_ACCEPTED);
+    assert(motor_control_active_source() == MOTOR_CONTROL_SOURCE_RECEIVER);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST,
+                                &owner_command) ==
+           MOTOR_CONTROL_SUBMIT_BLOCKED_SOURCE);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_RECEIVER,
+                                &owner_command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
 }
 
 static void allowed_health_passes_fresh_commands_with_mapping(
@@ -340,7 +394,8 @@ static void allowed_health_passes_fresh_commands_with_mapping(
     current_time_us += UINT64_C(500000);
     command = make_command(0.1f, 0.2f, 0.3f, 0.4f, current_time_us);
     submits_before = fake->submit_count;
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(fake->submit_count == submits_before);
     assert(!motor_control_outputs_stopped());
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
@@ -355,19 +410,18 @@ static void allowed_health_passes_fresh_commands_with_mapping(
                                TEST_WARNING_FAULT_ID,
                                false,
                                0U) == FAULT_REPORT_RECORDED);
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(fault_system_report(fault_system,
                                FAULT_ID_LOGGING_CLOCK_ATTACHMENT,
                                false,
                                0U) == FAULT_REPORT_RECORDED);
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
 
     submits_before = fake->submit_count;
-    assert(system_state_machine_handle_event(
-               state_machine,
-               SYSTEM_STATE_EVENT_DISARM_REQUESTED) ==
-           SYSTEM_STATE_TRANSITION_OK);
-    assert(motor_control_submit(&command) ==
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
            MOTOR_CONTROL_SUBMIT_BLOCKED_STATE);
     assert(fake->submit_count == submits_before);
     assert(!motor_control_outputs_stopped());
@@ -385,13 +439,15 @@ static void invalid_and_stale_commands_enter_failsafe(
     enter_armed(state_machine);
     current_time_us = UINT64_C(700000);
     command = make_command(0.2f, 0.2f, 0.2f, 0.2f, current_time_us);
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
     command.throttle[2] = NAN;
     stop_before = fake->stop_count;
-    assert(motor_control_submit(&command) ==
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
            MOTOR_CONTROL_SUBMIT_INVALID_COMMAND);
     assert(state_machine->current == SYSTEM_STATE_FAILSAFE);
+    assert(motor_control_active_source() == MOTOR_CONTROL_SOURCE_NONE);
     assert(fake->stop_count == stop_before + 1U);
     assert(motor_control_outputs_stopped());
 
@@ -400,7 +456,7 @@ static void invalid_and_stale_commands_enter_failsafe(
     enter_armed(state_machine);
     command = make_command(0.3f, 0.3f, 0.3f, 0.3f,
                            current_time_us - COMMAND_TIMEOUT_US - 1U);
-    assert(motor_control_submit(&command) ==
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
            MOTOR_CONTROL_SUBMIT_STALE_COMMAND);
     assert(state_machine->current == SYSTEM_STATE_FAILSAFE);
     assert(motor_control_outputs_stopped());
@@ -421,7 +477,8 @@ static void periodic_service_repeats_the_latest_fresh_command(
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
     submits_before = fake->submit_count;
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(fake->submit_count == submits_before);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
     assert(fake->submit_count == submits_before + 1U);
@@ -434,7 +491,8 @@ static void periodic_service_repeats_the_latest_fresh_command(
 
     current_time_us += UINT64_C(1000);
     command = make_command(0.5f, 0.5f, 0.5f, 0.5f, current_time_us);
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(fake->submit_count == submits_before + 2U);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
     assert(fake->submit_count == submits_before + 3U);
@@ -465,13 +523,15 @@ static void stuck_busy_output_becomes_critical(
     current_time_us = UINT64_C(1050000);
     command = make_command(0.5f, 0.5f, 0.5f, 0.5f, current_time_us);
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
 
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_BUSY;
     current_time_us += MOTOR_CONTROL_OUTPUT_COMPLETION_TIMEOUT_US / 2U;
     command = make_command(0.6f, 0.6f, 0.6f, 0.6f, current_time_us);
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     current_time_us +=
         (MOTOR_CONTROL_OUTPUT_COMPLETION_TIMEOUT_US / 2U) - 1U;
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
@@ -493,11 +553,18 @@ static void unknown_health_stops_and_enters_failsafe(
 
     leave_failsafe(state_machine);
     prepare_arming(state_machine, fake);
+    fault_system->dropped_record_count = 1U;
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST) ==
+           MOTOR_CONTROL_ARM_BLOCKED_HEALTH);
+    assert(state_machine->current == SYSTEM_STATE_DISARMED);
+    assert(motor_control_active_source() == MOTOR_CONTROL_SOURCE_NONE);
+    fault_system->dropped_record_count = 0U;
     enter_armed(state_machine);
     current_time_us = UINT64_C(1100000);
     command = make_command(0.6f, 0.6f, 0.6f, 0.6f, current_time_us);
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
 
     fault_system->dropped_record_count = 1U;
@@ -510,9 +577,10 @@ static void unknown_health_stops_and_enters_failsafe(
     leave_failsafe(state_machine);
     prepare_arming(state_machine, fake);
     enter_armed(state_machine);
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     fault_system->dropped_record_count = 1U;
-    assert(motor_control_submit(&command) ==
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
            MOTOR_CONTROL_SUBMIT_BLOCKED_HEALTH);
     assert(state_machine->current == SYSTEM_STATE_FAILSAFE);
     assert(motor_control_outputs_stopped());
@@ -532,7 +600,8 @@ static void backend_and_stop_failures_become_critical(
     current_time_us = UINT64_C(1300000);
     command = make_command(0.7f, 0.7f, 0.7f, 0.7f, current_time_us);
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ERROR;
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_BACKEND_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(fault_system,
@@ -545,7 +614,8 @@ static void backend_and_stop_failures_become_critical(
     enter_armed(state_machine);
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
     command = make_command(0.7f, 0.7f, 0.7f, 0.7f, current_time_us);
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
     fake->stop_result = MOTOR_OUTPUT_BACKEND_STOP_ERROR;
     assert(motor_control_force_stop() == MOTOR_CONTROL_STOP_ERROR);
@@ -571,7 +641,8 @@ static void asynchronous_backend_error_becomes_critical(
     fake->submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED;
     fake->stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED;
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE;
-    assert(motor_control_submit(&command) == MOTOR_CONTROL_SUBMIT_ACCEPTED);
+    assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST, &command) ==
+           MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
 
     fake->status_result = MOTOR_OUTPUT_BACKEND_STATUS_ERROR;
@@ -603,9 +674,11 @@ int main(void)
         &state_machine, &fault_system, &fake);
     successful_initialization_is_stopped_and_singleton(
         &state_machine, &fault_system, &fake);
-    nonzero_commands_are_blocked_before_stop_preparation(
+    arming_is_blocked_before_stop_preparation(
         &state_machine, &fake);
     mapping_is_private_and_requires_disarmed_output(&state_machine);
+    command_source_is_exclusive_and_hands_off_after_disarm(&state_machine,
+                                                           &fake);
     allowed_health_passes_fresh_commands_with_mapping(
         &state_machine, &fault_system, &fake);
     invalid_and_stale_commands_enter_failsafe(&state_machine, &fake);

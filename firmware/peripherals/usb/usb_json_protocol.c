@@ -365,6 +365,7 @@ bool usb_json_build_transition_response(usb_json_command_t command,
 }
 
 bool usb_json_build_status_response(const char *state,
+                                    const char *control_source,
                                     uint32_t request_id,
                                     uint64_t uptime_us,
                                     const char *firmware_version,
@@ -377,7 +378,8 @@ bool usb_json_build_status_response(const char *state,
     size_t uptime_length;
     int written;
 
-    if ((state == NULL) || (firmware_version == NULL) ||
+    if ((state == NULL) || (control_source == NULL) ||
+        (firmware_version == NULL) ||
         (build_id == NULL) || (destination == NULL) || (capacity == 0U) ||
         (length == NULL)) {
         return false;
@@ -397,11 +399,13 @@ bool usb_json_build_status_response(const char *state,
                        "{\"type\":\"response\",\"request_id\":%lu,"
                        "\"command\":\"status\","
                        "\"ok\":true,\"state\":\"%s\","
+                       "\"control_source\":\"%s\","
                        "\"uptime_us\":%s,"
                        "\"firmware_version\":\"%s\","
                        "\"build_id\":\"%s\"}\n",
                        (unsigned long)request_id,
                        state,
+                       control_source,
                        uptime,
                        firmware_version,
                        build_id);

@@ -90,6 +90,23 @@ level climb. After stabilized attitude control exists, determine a safe
 vehicle-specific hover/light-climb throttle from physical testing and replace
 the Stage 1 fallback with a validated level/stabilized recovery behavior.
 
+## Phase 3 — Open-loop receiver-to-motor integration
+
+1. Exclusive motor-command source authority — implemented for review; a
+   successful arm latches `USB_TEST` or `RECEIVER`, and every stop path releases
+   it without adding lifecycle states.
+2. Safe receiver arming and disarming with startup-low and low-throttle
+   interlocks.
+3. Runtime-safe motor direction configuration and physical direction record.
+4. Hardware-independent open-loop quad-X mixer.
+5. Dedicated receiver-control producer task through the existing motor gate.
+6. Receiver-loss policy authority and explicit Stage 2 recovery.
+7. End-to-end control/authority USB inspection.
+8. Propeller-free receiver-to-motor and loss/recovery validation.
+
+Phase 3 does not provide attitude stabilization or flight readiness. Those
+require IMU-based estimation and closed-loop control in Phase 4.
+
 ## Later phases
 
 | Phase | Objective |

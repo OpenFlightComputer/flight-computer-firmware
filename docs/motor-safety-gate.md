@@ -11,9 +11,9 @@ task without exposing raw hardware access to command producers.
 USB / future receiver / future flight controller
                        |
                        v
-          motor_control_submit()
+       motor_control_submit(source, command)
                        |
-        state + health + validity + freshness
+ source + state + health + validity + freshness
                        |
         private logical-to-physical mapping + retained command
                        |
@@ -32,8 +32,9 @@ USB / future receiver / future flight controller
 
 `motor_control.c` owns the only production `motor_output_t`, current motor
 mapping, retained command, clock and timeout. None has a public getter.
-The public API accepts logical commands, requests an unconditional emergency
-stop, periodically synchronizes safety state, and configures mapping only while
+The public API atomically arms with a named source, accepts source-tagged
+logical commands, requests source-independent disarm or emergency stop,
+periodically synchronizes safety state, and configures mapping only while
 disarmed. Mapping remains safe while stop frames stream because all four
 physical throttle values are zero.
 
@@ -54,13 +55,18 @@ A command passes only when all of these are true:
 
 1. motor control initialized successfully and its initial force-stop was
    accepted;
-2. lifecycle state is exactly `ARMED`;
-3. five seconds of periodic DShot stop frames have completed since startup or
+2. the command source is the source that successfully armed motor control;
+3. lifecycle state is exactly `ARMED`;
+4. five seconds of periodic DShot stop frames have completed since startup or
    the most recent emergency hardware stop;
-4. health is `OK`, `WARNING`, or `DEGRADED`;
-5. the complete four-motor command is structurally valid; and
-6. its timestamp is not in the future and is within the configured inclusive
+5. health is `OK`, `WARNING`, or `DEGRADED`;
+6. the complete four-motor command is structurally valid; and
+7. its timestamp is not in the future and is within the configured inclusive
    freshness timeout.
+
+A wrong-source command is rejected without modifying the retained command.
+Disarm, failsafe, faults, and force-stop are never blocked by source ownership.
+See `control-authority.md` for the complete handoff contract.
 
 The command is recreated through `motor_command_create()` before use, then
 mapped as one complete snapshot. This repeats finite/range/near-zero checks at
@@ -83,7 +89,8 @@ requires an explicit disarm before another arm request.
 
 ## Command acceptance and periodic output
 
-`motor_control_submit()` validates and maps one complete command, then
+`motor_control_submit()` first verifies its source, then validates and maps one
+complete command, then
 atomically replaces the retained physical-order command. Acceptance renews the
 command lease but does not submit directly to the backend. Command-source and
 USB response timing therefore cannot determine the DShot frame cadence.

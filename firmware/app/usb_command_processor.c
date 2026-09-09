@@ -69,6 +69,8 @@ static const char *motor_test_error(motor_control_submit_result_t result)
     switch (result) {
     case MOTOR_CONTROL_SUBMIT_BLOCKED_STATE:
         return "state_rejected";
+    case MOTOR_CONTROL_SUBMIT_BLOCKED_SOURCE:
+        return "control_source_rejected";
     case MOTOR_CONTROL_SUBMIT_BLOCKED_PREPARATION:
         return "motor_not_ready";
     case MOTOR_CONTROL_SUBMIT_BLOCKED_HEALTH:
@@ -116,7 +118,8 @@ static bool build_motor_test_response(
         MOTOR_COMMAND_CREATE_OK) {
         result = MOTOR_CONTROL_SUBMIT_INVALID_COMMAND;
     } else {
-        result = motor_control_submit(&command);
+        result = motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST,
+                                      &command);
     }
 
     if (result == MOTOR_CONTROL_SUBMIT_ACCEPTED) {
@@ -145,6 +148,7 @@ static bool build_command_response(usb_command_processor_t *processor,
         saturating_increment(&processor->statistics.status_count);
         return usb_json_build_status_response(
             system_state_name(processor->state_machine->current),
+            motor_control_source_name(motor_control_active_source()),
             request->request_id,
             processor->clock(),
             processor->firmware_version,
@@ -189,25 +193,32 @@ static bool build_command_response(usb_command_processor_t *processor,
     case USB_JSON_COMMAND_ARM:
     case USB_JSON_COMMAND_DISARM: {
         const system_state_t previous = processor->state_machine->current;
-        const system_state_event_t event =
-            request->command == USB_JSON_COMMAND_ARM
-                ? SYSTEM_STATE_EVENT_ARM_REQUESTED
-                : SYSTEM_STATE_EVENT_DISARM_REQUESTED;
-        const bool arm_health_rejected =
-            (request->command == USB_JSON_COMMAND_ARM) &&
-            !motor_fault_state_allows_arm(processor->fault_system);
-        const bool arm_motor_not_ready =
-            (request->command == USB_JSON_COMMAND_ARM) &&
-            (processor->state_machine->current == SYSTEM_STATE_DISARMED) &&
-            !arm_health_rejected && !motor_control_ready_for_arm();
+        motor_control_arm_result_t arm_result =
+            MOTOR_CONTROL_ARM_BLOCKED_STATE;
+        motor_control_disarm_result_t disarm_result =
+            MOTOR_CONTROL_DISARM_BLOCKED_STATE;
+        const bool arm_requested = request->command == USB_JSON_COMMAND_ARM;
+        const char *error = "transition_rejected";
 
-        if (arm_health_rejected || arm_motor_not_ready) {
+        if (arm_requested) {
+            arm_result = motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST);
+            if (arm_result == MOTOR_CONTROL_ARM_BLOCKED_HEALTH) {
+                error = "health_rejected";
+            } else if (arm_result == MOTOR_CONTROL_ARM_BLOCKED_PREPARATION) {
+                error = "motor_not_ready";
+            } else if (arm_result == MOTOR_CONTROL_ARM_INVALID_SOURCE) {
+                error = "control_source_rejected";
+            }
             processor->last_transition_result =
-                SYSTEM_STATE_TRANSITION_REJECTED;
+                arm_result == MOTOR_CONTROL_ARM_ACCEPTED
+                    ? SYSTEM_STATE_TRANSITION_OK
+                    : SYSTEM_STATE_TRANSITION_REJECTED;
         } else {
+            disarm_result = motor_control_disarm();
             processor->last_transition_result =
-                system_state_machine_handle_event(processor->state_machine,
-                                                  event);
+                disarm_result == MOTOR_CONTROL_DISARM_ACCEPTED
+                    ? SYSTEM_STATE_TRANSITION_OK
+                    : SYSTEM_STATE_TRANSITION_REJECTED;
         }
         processor->last_transition_valid = true;
 
@@ -235,10 +246,7 @@ static bool build_command_response(usb_command_processor_t *processor,
             request->request_id,
             false,
             system_state_name(processor->state_machine->current),
-            arm_health_rejected ? "health_rejected"
-                                : (arm_motor_not_ready
-                                       ? "motor_not_ready"
-                                       : "transition_rejected"),
+            error,
             processor->pending_response,
             sizeof(processor->pending_response),
             &processor->pending_response_length);

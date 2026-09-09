@@ -2,12 +2,12 @@
 
 ## Current phase
 
-Phase 2 — ELRS/CRSF receiver input — complete. Phase 3 planning is next.
+Phase 3 — open-loop receiver-to-motor integration.
 
 ## Current milestone
 
-Phase 3 planning — define the open-loop receiver-to-motor command path and its
-authority/safety boundaries before implementation.
+Milestone 3.1 — exclusive motor-command source authority — implemented and
+awaiting owner review.
 
 ## Last completed milestone
 
@@ -17,6 +17,23 @@ receiver service, normalization, freshness, failsafe observation, and live host
 view are integrated without granting receiver motor authority.
 
 ## Current implementation status
+
+- Added a single `NONE`/`USB_TEST`/`RECEIVER` authority latch inside the
+  existing motor-control safety owner; this is orthogonal metadata, not a new
+  lifecycle state machine.
+- Centralized production arming in `motor_control_arm()`: source validation,
+  lifecycle, health, and stop-frame preparation must all pass before the
+  source is latched.
+- Tagged every USB motor-test submission as `USB_TEST`. Commands from a source
+  that did not arm are rejected without invalidating or replacing the active
+  owner's retained command.
+- Added source-independent disarm and fail-closed authority clearing on
+  disarm, failsafe, non-armed synchronization, and successful or failed
+  emergency force-stop.
+- Added `control_source` to the USB `status` response and host coverage for
+  exclusive ownership, rejection, handoff after disarm, admission failures,
+  and readable source names. Receiver arming and motor submission remain
+  deliberately disconnected until Milestone 3.2.
 
 - Added a read-only `receiver` USB command which copies the receiver service's
   existing raw and normalized snapshots only when requested. It reports packet
@@ -466,10 +483,9 @@ can request nonzero throttle.
 
 ## Next step
 
-Plan Phase 3's open-loop receiver-to-motor integration. Define the command
-producer, arming and freshness admission, staged-loss authority, control-to-motor
-mapping, and propeller-free acceptance sequence before receiver data can gain
-motor or lifecycle authority.
+Review Milestone 3.1, then implement Milestone 3.2's receiver arming/disarming
+interlock. Receiver motor submission remains prohibited until the later mixer
+and producer milestones.
 Physical motor heartbeat-loss timing and per-motor direction configuration
 remain explicit pre-flight tasks; DShot600 remains deferred.
 

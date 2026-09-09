@@ -52,6 +52,7 @@ bool usb_json_build_motor_test_response(uint32_t request_id,
                                         size_t capacity,
                                         size_t *length);
 bool usb_json_build_status_response(const char *state,
+                                    const char *control_source,
                                     uint32_t request_id,
                                     uint64_t uptime_us,
                                     const char *firmware_version,

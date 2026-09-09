@@ -79,7 +79,7 @@ assert_token_is_private("dshot_timing_build_dma_buffer" ${DSHOT_TIMING_FILES})
 set(ARM_EVENT_FILES
     firmware/app/system_state.c
     firmware/app/system_state.h
-    firmware/app/usb_command_processor.c
+    firmware/app/motor_control.c
 )
 
 assert_token_is_private("SYSTEM_STATE_EVENT_ARM_REQUESTED" ${ARM_EVENT_FILES})

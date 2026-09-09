@@ -14,6 +14,7 @@ typedef struct {
     motor_output_t physical_output;
     motor_mapping_t mapping;
     motor_command_t retained_command;
+    motor_control_source_t active_source;
     uint64_t transfer_started_at_us;
     uint64_t stop_stream_started_at_us;
     bool transfer_in_progress;
@@ -80,6 +81,8 @@ static bool enter_failsafe_if_armed(void)
         control.state_machine,
         SYSTEM_STATE_EVENT_FAILSAFE_DETECTED);
     if (transition_result == SYSTEM_STATE_TRANSITION_OK) {
+        control.active_source = MOTOR_CONTROL_SOURCE_NONE;
+        motor_command_invalidate(&control.retained_command);
         return true;
     }
 
@@ -93,6 +96,12 @@ static bool force_stop_internal(void)
     const motor_output_stop_result_t result =
         motor_output_force_stop(&control.physical_output);
 
+    control.active_source = MOTOR_CONTROL_SOURCE_NONE;
+    control.transfer_in_progress = false;
+    control.stop_stream_started = false;
+    control.arming_preparation_complete = false;
+    motor_command_invalidate(&control.retained_command);
+
     if (result != MOTOR_OUTPUT_STOP_ACCEPTED) {
         control.outputs_stopped = false;
         report_motor_fault(FAULT_ID_MOTOR_FORCE_STOP,
@@ -101,10 +110,6 @@ static bool force_stop_internal(void)
     }
 
     control.outputs_stopped = true;
-    control.transfer_in_progress = false;
-    control.stop_stream_started = false;
-    control.arming_preparation_complete = false;
-    motor_command_invalidate(&control.retained_command);
     return true;
 }
 
@@ -210,7 +215,65 @@ motor_control_init_result_t motor_control_initialize(
     return MOTOR_CONTROL_INIT_OK;
 }
 
+motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
+{
+    system_state_transition_result_t transition_result;
+
+    if (!control.initialized) {
+        return MOTOR_CONTROL_ARM_NOT_INITIALIZED;
+    }
+    if ((source <= MOTOR_CONTROL_SOURCE_NONE) ||
+        (source >= MOTOR_CONTROL_SOURCE_COUNT)) {
+        return MOTOR_CONTROL_ARM_INVALID_SOURCE;
+    }
+    if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
+        (control.active_source != MOTOR_CONTROL_SOURCE_NONE)) {
+        return MOTOR_CONTROL_ARM_BLOCKED_STATE;
+    }
+    if (!motor_fault_state_allows_arm(control.fault_system)) {
+        return MOTOR_CONTROL_ARM_BLOCKED_HEALTH;
+    }
+    if (!motor_control_ready_for_arm()) {
+        return MOTOR_CONTROL_ARM_BLOCKED_PREPARATION;
+    }
+
+    transition_result = system_state_machine_handle_event(
+        control.state_machine,
+        SYSTEM_STATE_EVENT_ARM_REQUESTED);
+    if (transition_result != SYSTEM_STATE_TRANSITION_OK) {
+        return MOTOR_CONTROL_ARM_TRANSITION_ERROR;
+    }
+
+    control.active_source = source;
+    motor_command_invalidate(&control.retained_command);
+    return MOTOR_CONTROL_ARM_ACCEPTED;
+}
+
+motor_control_disarm_result_t motor_control_disarm(void)
+{
+    system_state_transition_result_t transition_result;
+
+    if (!control.initialized) {
+        return MOTOR_CONTROL_DISARM_NOT_INITIALIZED;
+    }
+
+    transition_result = system_state_machine_handle_event(
+        control.state_machine,
+        SYSTEM_STATE_EVENT_DISARM_REQUESTED);
+    if (transition_result == SYSTEM_STATE_TRANSITION_REJECTED) {
+        return MOTOR_CONTROL_DISARM_BLOCKED_STATE;
+    }
+    if (transition_result != SYSTEM_STATE_TRANSITION_OK) {
+        return MOTOR_CONTROL_DISARM_TRANSITION_ERROR;
+    }
+
+    control.active_source = MOTOR_CONTROL_SOURCE_NONE;
+    motor_command_invalidate(&control.retained_command);
+    return MOTOR_CONTROL_DISARM_ACCEPTED;
+}
+
 motor_control_submit_result_t motor_control_submit(
+    motor_control_source_t source,
     const motor_command_t *logical_command)
 {
     motor_command_t validated_command;
@@ -220,8 +283,14 @@ motor_control_submit_result_t motor_control_submit(
         return MOTOR_CONTROL_SUBMIT_NOT_INITIALIZED;
     }
     if (control.state_machine->current != SYSTEM_STATE_ARMED) {
+        control.active_source = MOTOR_CONTROL_SOURCE_NONE;
         motor_command_invalidate(&control.retained_command);
         return MOTOR_CONTROL_SUBMIT_BLOCKED_STATE;
+    }
+    if ((source <= MOTOR_CONTROL_SOURCE_NONE) ||
+        (source >= MOTOR_CONTROL_SOURCE_COUNT) ||
+        (source != control.active_source)) {
+        return MOTOR_CONTROL_SUBMIT_BLOCKED_SOURCE;
     }
     if (!control.arming_preparation_complete) {
         return MOTOR_CONTROL_SUBMIT_BLOCKED_PREPARATION;
@@ -294,6 +363,8 @@ motor_control_sync_result_t motor_control_synchronize(void)
     if ((control.state_machine->current == SYSTEM_STATE_BOOT) ||
         (control.state_machine->current == SYSTEM_STATE_INITIALIZING) ||
         (control.state_machine->current == SYSTEM_STATE_FAULT)) {
+        control.active_source = MOTOR_CONTROL_SOURCE_NONE;
+        motor_command_invalidate(&control.retained_command);
         if (control.outputs_stopped) {
             return MOTOR_CONTROL_SYNC_STOPPED;
         }
@@ -327,6 +398,7 @@ motor_control_sync_result_t motor_control_synchronize(void)
                control.retained_command.valid) {
         command_to_submit = &control.retained_command;
     } else if (control.state_machine->current != SYSTEM_STATE_ARMED) {
+        control.active_source = MOTOR_CONTROL_SOURCE_NONE;
         motor_command_invalidate(&control.retained_command);
     }
 
@@ -436,4 +508,28 @@ bool motor_control_ready_for_arm(void)
         control.arming_preparation_complete = true;
     }
     return control.arming_preparation_complete;
+}
+
+motor_control_source_t motor_control_active_source(void)
+{
+    if (!control.initialized ||
+        (control.state_machine->current != SYSTEM_STATE_ARMED)) {
+        return MOTOR_CONTROL_SOURCE_NONE;
+    }
+    return control.active_source;
+}
+
+const char *motor_control_source_name(motor_control_source_t source)
+{
+    switch (source) {
+    case MOTOR_CONTROL_SOURCE_NONE:
+        return "NONE";
+    case MOTOR_CONTROL_SOURCE_USB_TEST:
+        return "USB_TEST";
+    case MOTOR_CONTROL_SOURCE_RECEIVER:
+        return "RECEIVER";
+    case MOTOR_CONTROL_SOURCE_COUNT:
+        break;
+    }
+    return "UNKNOWN";
 }
