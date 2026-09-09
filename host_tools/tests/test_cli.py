@@ -19,12 +19,10 @@ from openflightcomputer.cli import build_parser
         ["device", "receiver", "--watch", "--interval", "0.2"],
         ["device", "monitor"],
         ["motor", "run", "--motor", "1", "--throttle", "1.0", "--duration", "60"],
-        ["motor", "direction", "show"],
-        [
-            "motor", "direction", "set", "--motor", "3",
-            "--direction", "reversed",
-        ],
-        ["motor", "configuration", "reset"],
+        ["config", "read"],
+        ["config", "read", "--output", "quad.json"],
+        ["config", "write", "config/default-flight-configuration.json"],
+        ["config", "reset"],
         ["smoke", "--no-flash"],
     ],
 )
@@ -71,3 +69,98 @@ def test_device_arm_waits_for_pending_direction_preparation(
     response = json.loads(capsys.readouterr().out)
     assert response["state"] == "ARMED"
     assert response["pending"] is False
+
+
+def test_configuration_read_can_export_portable_json(
+    monkeypatch, tmp_path, capsys
+):
+    output = tmp_path / "quad.json"
+    configuration = {
+        "schema_version": 1,
+        "motors": {
+            "propeller_layout": "PROPS_IN",
+            "directions": ["NORMAL"] * 4,
+        },
+    }
+
+    class FakeConnectionContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exception_type, exception, traceback):
+            return False
+
+    class FakeClient:
+        def __init__(self, connection):
+            assert connection is not None
+
+        def request(self, command, **options):
+            assert command == "config_read"
+            assert options["parameters"] is None
+            return {"ok": True, "configuration": configuration}
+
+    monkeypatch.setattr(cli, "wait_for_flight_port", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        cli,
+        "UsbCdcConnection",
+        SimpleNamespace(open=lambda port: FakeConnectionContext()),
+    )
+    monkeypatch.setattr(cli, "JsonProtocolClient", FakeClient)
+
+    assert cli._configuration_request(
+        SimpleNamespace(
+            configuration_command="read",
+            output=output,
+            port=None,
+            timeout=1.0,
+        )
+    ) == 0
+    assert json.loads(output.read_text()) == configuration
+    assert str(output) in capsys.readouterr().out
+
+
+def test_configuration_write_sends_file_as_one_document(
+    monkeypatch, tmp_path, capsys
+):
+    source = tmp_path / "quad.json"
+    configuration = {"schema_version": 1, "motors": {"directions": []}}
+    source.write_text(json.dumps(configuration))
+    observed = {}
+
+    class FakeConnectionContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exception_type, exception, traceback):
+            return False
+
+    class FakeClient:
+        def __init__(self, connection):
+            assert connection is not None
+
+        def request(self, command, **options):
+            observed["command"] = command
+            observed["parameters"] = options["parameters"]
+            return {"ok": True, "configuration": configuration}
+
+    monkeypatch.setattr(cli, "wait_for_flight_port", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        cli,
+        "UsbCdcConnection",
+        SimpleNamespace(open=lambda port: FakeConnectionContext()),
+    )
+    monkeypatch.setattr(cli, "JsonProtocolClient", FakeClient)
+
+    assert cli._configuration_request(
+        SimpleNamespace(
+            configuration_command="write",
+            file=source,
+            port=None,
+            timeout=1.0,
+        )
+    ) == 0
+    assert observed == {
+        "command": "config_write",
+        "parameters": {"configuration": configuration},
+    }
+    assert json.loads(capsys.readouterr().out) == configuration

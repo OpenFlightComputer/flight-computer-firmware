@@ -358,27 +358,90 @@ target_compile_options(motor_configuration_tests PRIVATE
 
 add_test(NAME motor_configuration COMMAND motor_configuration_tests)
 
-add_executable(board_motor_configuration_storage_tests
-    board_motor_configuration_storage_tests.c
-    "${PROJECT_SOURCE_DIR}/firmware/app/board_motor_configuration_storage.c"
+add_executable(board_flight_configuration_storage_tests
+    board_flight_configuration_storage_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/board_flight_configuration_storage.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
 )
 
-target_include_directories(board_motor_configuration_storage_tests PRIVATE
+target_include_directories(board_flight_configuration_storage_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
+    "${CMAKE_BINARY_DIR}/generated"
 )
 
-target_compile_options(board_motor_configuration_storage_tests PRIVATE
+target_compile_options(board_flight_configuration_storage_tests PRIVATE
     -Wall
     -Wextra
     -Wpedantic
     -Werror
 )
 
-add_test(NAME board_motor_configuration_storage
-         COMMAND board_motor_configuration_storage_tests)
+add_test(NAME board_flight_configuration_storage
+         COMMAND board_flight_configuration_storage_tests)
+
+add_executable(flight_configuration_service_tests
+    flight_configuration_service_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/flight_configuration_service.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
+)
+target_include_directories(flight_configuration_service_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${CMAKE_BINARY_DIR}/generated"
+)
+target_compile_options(flight_configuration_service_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME flight_configuration_service
+         COMMAND flight_configuration_service_tests)
+
+add_executable(quad_x_mixer_tests
+    quad_x_mixer_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+)
+target_include_directories(quad_x_mixer_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+target_compile_options(quad_x_mixer_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME quad_x_mixer COMMAND quad_x_mixer_tests)
+
+add_executable(flight_control_tests
+    flight_control_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/flight_control.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+)
+target_include_directories(flight_control_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+target_compile_options(flight_control_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME flight_control COMMAND flight_control_tests)
 
 add_executable(motor_mapping_tests
     motor_mapping_tests.c
@@ -683,6 +746,8 @@ add_executable(usb_command_processor_tests
 target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"

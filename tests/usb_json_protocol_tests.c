@@ -1,8 +1,27 @@
 #include "usb_json_protocol.h"
 
+#define JSMN_STATIC
+#include "third_party/jsmn.h"
+
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+
+static void assert_valid_json_line(const char *line, size_t length)
+{
+    jsmn_parser parser;
+    jsmntok_t tokens[64];
+    int token_count;
+
+    assert(length > 1U);
+    assert(line[length - 1U] == '\n');
+    jsmn_init(&parser);
+    token_count = jsmn_parse(&parser, line, length - 1U, tokens, 64U);
+    assert(token_count > 0);
+    assert(tokens[0].type == JSMN_OBJECT);
+    assert(tokens[0].start == 0);
+    assert(tokens[0].end == (int)(length - 1U));
+}
 
 static usb_json_request_t parse(const char *json)
 {
@@ -47,17 +66,29 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(request.motor == UINT8_MAX);
     assert(request.throttle_millionths == 1U);
     assert(parse("{\"type\":\"command\",\"request_id\":7,"
-                 "\"command\":\"motor_direction\"}").command ==
-           USB_JSON_COMMAND_MOTOR_DIRECTION);
-    request = parse("{\"type\":\"command\",\"request_id\":8,"
-                    "\"command\":\"motor_direction_set\",\"motor\":3,"
-                    "\"direction\":\"REVERSED\"}");
-    assert(request.command == USB_JSON_COMMAND_MOTOR_DIRECTION_SET);
-    assert(request.motor == 3U);
-    assert(request.direction == USB_JSON_MOTOR_DIRECTION_REVERSED);
+                 "\"command\":\"config_read\"}").command ==
+           USB_JSON_COMMAND_CONFIG_READ);
     assert(parse("{\"type\":\"command\",\"request_id\":9,"
-                 "\"command\":\"motor_configuration_reset\"}").command ==
-           USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET);
+                 "\"command\":\"config_reset\"}").command ==
+           USB_JSON_COMMAND_CONFIG_RESET);
+    request = parse(
+        "{\"type\":\"command\",\"request_id\":8,"
+        "\"command\":\"config_write\",\"configuration\":{"
+        "\"schema_version\":1,\"motors\":{\"propeller_layout\":"
+        "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
+        "\"NORMAL\",\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
+        "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
+        "\"receiver_failsafe\":{\"stale_after_us\":25000,"
+        "\"loss_detected_after_us\":100000,\"hold_last_until_us\":400000,"
+        "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"
+        "\"stage_one_roll\":-0.1,\"stage_one_pitch\":0.0,"
+        "\"stage_one_yaw\":0.0,\"stage_one_throttle\":0.05,"
+        "\"recovery_throttle_maximum\":0.05}}}");
+    assert(request.command == USB_JSON_COMMAND_CONFIG_WRITE);
+    assert(request.configuration.propeller_layout == 1U);
+    assert(request.configuration.directions[0] == 1U);
+    assert(request.configuration.mixer_factor_millionths[0] == 250000U);
+    assert(request.configuration.failsafe_control_millionths[0] == -100000);
     assert(parse("{\"type\":\"command\",\"request_id\":4,"
                  "\"command\":\"future\"}").command ==
            USB_JSON_COMMAND_UNSUPPORTED);
@@ -97,12 +128,10 @@ static void malformed_or_noncanonical_requests_are_rejected(void)
         "\"request_id\":1,\"motor\":256,\"throttle\":0.1}",
         "{\"type\":\"command\",\"command\":\"status\","
         "\"request_id\":1,\"motor\":1,\"throttle\":0.1}",
-        "{\"type\":\"command\",\"command\":\"motor_direction_set\","
+        "{\"type\":\"command\",\"command\":\"config_write\","
+        "\"request_id\":1}",
+        "{\"type\":\"command\",\"command\":\"config_read\","
         "\"request_id\":1,\"motor\":1}",
-        "{\"type\":\"command\",\"command\":\"motor_direction_set\","
-        "\"request_id\":1,\"motor\":1,\"direction\":\"reverse\"}",
-        "{\"type\":\"command\",\"command\":\"motor_direction\","
-        "\"request_id\":1,\"motor\":1,\"direction\":\"NORMAL\"}",
     };
     size_t index;
 
@@ -150,8 +179,13 @@ static void response_builders_are_exact_and_bounded(void)
         "\"command\":\"motor_test\",\"ok\":false,"
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
-    static const char *const directions[4] = {
-        "NORMAL", "NORMAL", "REVERSED", "NORMAL",
+    const usb_json_configuration_t configuration = {
+        .schema_version = 1U,
+        .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
+        .failsafe_control_millionths = {-100000, 0, 0, 50000, 50000},
+        .mixer_factor_millionths = {250000U, 250000U, 150000U},
+        .directions = {0U, 0U, 1U, 0U},
+        .propeller_layout = 0U,
     };
 
     assert(usb_json_build_status_response("DISARMED", "NONE", 42U, 42U,
@@ -189,24 +223,37 @@ static void response_builders_are_exact_and_bounded(void)
                                               true, "DISARMED", NULL, output,
                                               sizeof(output), &length));
     assert(strstr(output, "\"pending\":true") != NULL);
-    assert(usb_json_build_motor_configuration_response(
-        USB_JSON_COMMAND_MOTOR_DIRECTION_SET,
+    assert(usb_json_build_configuration_response(
+        USB_JSON_COMMAND_CONFIG_WRITE,
         13U,
         true,
-        3U,
-        "REVERSED",
         "PERSISTENT",
-        directions,
+        &configuration,
         "DISARMED",
         NULL,
         output,
         sizeof(output),
         &length));
-    assert(strstr(output, "\"command\":\"motor_direction_set\"") != NULL);
-    assert(strstr(output, "\"motor\":3") != NULL);
+    assert(strstr(output, "\"command\":\"config_write\"") != NULL);
+    assert(strstr(output, "\"propeller_layout\":\"PROPS_IN\"") != NULL);
     assert(strstr(output,
                   "\"directions\":[\"NORMAL\",\"NORMAL\","
                   "\"REVERSED\",\"NORMAL\"]") != NULL);
+    assert(strstr(output, "\"stage_one_roll\":-0.100000") != NULL);
+    assert_valid_json_line(output, length);
+    assert(usb_json_build_configuration_response(
+        USB_JSON_COMMAND_CONFIG_WRITE,
+        14U,
+        false,
+        "DEFAULT",
+        &configuration,
+        "ARMED",
+        "state_rejected",
+        output,
+        sizeof(output),
+        &length));
+    assert(strstr(output, "\"error\":\"state_rejected\"") != NULL);
+    assert_valid_json_line(output, length);
     assert(usb_json_build_error_response(false, 0U, "invalid_request", output,
                                          sizeof(output), &length));
     assert(memcmp(output, error, length) == 0);

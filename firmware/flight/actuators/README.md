@@ -6,7 +6,8 @@ four-motor snapshot, validation, exact-stop canonicalization, invalidation, and
 freshness checks. `motor_mapping` owns an atomic logical-to-physical
 permutation, the disarmed configuration precondition, and complete-command
 reordering. `motor_configuration` defines validated logical-motor direction
-values and compiled defaults. `motor_output` defines the instance-based facade
+values; compiled vehicle defaults belong to the unified flight configuration.
+`motor_output` defines the instance-based facade
 and injected backend contract for initialization, complete throttle/direction
 submission, status, diagnostics, and unconditional force-stop.
 

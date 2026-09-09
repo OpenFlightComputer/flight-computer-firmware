@@ -1,0 +1,8 @@
+#ifndef OPENFLIGHTCOMPUTER_BOARD_FLIGHT_CONFIGURATION_STORAGE_H
+#define OPENFLIGHTCOMPUTER_BOARD_FLIGHT_CONFIGURATION_STORAGE_H
+
+#include "flight_configuration_storage.h"
+
+flight_configuration_storage_t board_flight_configuration_storage(void);
+
+#endif

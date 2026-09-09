@@ -12,25 +12,34 @@ typedef enum {
     USB_JSON_COMMAND_ARM,
     USB_JSON_COMMAND_DISARM,
     USB_JSON_COMMAND_MOTOR_TEST,
-    USB_JSON_COMMAND_MOTOR_DIRECTION,
-    USB_JSON_COMMAND_MOTOR_DIRECTION_SET,
-    USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET,
+    USB_JSON_COMMAND_CONFIG_READ,
+    USB_JSON_COMMAND_CONFIG_WRITE,
+    USB_JSON_COMMAND_CONFIG_RESET,
     USB_JSON_COMMAND_UNSUPPORTED,
     USB_JSON_COMMAND_INVALID,
 } usb_json_command_t;
 
-typedef enum {
-    USB_JSON_MOTOR_DIRECTION_INVALID = 0,
-    USB_JSON_MOTOR_DIRECTION_NORMAL,
-    USB_JSON_MOTOR_DIRECTION_REVERSED,
-} usb_json_motor_direction_t;
+#define USB_JSON_CONFIGURATION_MOTOR_COUNT 4U
+#define USB_JSON_CONFIGURATION_TIMING_COUNT 5U
+#define USB_JSON_CONFIGURATION_CONTROL_COUNT 5U
+#define USB_JSON_CONFIGURATION_MIXER_COUNT 3U
+
+typedef struct {
+    uint32_t schema_version;
+    uint64_t timing_us[USB_JSON_CONFIGURATION_TIMING_COUNT];
+    int32_t failsafe_control_millionths[
+        USB_JSON_CONFIGURATION_CONTROL_COUNT];
+    uint32_t mixer_factor_millionths[USB_JSON_CONFIGURATION_MIXER_COUNT];
+    uint8_t directions[USB_JSON_CONFIGURATION_MOTOR_COUNT];
+    uint8_t propeller_layout;
+} usb_json_configuration_t;
 
 typedef struct {
     usb_json_command_t command;
     uint32_t request_id;
     uint32_t throttle_millionths;
     uint8_t motor;
-    usb_json_motor_direction_t direction;
+    usb_json_configuration_t configuration;
 } usb_json_request_t;
 
 bool usb_json_parse_request(const char *line,
@@ -53,14 +62,12 @@ bool usb_json_build_transition_response(usb_json_command_t command,
                                         char *destination,
                                         size_t capacity,
                                         size_t *length);
-bool usb_json_build_motor_configuration_response(
+bool usb_json_build_configuration_response(
     usb_json_command_t command,
     uint32_t request_id,
     bool accepted,
-    uint8_t motor,
-    const char *selected_direction,
     const char *configuration_source,
-    const char *const directions[4],
+    const usb_json_configuration_t *configuration,
     const char *state,
     const char *error,
     char *destination,

@@ -118,11 +118,16 @@ canonicalization, all-zero stop commands, NaN/infinity/out-of-range rejection
 without replacement, invalidation, timeout boundaries, future timestamps, and
 freshness near the 64-bit time limit.
 
-The native `motor_configuration_tests` target verifies all-normal compiled
-defaults, per-motor direction validation, invalid configurations, and stable
-direction names. `board_motor_configuration_storage_tests` verifies the
-versioned eight-byte board payload, valid load/save/clear behavior, corrupt or
-incompatible data rejection, and board-storage error propagation.
+The native `motor_configuration_tests` target verifies per-motor direction
+validation, invalid configurations, and stable direction names.
+`board_flight_configuration_storage_tests` verifies the complete versioned
+payload, prior motor-direction payload migration, valid load/save/clear
+behavior, corrupt or incompatible data rejection, and board-storage error
+propagation. `flight_configuration_service_tests` covers source selection,
+disarmed-only whole-document replacement/reset, persistence ordering, and
+runtime application. `quad_x_mixer_tests` and `flight_control_tests` cover the
+mix equations, zero-throttle fast path, clamping, authority, submission, and
+explicit receiver-loss failsafe entry.
 
 The native `motor_mapping_tests` target verifies identity defaults, exhaustively
 classifies all 256 in-range assignments, rejects configuration unless the

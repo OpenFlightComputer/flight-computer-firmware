@@ -14,7 +14,6 @@ typedef struct {
     motor_output_t physical_output;
     motor_mapping_t mapping;
     motor_configuration_t configuration;
-    motor_configuration_storage_t configuration_storage;
     motor_command_t retained_command;
     motor_control_source_t active_source;
     motor_control_source_t pending_source;
@@ -25,7 +24,6 @@ typedef struct {
     bool arming_preparation_complete;
     uint8_t direction_repetitions_remaining;
     bool direction_sequence_active;
-    bool persistent_configuration;
     bool outputs_stopped;
     bool initialized;
 } motor_control_state_t;
@@ -120,13 +118,6 @@ static bool force_stop_internal(void)
 
     control.outputs_stopped = true;
     return true;
-}
-
-static bool configuration_storage_is_valid(
-    const motor_configuration_storage_t *storage)
-{
-    return (storage != NULL) && (storage->load != NULL) &&
-           (storage->save != NULL) && (storage->clear != NULL);
 }
 
 static void start_direction_sequence(void)
@@ -255,10 +246,9 @@ motor_control_init_result_t motor_control_initialize(
     motor_control_clock_t clock,
     uint64_t command_timeout_us,
     const motor_output_backend_t *backend,
-    const motor_configuration_storage_t *configuration_storage)
+    const motor_configuration_t *configuration)
 {
     motor_output_init_result_t output_result;
-    motor_configuration_load_result_t configuration_result;
 
     if (control.initialized) {
         return MOTOR_CONTROL_INIT_ALREADY_INITIALIZED;
@@ -267,7 +257,7 @@ motor_control_init_result_t motor_control_initialize(
         (fault_system == NULL) || !fault_system->initialized ||
         (fault_system->state_machine != state_machine) || (clock == NULL) ||
         (command_timeout_us == 0U) || (backend == NULL) ||
-        !configuration_storage_is_valid(configuration_storage) ||
+        !motor_configuration_is_valid(configuration) ||
         !motor_fault_policy_is_valid(fault_system)) {
         return MOTOR_CONTROL_INIT_INVALID_ARGUMENT;
     }
@@ -277,23 +267,10 @@ motor_control_init_result_t motor_control_initialize(
         .fault_system = fault_system,
         .clock = clock,
         .command_timeout_us = command_timeout_us,
-        .configuration_storage = *configuration_storage,
+        .configuration = *configuration,
     };
     motor_mapping_initialize(&control.mapping);
-    motor_configuration_defaults(&control.configuration);
     motor_command_initialize(&control.retained_command);
-
-    configuration_result = control.configuration_storage.load(
-        control.configuration_storage.context,
-        &control.configuration);
-    if (configuration_result == MOTOR_CONFIGURATION_LOAD_OK) {
-        if (!motor_configuration_is_valid(&control.configuration)) {
-            return MOTOR_CONTROL_INIT_INVALID_ARGUMENT;
-        }
-        control.persistent_configuration = true;
-    } else if (configuration_result != MOTOR_CONFIGURATION_LOAD_EMPTY) {
-        return MOTOR_CONTROL_INIT_INVALID_ARGUMENT;
-    }
 
     output_result = motor_output_initialize(&control.physical_output, backend);
     if (output_result == MOTOR_OUTPUT_INIT_INITIAL_STOP_ERROR) {
@@ -586,6 +563,43 @@ motor_control_stop_result_t motor_control_force_stop(void)
                                  : MOTOR_CONTROL_STOP_ERROR;
 }
 
+motor_control_failsafe_result_t motor_control_enter_failsafe(void)
+{
+    if (!control.initialized) {
+        return MOTOR_CONTROL_FAILSAFE_NOT_INITIALIZED;
+    }
+    if (control.state_machine->current != SYSTEM_STATE_ARMED) {
+        return MOTOR_CONTROL_FAILSAFE_NOT_ARMED;
+    }
+    return enter_failsafe_if_armed()
+               ? MOTOR_CONTROL_FAILSAFE_ACCEPTED
+               : MOTOR_CONTROL_FAILSAFE_TRANSITION_ERROR;
+}
+
+motor_control_recovery_result_t motor_control_recover_to_disarmed(void)
+{
+    motor_control_disarm_result_t result;
+
+    if (!control.initialized) {
+        return MOTOR_CONTROL_RECOVERY_NOT_INITIALIZED;
+    }
+    if ((control.state_machine->current == SYSTEM_STATE_DISARMED) &&
+        (control.active_source == MOTOR_CONTROL_SOURCE_NONE) &&
+        (control.pending_source == MOTOR_CONTROL_SOURCE_NONE)) {
+        return MOTOR_CONTROL_RECOVERY_ACCEPTED;
+    }
+    if (control.state_machine->current != SYSTEM_STATE_FAILSAFE) {
+        return MOTOR_CONTROL_RECOVERY_BLOCKED_STATE;
+    }
+    result = motor_control_disarm();
+    if (result == MOTOR_CONTROL_DISARM_ACCEPTED) {
+        return MOTOR_CONTROL_RECOVERY_ACCEPTED;
+    }
+    return result == MOTOR_CONTROL_DISARM_TRANSITION_ERROR
+               ? MOTOR_CONTROL_RECOVERY_TRANSITION_ERROR
+               : MOTOR_CONTROL_RECOVERY_BLOCKED_STATE;
+}
+
 motor_control_mapping_configure_result_t motor_control_configure_mapping(
     const uint8_t logical_to_physical[MOTOR_COMMAND_MOTOR_COUNT])
 {
@@ -613,73 +627,23 @@ motor_control_mapping_configure_result_t motor_control_configure_mapping(
     return MOTOR_CONTROL_MAPPING_CONFIGURE_INVALID_ARGUMENT;
 }
 
-motor_control_direction_configure_result_t motor_control_configure_direction(
-    uint8_t logical_motor,
-    motor_direction_t direction)
+motor_control_configuration_apply_result_t motor_control_apply_configuration(
+    const motor_configuration_t *configuration)
 {
-    motor_configuration_t candidate;
-
     if (!control.initialized) {
-        return MOTOR_CONTROL_DIRECTION_CONFIGURE_NOT_INITIALIZED;
+        return MOTOR_CONTROL_CONFIGURATION_APPLY_NOT_INITIALIZED;
     }
-    if ((logical_motor == 0U) ||
-        (logical_motor > MOTOR_COMMAND_MOTOR_COUNT) ||
-        ((direction != MOTOR_DIRECTION_NORMAL) &&
-         (direction != MOTOR_DIRECTION_REVERSED))) {
-        return MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT;
+    if (!motor_configuration_is_valid(configuration)) {
+        return MOTOR_CONTROL_CONFIGURATION_APPLY_INVALID_ARGUMENT;
     }
     if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
         (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
-        return MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE;
+        return MOTOR_CONTROL_CONFIGURATION_APPLY_UNSAFE_STATE;
     }
 
-    candidate = control.configuration;
-    candidate.direction[logical_motor - 1U] = direction;
-    if (control.configuration_storage.save(
-            control.configuration_storage.context,
-            &candidate) != MOTOR_CONFIGURATION_SAVE_OK) {
-        return MOTOR_CONTROL_DIRECTION_CONFIGURE_STORAGE_ERROR;
-    }
-
-    control.configuration = candidate;
-    control.persistent_configuration = true;
+    control.configuration = *configuration;
     start_direction_sequence();
-    return MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
-}
-
-motor_control_configuration_reset_result_t
-    motor_control_reset_configuration(void)
-{
-    if (!control.initialized) {
-        return MOTOR_CONTROL_CONFIGURATION_RESET_NOT_INITIALIZED;
-    }
-    if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
-        (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
-        return MOTOR_CONTROL_CONFIGURATION_RESET_UNSAFE_STATE;
-    }
-    if (control.configuration_storage.clear(
-            control.configuration_storage.context) !=
-        MOTOR_CONFIGURATION_CLEAR_OK) {
-        return MOTOR_CONTROL_CONFIGURATION_RESET_STORAGE_ERROR;
-    }
-
-    motor_configuration_defaults(&control.configuration);
-    control.persistent_configuration = false;
-    start_direction_sequence();
-    return MOTOR_CONTROL_CONFIGURATION_RESET_OK;
-}
-
-bool motor_control_get_configuration(motor_configuration_t *configuration,
-                                     bool *persistent_override)
-{
-    if (!control.initialized || (configuration == NULL) ||
-        (persistent_override == NULL)) {
-        return false;
-    }
-
-    *configuration = control.configuration;
-    *persistent_override = control.persistent_configuration;
-    return true;
+    return MOTOR_CONTROL_CONFIGURATION_APPLY_OK;
 }
 
 bool motor_control_is_initialized(void)

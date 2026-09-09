@@ -113,36 +113,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--throttle", type=float, required=True, metavar=">0.001..1.0"
     )
     motor_run.add_argument("--duration", type=float, required=True, metavar="SECONDS")
-    motor_direction = motor_commands.add_parser(
-        "direction", help="inspect or set persistent motor directions"
+    configuration = commands.add_parser(
+        "config", help="read or replace the complete flight configuration"
     )
-    motor_direction_commands = motor_direction.add_subparsers(
-        dest="motor_direction_command", required=True
+    configuration_commands = configuration.add_subparsers(
+        dest="configuration_command", required=True
     )
-    motor_direction_show = motor_direction_commands.add_parser(
-        "show", help="show all configured motor directions"
+    configuration_read = configuration_commands.add_parser(
+        "read", help="read the complete active configuration"
     )
-    _add_device_options(motor_direction_show)
-    motor_direction_set = motor_direction_commands.add_parser(
-        "set", help="set one motor's persistent direction"
+    _add_device_options(configuration_read)
+    configuration_read.add_argument("--output", type=Path, metavar="PATH")
+    configuration_write = configuration_commands.add_parser(
+        "write", help="validate and write a complete JSON configuration"
     )
-    _add_device_options(motor_direction_set)
-    motor_direction_set.add_argument(
-        "--motor", type=int, choices=range(1, 5), required=True
+    _add_device_options(configuration_write)
+    configuration_write.add_argument("file", type=_existing_file, metavar="JSON")
+    configuration_reset = configuration_commands.add_parser(
+        "reset", help="erase the override and restore compiled JSON defaults"
     )
-    motor_direction_set.add_argument(
-        "--direction", choices=("normal", "reversed"), required=True
-    )
-    motor_configuration = motor_commands.add_parser(
-        "configuration", help="manage persistent motor configuration"
-    )
-    motor_configuration_commands = motor_configuration.add_subparsers(
-        dest="motor_configuration_command", required=True
-    )
-    motor_configuration_reset = motor_configuration_commands.add_parser(
-        "reset", help="restore compiled motor defaults"
-    )
-    _add_device_options(motor_configuration_reset)
+    _add_device_options(configuration_reset)
 
     smoke = commands.add_parser(
         "smoke", help="optionally flash, then run non-arming status and health checks"
@@ -270,20 +260,17 @@ def _motor_run(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _motor_configuration_request(arguments: argparse.Namespace) -> int:
-    if arguments.motor_command == "direction":
-        if arguments.motor_direction_command == "show":
-            command = "motor_direction"
-            parameters = None
-        else:
-            command = "motor_direction_set"
-            parameters = {
-                "motor": arguments.motor,
-                "direction": arguments.direction.upper(),
-            }
-    else:
-        command = "motor_configuration_reset"
-        parameters = None
+def _configuration_request(arguments: argparse.Namespace) -> int:
+    command = f"config_{arguments.configuration_command}"
+    parameters = None
+    if arguments.configuration_command == "write":
+        try:
+            configuration = json.loads(arguments.file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"cannot read configuration JSON: {error}") from error
+        if not isinstance(configuration, dict):
+            raise ValueError("configuration JSON must contain one object")
+        parameters = {"configuration": configuration}
 
     port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
     with UsbCdcConnection.open(port) as connection:
@@ -292,7 +279,15 @@ def _motor_configuration_request(arguments: argparse.Namespace) -> int:
             parameters=parameters,
             timeout_seconds=arguments.timeout,
         )
-    print(json.dumps(response, indent=2, sort_keys=True))
+    configuration = response.get("configuration")
+    if not isinstance(configuration, dict):
+        raise ProtocolError("configuration response does not contain an object")
+    rendered = json.dumps(configuration, indent=2, sort_keys=True) + "\n"
+    if arguments.configuration_command == "read" and arguments.output is not None:
+        arguments.output.write_text(rendered, encoding="utf-8")
+        print(f"Configuration: {arguments.output}")
+    else:
+        print(rendered, end="")
     return 0
 
 
@@ -323,9 +318,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _device_receiver(arguments)
             return _device_request(arguments, arguments.device_command)
         if arguments.command == "motor":
-            if arguments.motor_command == "run":
-                return _motor_run(arguments)
-            return _motor_configuration_request(arguments)
+            return _motor_run(arguments)
+        if arguments.command == "config":
+            return _configuration_request(arguments)
         return _smoke(arguments)
     except KeyboardInterrupt:
         return 130

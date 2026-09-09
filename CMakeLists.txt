@@ -10,6 +10,8 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+include(cmake/FlightConfiguration.cmake)
+
 option(
     OPENFLIGHTCOMPUTER_BUILD_FIRMWARE
     "Build the STM32F405 Flight Computer V1 firmware image"

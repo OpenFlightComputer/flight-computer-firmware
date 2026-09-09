@@ -65,6 +65,9 @@ bool receiver_service_latest(const receiver_service_t *service,
                              receiver_snapshot_t *snapshot);
 bool receiver_service_control_state(const receiver_service_t *service,
                                     receiver_control_state_t *state);
+bool receiver_service_update_freshness_config(
+    receiver_service_t *service,
+    const receiver_freshness_config_t *config);
 void receiver_service_task(void *context);
 
 #endif

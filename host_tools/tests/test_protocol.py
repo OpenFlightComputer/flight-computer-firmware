@@ -76,23 +76,46 @@ def test_request_parameters_cannot_replace_correlated_envelope():
         )
 
 
-def test_motor_direction_request_uses_absolute_setting():
+def test_configuration_write_sends_the_complete_document():
+    configuration = {
+        "schema_version": 1,
+        "motors": {
+            "propeller_layout": "PROPS_IN",
+            "directions": ["NORMAL", "NORMAL", "REVERSED", "NORMAL"],
+        },
+        "mixer": {
+            "roll_factor": 0.25,
+            "pitch_factor": 0.25,
+            "yaw_factor": 0.15,
+        },
+        "receiver_failsafe": {
+            "stale_after_us": 25000,
+            "loss_detected_after_us": 100000,
+            "hold_last_until_us": 400000,
+            "stage_two_after_us": 1500000,
+            "recovery_stable_us": 500000,
+            "stage_one_roll": 0.0,
+            "stage_one_pitch": 0.0,
+            "stage_one_yaw": 0.0,
+            "stage_one_throttle": 0.05,
+            "recovery_throttle_maximum": 0.05,
+        },
+    }
     connection = FakeConnection(
         [
             b'{"type":"response","request_id":1,'
-            b'"command":"motor_direction_set","ok":true}'
+            b'"command":"config_write","ok":true}'
         ]
     )
     JsonProtocolClient(connection).request(
-        "motor_direction_set",
-        parameters={"motor": 3, "direction": "REVERSED"},
+        "config_write",
+        parameters={"configuration": configuration},
     )
     assert json.loads(connection.written[0]) == {
         "type": "command",
-        "command": "motor_direction_set",
+        "command": "config_write",
         "request_id": 1,
-        "motor": 3,
-        "direction": "REVERSED",
+        "configuration": configuration,
     }
 
 

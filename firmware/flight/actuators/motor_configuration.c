@@ -2,19 +2,6 @@
 
 #include <stddef.h>
 
-void motor_configuration_defaults(motor_configuration_t *configuration)
-{
-    size_t motor;
-
-    if (configuration == NULL) {
-        return;
-    }
-
-    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
-        configuration->direction[motor] = MOTOR_DIRECTION_NORMAL;
-    }
-}
-
 bool motor_configuration_is_valid(
     const motor_configuration_t *configuration)
 {

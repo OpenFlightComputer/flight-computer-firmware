@@ -10,9 +10,9 @@
 #include <string.h>
 
 #define STORAGE_MAGIC UINT32_C(0x4F464343)
-#define STORAGE_FORMAT_VERSION UINT32_C(1)
+#define STORAGE_FORMAT_VERSION UINT32_C(2)
 #define STORAGE_COMMIT UINT32_C(0x434F4D54)
-#define STORAGE_PAYLOAD_CAPACITY 16U
+#define STORAGE_PAYLOAD_CAPACITY 96U
 
 typedef struct {
     uint32_t magic;
@@ -23,6 +23,16 @@ typedef struct {
     uint32_t crc;
     uint32_t commit;
 } storage_record_t;
+
+typedef struct {
+    uint32_t magic;
+    uint32_t format_version;
+    uint32_t sequence;
+    uint32_t payload_length;
+    uint32_t payload[4];
+    uint32_t crc;
+    uint32_t commit;
+} legacy_storage_record_t;
 
 _Static_assert((sizeof(storage_record_t) % sizeof(uint32_t)) == 0U,
                "Persistent records must use whole flash words");
@@ -46,6 +56,19 @@ static uint32_t record_crc(const storage_record_t *record)
 {
     const uint8_t *bytes = (const uint8_t *)record;
     const size_t protected_length = offsetof(storage_record_t, crc);
+    uint32_t crc = UINT32_MAX;
+    size_t index;
+
+    for (index = 0U; index < protected_length; index++) {
+        crc = crc32_update(crc, bytes[index]);
+    }
+    return ~crc;
+}
+
+static uint32_t legacy_record_crc(const legacy_storage_record_t *record)
+{
+    const uint8_t *bytes = (const uint8_t *)record;
+    const size_t protected_length = offsetof(legacy_storage_record_t, crc);
     uint32_t crc = UINT32_MAX;
     size_t index;
 
@@ -134,6 +157,44 @@ board_persistent_storage_read_result_t board_persistent_storage_read(
     return BOARD_PERSISTENT_STORAGE_READ_OK;
 }
 
+board_persistent_storage_read_result_t board_persistent_storage_read_legacy(
+    void *destination,
+    size_t length)
+{
+    const legacy_storage_record_t *latest = NULL;
+    uint32_t latest_sequence = 0U;
+    size_t index;
+    const size_t capacity = FLIGHTCOMPUTER_V1_CONFIGURATION_FLASH_LENGTH /
+                            sizeof(legacy_storage_record_t);
+
+    if ((destination == NULL) || (length == 0U) || (length > 16U)) {
+        return BOARD_PERSISTENT_STORAGE_READ_ERROR;
+    }
+    for (index = 0U; index < capacity; index++) {
+        const legacy_storage_record_t *record =
+            (const legacy_storage_record_t *)(
+                (uintptr_t)FLIGHTCOMPUTER_V1_CONFIGURATION_FLASH_ADDRESS +
+                (index * sizeof(legacy_storage_record_t)));
+        legacy_storage_record_t snapshot;
+
+        memcpy(&snapshot, record, sizeof(snapshot));
+        if ((snapshot.magic == STORAGE_MAGIC) &&
+            (snapshot.format_version == 1U) &&
+            (snapshot.payload_length == length) &&
+            (snapshot.commit == STORAGE_COMMIT) &&
+            (snapshot.crc == legacy_record_crc(&snapshot)) &&
+            ((latest == NULL) || (snapshot.sequence > latest_sequence))) {
+            latest = record;
+            latest_sequence = snapshot.sequence;
+        }
+    }
+    if (latest == NULL) {
+        return BOARD_PERSISTENT_STORAGE_READ_EMPTY;
+    }
+    memcpy(destination, latest->payload, length);
+    return BOARD_PERSISTENT_STORAGE_READ_OK;
+}
+
 board_persistent_storage_write_result_t board_persistent_storage_write(
     const void *source,
     size_t length)
@@ -170,9 +231,9 @@ board_persistent_storage_write_result_t board_persistent_storage_write(
         .format_version = STORAGE_FORMAT_VERSION,
         .sequence = latest_sequence + 1U,
         .payload_length = (uint32_t)length,
-        .payload = {UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX},
         .commit = STORAGE_COMMIT,
     };
+    memset(candidate.payload, 0xFF, sizeof(candidate.payload));
     memcpy(candidate.payload, source, length);
     candidate.crc = record_crc(&candidate);
 

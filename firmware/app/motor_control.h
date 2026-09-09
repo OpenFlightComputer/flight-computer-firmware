@@ -67,6 +67,20 @@ typedef enum {
 } motor_control_stop_result_t;
 
 typedef enum {
+    MOTOR_CONTROL_FAILSAFE_ACCEPTED = 0,
+    MOTOR_CONTROL_FAILSAFE_NOT_INITIALIZED,
+    MOTOR_CONTROL_FAILSAFE_NOT_ARMED,
+    MOTOR_CONTROL_FAILSAFE_TRANSITION_ERROR,
+} motor_control_failsafe_result_t;
+
+typedef enum {
+    MOTOR_CONTROL_RECOVERY_ACCEPTED = 0,
+    MOTOR_CONTROL_RECOVERY_NOT_INITIALIZED,
+    MOTOR_CONTROL_RECOVERY_BLOCKED_STATE,
+    MOTOR_CONTROL_RECOVERY_TRANSITION_ERROR,
+} motor_control_recovery_result_t;
+
+typedef enum {
     MOTOR_CONTROL_MAPPING_CONFIGURE_OK = 0,
     MOTOR_CONTROL_MAPPING_CONFIGURE_NOT_INITIALIZED,
     MOTOR_CONTROL_MAPPING_CONFIGURE_INVALID_ARGUMENT,
@@ -75,19 +89,11 @@ typedef enum {
 } motor_control_mapping_configure_result_t;
 
 typedef enum {
-    MOTOR_CONTROL_DIRECTION_CONFIGURE_OK = 0,
-    MOTOR_CONTROL_DIRECTION_CONFIGURE_NOT_INITIALIZED,
-    MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT,
-    MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE,
-    MOTOR_CONTROL_DIRECTION_CONFIGURE_STORAGE_ERROR,
-} motor_control_direction_configure_result_t;
-
-typedef enum {
-    MOTOR_CONTROL_CONFIGURATION_RESET_OK = 0,
-    MOTOR_CONTROL_CONFIGURATION_RESET_NOT_INITIALIZED,
-    MOTOR_CONTROL_CONFIGURATION_RESET_UNSAFE_STATE,
-    MOTOR_CONTROL_CONFIGURATION_RESET_STORAGE_ERROR,
-} motor_control_configuration_reset_result_t;
+    MOTOR_CONTROL_CONFIGURATION_APPLY_OK = 0,
+    MOTOR_CONTROL_CONFIGURATION_APPLY_NOT_INITIALIZED,
+    MOTOR_CONTROL_CONFIGURATION_APPLY_INVALID_ARGUMENT,
+    MOTOR_CONTROL_CONFIGURATION_APPLY_UNSAFE_STATE,
+} motor_control_configuration_apply_result_t;
 
 motor_control_arm_result_t motor_control_arm(motor_control_source_t source);
 motor_control_disarm_result_t motor_control_disarm(void);
@@ -100,17 +106,14 @@ motor_control_submit_result_t motor_control_submit(
 motor_control_sync_result_t motor_control_synchronize(void);
 
 motor_control_stop_result_t motor_control_force_stop(void);
+motor_control_failsafe_result_t motor_control_enter_failsafe(void);
+motor_control_recovery_result_t motor_control_recover_to_disarmed(void);
 
 motor_control_mapping_configure_result_t motor_control_configure_mapping(
     const uint8_t logical_to_physical[MOTOR_COMMAND_MOTOR_COUNT]);
 
-motor_control_direction_configure_result_t motor_control_configure_direction(
-    uint8_t logical_motor,
-    motor_direction_t direction);
-motor_control_configuration_reset_result_t
-    motor_control_reset_configuration(void);
-bool motor_control_get_configuration(motor_configuration_t *configuration,
-                                     bool *persistent_override);
+motor_control_configuration_apply_result_t motor_control_apply_configuration(
+    const motor_configuration_t *configuration);
 
 bool motor_control_is_initialized(void);
 bool motor_control_outputs_stopped(void);

@@ -1,0 +1,51 @@
+#include "application_state.h"
+
+volatile boot_status_t firmware_boot_status = BOOT_STATUS_RESET;
+volatile uint32_t firmware_main_loop_iterations;
+volatile uint64_t firmware_uptime_us;
+volatile uint32_t firmware_scheduler_last_result;
+volatile uint32_t firmware_fast_task_executions;
+volatile uint32_t firmware_medium_task_executions;
+volatile uint32_t firmware_slow_task_executions;
+volatile uint32_t firmware_system_state_last_result;
+volatile uint32_t firmware_fault_last_result = UINT32_MAX;
+volatile uint32_t firmware_usb_initialization_result = UINT32_MAX;
+volatile uint32_t firmware_logging_drain_last_result = UINT32_MAX;
+volatile uint32_t firmware_usb_command_last_result = UINT32_MAX;
+volatile uint32_t firmware_usb_service_task_executions;
+volatile uint32_t firmware_motor_control_initialization_result = UINT32_MAX;
+volatile uint32_t firmware_motor_control_sync_last_result = UINT32_MAX;
+volatile uint32_t firmware_motor_control_task_executions;
+volatile uint32_t firmware_receiver_initialization_result = UINT32_MAX;
+volatile uint32_t firmware_receiver_service_last_result = UINT32_MAX;
+volatile uint32_t firmware_receiver_arming_last_result = UINT32_MAX;
+volatile uint32_t firmware_receiver_task_executions;
+volatile uint32_t firmware_flight_control_task_executions;
+volatile uint32_t firmware_flight_control_submit_last_result = UINT32_MAX;
+volatile uint32_t firmware_receiver_freshness =
+    (uint32_t)RECEIVER_FRESHNESS_UNAVAILABLE;
+volatile uint32_t firmware_receiver_uart_bytes;
+volatile uint32_t firmware_receiver_valid_frames;
+volatile uint32_t firmware_receiver_crc_errors;
+volatile uint32_t firmware_receiver_framing_errors;
+volatile uint32_t firmware_receiver_dma_overruns;
+volatile uint32_t firmware_receiver_dma_dropped_bytes;
+volatile uint32_t firmware_receiver_failsafe_state =
+    (uint32_t)RECEIVER_FAILSAFE_UNAVAILABLE;
+volatile uint32_t firmware_receiver_failsafe_action =
+    (uint32_t)RECEIVER_FAILSAFE_ACTION_NONE;
+volatile uint64_t firmware_receiver_link_age_us;
+volatile uint32_t firmware_receiver_failsafe_transitions;
+volatile bool firmware_receiver_stage_two_latched;
+volatile bool firmware_receiver_recovery_ready;
+
+task_registry_t firmware_task_registry;
+scheduler_t firmware_scheduler;
+system_state_machine_t firmware_system_state_machine;
+fault_system_t firmware_fault_system;
+usb_command_processor_t firmware_usb_command_processor;
+receiver_service_t firmware_receiver_service;
+receiver_arming_t firmware_receiver_arming;
+receiver_failsafe_t firmware_receiver_failsafe;
+receiver_failsafe_decision_t firmware_receiver_failsafe_decision;
+flight_configuration_service_t firmware_flight_configuration_service;

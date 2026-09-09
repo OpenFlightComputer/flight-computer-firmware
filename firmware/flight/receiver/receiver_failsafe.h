@@ -63,7 +63,6 @@ typedef struct {
     bool initialized;
 } receiver_failsafe_t;
 
-void receiver_failsafe_default_config(receiver_failsafe_config_t *config);
 bool receiver_failsafe_config_is_valid(
     const receiver_failsafe_config_t *config);
 bool receiver_failsafe_initialize(receiver_failsafe_t *failsafe,

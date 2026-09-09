@@ -31,7 +31,7 @@ recovery timer. A backwards clock observation fails closed into Stage 2.
 ## Configuration
 
 `receiver_failsafe_config_t` owns every timing and fallback value. The current
-defaults are compiled into `receiver_failsafe_default_config()` and are
+defaults are generated from `config/default-flight-configuration.json` and are
 validated before use. Timing thresholds must be strictly ordered, the
 recovery duration must be nonzero, axes must be in `[-1, 1]`, and throttles
 must be in `[0, 1]`; NaN values are rejected.

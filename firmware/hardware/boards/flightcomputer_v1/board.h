@@ -89,6 +89,10 @@ uint32_t board_motor_output_error_context(void);
 board_persistent_storage_read_result_t board_persistent_storage_read(
     void *destination,
     size_t length);
+/* Temporary reader for the Milestone 3.3 eight-byte motor-only record. */
+board_persistent_storage_read_result_t board_persistent_storage_read_legacy(
+    void *destination,
+    size_t length);
 board_persistent_storage_write_result_t board_persistent_storage_write(
     const void *source,
     size_t length);

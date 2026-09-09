@@ -6,7 +6,8 @@ Phase 3 — open-loop receiver-to-motor integration.
 
 ## Current milestone
 
-Milestone 3.3 — persistent runtime motor direction configuration — implemented
+Milestones 3.4 through 3.6 — unified configuration, open-loop quad-X mixing,
+dedicated receiver-control execution, and receiver-loss authority — implemented
 and awaiting owner review and propeller-free validation.
 
 ## Last completed milestone
@@ -16,6 +17,47 @@ startup-low qualification, a low-to-high switch edge, and low throttle are
 required; a fresh low switch disarms only receiver-owned control.
 
 ## Current implementation status
+
+- Added `config/default-flight-configuration.json` as the single production
+  source for schema version, propeller layout, four absolute ESC directions,
+  mixer factors, and receiver-failsafe values. CMake validates the basic shape
+  and generates the compiled fallback constants.
+- Replaced the individual motor-direction USB/CLI mutations with whole-document
+  `config_read`, `config_write`, and `config_reset` operations. Read output is
+  directly reusable as a portable write input; write/reset require `DISARMED`
+  with no pending arm and always return the complete effective configuration.
+- Expanded the append-only board payload from the old eight-byte motor record
+  to an 88-byte full configuration. The loader migrates a valid legacy record
+  by preserving its directions and filling new fields from the JSON defaults;
+  corrupt or unknown nonempty storage still fails startup closed.
+- Added a pure hardware-independent quad-X mixer in logical front-left,
+  rear-left, front-right, rear-right order. Exact zero throttle returns four
+  zeros before roll/pitch/yaw work; nonzero controls use configurable factors,
+  the selected props-in/out yaw convention, and per-output `0..1` clamping.
+- Split the old 1 kHz receiver callback into a receiver-service task that only
+  ingests/publishes input and a same-rate flight-control task that owns
+  failsafe evaluation, receiver arming, mixing, and motor-command production.
+  The highest-priority motor-control task remains the only DShot submitter.
+- Reduced `app/main.c` to the firmware entry point and separated application
+  boot orchestration, task callbacks/registration, and debugger-visible runtime
+  state into `application_runtime`, `application_tasks`, and
+  `application_state`. This is an ownership-only refactor; task periods,
+  priorities, startup ordering, fault behavior, and exported diagnostic symbol
+  names are unchanged.
+- Connected Stage 2 receiver loss directly to the central motor failsafe entry.
+  It releases receiver ownership synchronously and causes stop frames on the
+  next motor-task release instead of waiting for the 100 ms command lease.
+- Added native coverage for JSON-derived defaults, full storage and legacy
+  migration, configuration service safety/application, mixer behavior,
+  producer authority, and explicit failsafe entry. Configuration responses are
+  parsed as JSON in both accepted and rejected cases.
+- All 38 native tests and 56 host-tool tests pass. Debug and Release firmware
+  build with warnings as errors. Debug uses 101,980 bytes of application Flash
+  and 24,528 bytes of RAM; Release uses 69,208 bytes of application Flash and
+  24,528 bytes of RAM. The Release image ends near `0x08010E60`, leaving the
+  separately reserved configuration sector at `0x080E0000` untouched.
+
+## Historical milestone record
 
 - Added one absolute `NORMAL`/`REVERSED` setting per logical motor with
   compiled defaults of all `NORMAL`, validation, and no toggle operation.
@@ -32,9 +74,9 @@ required; a fresh low switch disarms only receiver-owned control.
   and before every arm. The lifecycle stays `DISARMED` with an internal pending
   source until completion; disarm, receiver switch-low, or unusable receiver
   input can cancel a pending receiver arm.
-- Updated `./ofc device arm` to wait for pending direction preparation and
-  added `./ofc motor direction show|set` plus
-  `./ofc motor configuration reset`.
+- Updated `./ofc device arm` to wait for pending direction preparation. The
+  initial per-field direction CLI from this milestone was later removed in
+  favor of the unified whole-document configuration commands.
 - All 35 native tests and 53 host-tool tests pass. Debug and Release firmware
   build with Arm GCC 15.3.1 and warnings as errors; Debug uses 94,756 bytes of
   application Flash and 16,720 bytes of RAM, while Release uses 64,320 bytes

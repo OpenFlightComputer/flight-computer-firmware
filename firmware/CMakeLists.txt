@@ -154,8 +154,13 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 )
 
 add_executable(flight_firmware
-    app/board_motor_configuration_storage.c
+    app/application_runtime.c
+    app/application_state.c
+    app/application_tasks.c
+    app/board_flight_configuration_storage.c
     app/dshot_motor_backend.c
+    app/flight_configuration_service.c
+    app/flight_control.c
     app/motor_control.c
     app/motor_safety_policy.c
     app/receiver_arming.c
@@ -179,6 +184,8 @@ add_executable(flight_firmware
     flight/actuators/motor_configuration.c
     flight/actuators/motor_mapping.c
     flight/actuators/motor_output.c
+    flight/configuration/flight_configuration.c
+    flight/control/quad_x_mixer.c
     flight/receiver/receiver_freshness.c
     flight/receiver/receiver_failsafe.c
     flight/receiver/receiver_normalization.c
@@ -212,6 +219,8 @@ add_dependencies(flight_firmware generate_firmware_identity)
 target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/app"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/actuators"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/configuration"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/control"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/receiver"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
@@ -220,6 +229,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/crsf"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/usb"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    "${CMAKE_BINARY_DIR}/generated"
 )
 
 target_link_libraries(flight_firmware PRIVATE firmware_common stm32cube_f4)

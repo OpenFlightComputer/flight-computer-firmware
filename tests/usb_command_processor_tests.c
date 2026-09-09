@@ -28,10 +28,9 @@ static motor_command_t captured_motor_command;
 static uint32_t motor_submit_count;
 static bool motor_ready_for_arm;
 static bool motor_outputs_stopped;
-static motor_configuration_t motor_configuration;
-static bool motor_configuration_persistent;
-static motor_control_direction_configure_result_t motor_direction_result;
-static motor_control_configuration_reset_result_t motor_reset_result;
+static flight_configuration_service_t configuration_service;
+static flight_configuration_service_result_t configuration_write_result;
+static flight_configuration_service_result_t configuration_reset_result;
 static receiver_inspection_t receiver_inspection;
 static bool receiver_inspection_read_result;
 static uint32_t receiver_inspection_read_count;
@@ -111,40 +110,43 @@ bool motor_control_outputs_stopped(void)
     return motor_outputs_stopped;
 }
 
-motor_control_direction_configure_result_t motor_control_configure_direction(
-    uint8_t logical_motor,
-    motor_direction_t direction)
+flight_configuration_service_result_t flight_configuration_service_write(
+    flight_configuration_service_t *service,
+    const flight_configuration_t *configuration)
 {
-    if (motor_direction_result != MOTOR_CONTROL_DIRECTION_CONFIGURE_OK) {
-        return motor_direction_result;
+    if (configuration_write_result != FLIGHT_CONFIGURATION_SERVICE_OK) {
+        return configuration_write_result;
     }
-    if ((logical_motor == 0U) ||
-        (logical_motor > MOTOR_COMMAND_MOTOR_COUNT) ||
-        (direction >= MOTOR_DIRECTION_COUNT)) {
-        return MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT;
-    }
-    motor_configuration.direction[logical_motor - 1U] = direction;
-    motor_configuration_persistent = true;
-    return MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
+    service->active = *configuration;
+    service->source = FLIGHT_CONFIGURATION_SOURCE_PERSISTENT;
+    return FLIGHT_CONFIGURATION_SERVICE_OK;
 }
 
-motor_control_configuration_reset_result_t
-    motor_control_reset_configuration(void)
+flight_configuration_service_result_t flight_configuration_service_reset(
+    flight_configuration_service_t *service)
 {
-    if (motor_reset_result != MOTOR_CONTROL_CONFIGURATION_RESET_OK) {
-        return motor_reset_result;
+    if (configuration_reset_result != FLIGHT_CONFIGURATION_SERVICE_OK) {
+        return configuration_reset_result;
     }
-    motor_configuration_defaults(&motor_configuration);
-    motor_configuration_persistent = false;
-    return MOTOR_CONTROL_CONFIGURATION_RESET_OK;
+    service->source = FLIGHT_CONFIGURATION_SOURCE_DEFAULT;
+    return FLIGHT_CONFIGURATION_SERVICE_OK;
 }
 
-bool motor_control_get_configuration(motor_configuration_t *configuration,
-                                     bool *persistent_override)
+bool flight_configuration_service_read(
+    const flight_configuration_service_t *service,
+    flight_configuration_t *configuration,
+    flight_configuration_source_t *source)
 {
-    *configuration = motor_configuration;
-    *persistent_override = motor_configuration_persistent;
+    *configuration = service->active;
+    *source = service->source;
     return true;
+}
+
+const char *flight_configuration_source_name(
+    flight_configuration_source_t source)
+{
+    return source == FLIGHT_CONFIGURATION_SOURCE_PERSISTENT
+               ? "PERSISTENT" : "DEFAULT";
 }
 
 static bool fake_receiver_inspection_read(
@@ -224,10 +226,30 @@ static void reset_fakes(void)
     motor_submit_count = 0U;
     motor_ready_for_arm = true;
     motor_outputs_stopped = false;
-    motor_configuration_defaults(&motor_configuration);
-    motor_configuration_persistent = false;
-    motor_direction_result = MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
-    motor_reset_result = MOTOR_CONTROL_CONFIGURATION_RESET_OK;
+    configuration_service = (flight_configuration_service_t){
+        .active = {
+            .schema_version = 1U,
+            .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
+            .motors = {.direction = {
+                MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
+                MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL}},
+            .mixer = {.roll_factor = 0.25F, .pitch_factor = 0.25F,
+                      .yaw_factor = 0.15F},
+            .receiver_failsafe = {
+                .stale_after_us = 25000U,
+                .loss_detected_after_us = 100000U,
+                .hold_last_until_us = 400000U,
+                .stage_two_after_us = 1500000U,
+                .recovery_stable_us = 500000U,
+                .stage_one_throttle = 0.05F,
+                .recovery_throttle_maximum = 0.05F,
+            },
+        },
+        .source = FLIGHT_CONFIGURATION_SOURCE_DEFAULT,
+        .initialized = true,
+    };
+    configuration_write_result = FLIGHT_CONFIGURATION_SERVICE_OK;
+    configuration_reset_result = FLIGHT_CONFIGURATION_SERVICE_OK;
     receiver_inspection = (receiver_inspection_t){
         .freshness = RECEIVER_FRESHNESS_UNAVAILABLE,
         .failsafe_state = RECEIVER_FAILSAFE_UNAVAILABLE,
@@ -261,6 +283,7 @@ static void initialize_system(usb_command_processor_t *processor,
                                             fault_system,
                                             fake_clock,
                                             &receiver_provider,
+                                            &configuration_service,
                                             "0.1.0",
                                             "test-build") ==
            USB_COMMAND_INIT_OK);
@@ -548,7 +571,7 @@ static void motor_test_is_bounded_and_uses_the_motor_gate(void)
     assert(processor.statistics.motor_test_rejected_count == 3U);
 }
 
-static void motor_configuration_commands_are_explicit_and_disarmed_only(void)
+static void complete_configuration_commands_replace_singular_commands(void)
 {
     usb_command_processor_t processor;
     system_state_machine_t state_machine;
@@ -559,37 +582,47 @@ static void motor_configuration_commands_are_explicit_and_disarmed_only(void)
     enter_disarmed(&state_machine);
 
     queue_input("{\"type\":\"command\",\"request_id\":60,"
-                "\"command\":\"motor_direction\"}");
+                "\"command\":\"config_read\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(strstr(captured_response, "\"source\":\"DEFAULT\"") != NULL);
 
-    queue_input("{\"type\":\"command\",\"request_id\":61,"
-                "\"command\":\"motor_direction_set\",\"motor\":3,"
-                "\"direction\":\"REVERSED\"}");
+    queue_input(
+        "{\"type\":\"command\",\"request_id\":61,\"command\":"
+        "\"config_write\",\"configuration\":{\"schema_version\":1,"
+        "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
+        "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
+        "\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
+        "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
+        "\"receiver_failsafe\":{\"stale_after_us\":25000,"
+        "\"loss_detected_after_us\":100000,\"hold_last_until_us\":400000,"
+        "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"
+        "\"stage_one_roll\":0.0,\"stage_one_pitch\":0.0,"
+        "\"stage_one_yaw\":0.0,\"stage_one_throttle\":0.05,"
+        "\"recovery_throttle_maximum\":0.05}}}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(strstr(captured_response, "\"ok\":true") != NULL);
-    assert(strstr(captured_response, "\"motor\":3") != NULL);
-    assert(strstr(captured_response, "\"direction\":\"REVERSED\"") != NULL);
+    assert(strstr(captured_response,
+                  "\"propeller_layout\":\"PROPS_OUT\"") != NULL);
     assert(strstr(captured_response, "\"source\":\"PERSISTENT\"") != NULL);
 
-    motor_direction_result = MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE;
+    configuration_write_result =
+        FLIGHT_CONFIGURATION_SERVICE_UNSAFE_STATE;
     queue_input("{\"type\":\"command\",\"request_id\":62,"
-                "\"command\":\"motor_direction_set\",\"motor\":2,"
-                "\"direction\":\"NORMAL\"}");
+                "\"command\":\"config_read\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
-    assert(strstr(captured_response, "\"error\":\"state_rejected\"") != NULL);
+    assert(strstr(captured_response, "\"ok\":true") != NULL);
 
     queue_input("{\"type\":\"command\",\"request_id\":63,"
-                "\"command\":\"motor_configuration_reset\"}");
+                "\"command\":\"config_reset\"}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(strstr(captured_response, "\"source\":\"DEFAULT\"") != NULL);
-    assert(processor.statistics.motor_configuration_count == 4U);
-    assert(processor.statistics.motor_configuration_accepted_count == 3U);
-    assert(processor.statistics.motor_configuration_rejected_count == 1U);
+    assert(processor.statistics.configuration_count == 4U);
+    assert(processor.statistics.configuration_accepted_count == 4U);
+    assert(processor.statistics.configuration_rejected_count == 0U);
 }
 
 static void asynchronous_arm_is_reported_as_pending(void)
@@ -671,12 +704,14 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &fault_system,
                                             fake_clock,
                                             &receiver_provider,
+                                            &configuration_service,
                                             "0.1.0", "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_initialize(&processor, &state_machine,
                                             &fault_system,
                                             fake_clock,
                                             &receiver_provider,
+                                            &configuration_service,
                                             NULL, "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_process_once(&processor) ==
@@ -692,7 +727,7 @@ int main(void)
     unknown_health_rejects_arm_before_the_state_machine();
     motor_preparation_rejects_arm_before_the_state_machine();
     motor_test_is_bounded_and_uses_the_motor_gate();
-    motor_configuration_commands_are_explicit_and_disarmed_only();
+    complete_configuration_commands_replace_singular_commands();
     asynchronous_arm_is_reported_as_pending();
     invalid_unsupported_and_busy_responses_are_bounded();
     initialization_and_invalid_state_are_checked();

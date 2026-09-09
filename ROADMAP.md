@@ -97,11 +97,14 @@ the Stage 1 fallback with a validated level/stabilized recovery behavior.
    it without adding lifecycle states.
 2. Safe receiver arming and disarming with startup-low and low-throttle
    interlocks — complete; receiver motor submission remains prohibited.
-3. Runtime-safe motor direction configuration — implemented for review;
-   physical persistence and direction recording remain.
-4. Hardware-independent open-loop quad-X mixer.
-5. Dedicated receiver-control producer task through the existing motor gate.
-6. Receiver-loss policy authority and explicit Stage 2 recovery.
+3. Runtime-safe motor direction configuration — complete in software and
+   incorporated into the unified flight configuration; physical persistence
+   across a normal flash remains to be checked.
+4. Hardware-independent open-loop quad-X mixer — implemented for review.
+5. Dedicated receiver-control producer task through the existing motor gate —
+   implemented for review.
+6. Receiver-loss policy authority and explicit Stage 2 recovery — implemented
+   for review; propeller-free physical validation remains.
 7. End-to-end control/authority USB inspection.
 8. Propeller-free receiver-to-motor and loss/recovery validation.
 

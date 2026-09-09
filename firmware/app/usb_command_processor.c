@@ -140,94 +140,156 @@ static bool build_motor_test_response(
         &processor->pending_response_length);
 }
 
-static const char *direction_configuration_error(
-    motor_control_direction_configure_result_t result)
+static void configuration_to_usb(
+    const flight_configuration_t *configuration,
+    usb_json_configuration_t *usb)
 {
-    switch (result) {
-    case MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE:
-        return "state_rejected";
-    case MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT:
-        return "motor_direction_invalid";
-    case MOTOR_CONTROL_DIRECTION_CONFIGURE_STORAGE_ERROR:
-        return "configuration_storage_error";
-    case MOTOR_CONTROL_DIRECTION_CONFIGURE_NOT_INITIALIZED:
-        return "motor_output_error";
-    case MOTOR_CONTROL_DIRECTION_CONFIGURE_OK:
-        break;
+    size_t motor;
+
+    *usb = (usb_json_configuration_t){
+        .schema_version = configuration->schema_version,
+        .timing_us = {
+            configuration->receiver_failsafe.stale_after_us,
+            configuration->receiver_failsafe.loss_detected_after_us,
+            configuration->receiver_failsafe.hold_last_until_us,
+            configuration->receiver_failsafe.stage_two_after_us,
+            configuration->receiver_failsafe.recovery_stable_us,
+        },
+        .failsafe_control_millionths = {
+            (int32_t)((configuration->receiver_failsafe.stage_one_roll *
+                       1000000.0F) +
+                      (configuration->receiver_failsafe.stage_one_roll >= 0.0F
+                           ? 0.5F
+                           : -0.5F)),
+            (int32_t)((configuration->receiver_failsafe.stage_one_pitch *
+                       1000000.0F) +
+                      (configuration->receiver_failsafe.stage_one_pitch >= 0.0F
+                           ? 0.5F
+                           : -0.5F)),
+            (int32_t)((configuration->receiver_failsafe.stage_one_yaw *
+                       1000000.0F) +
+                      (configuration->receiver_failsafe.stage_one_yaw >= 0.0F
+                           ? 0.5F
+                           : -0.5F)),
+            (int32_t)((configuration->receiver_failsafe.stage_one_throttle *
+                       1000000.0F) + 0.5F),
+            (int32_t)((configuration->receiver_failsafe
+                           .recovery_throttle_maximum * 1000000.0F) + 0.5F),
+        },
+        .mixer_factor_millionths = {
+            (uint32_t)((configuration->mixer.roll_factor * 1000000.0F) +
+                       0.5F),
+            (uint32_t)((configuration->mixer.pitch_factor * 1000000.0F) +
+                       0.5F),
+            (uint32_t)((configuration->mixer.yaw_factor * 1000000.0F) +
+                       0.5F),
+        },
+        .propeller_layout = (uint8_t)configuration->propeller_layout,
+    };
+    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+        usb->directions[motor] =
+            (uint8_t)configuration->motors.direction[motor];
     }
-    return "motor_output_error";
 }
 
-static bool build_motor_configuration_response(
+static void configuration_from_usb(
+    const usb_json_configuration_t *usb,
+    flight_configuration_t *configuration)
+{
+    size_t motor;
+
+    *configuration = (flight_configuration_t){
+        .schema_version = usb->schema_version,
+        .propeller_layout = (propeller_layout_t)usb->propeller_layout,
+        .mixer = {
+            .roll_factor = (float)usb->mixer_factor_millionths[0] / 1000000.0F,
+            .pitch_factor = (float)usb->mixer_factor_millionths[1] / 1000000.0F,
+            .yaw_factor = (float)usb->mixer_factor_millionths[2] / 1000000.0F,
+        },
+        .receiver_failsafe = {
+            .stale_after_us = usb->timing_us[0],
+            .loss_detected_after_us = usb->timing_us[1],
+            .hold_last_until_us = usb->timing_us[2],
+            .stage_two_after_us = usb->timing_us[3],
+            .recovery_stable_us = usb->timing_us[4],
+            .stage_one_roll =
+                (float)usb->failsafe_control_millionths[0] / 1000000.0F,
+            .stage_one_pitch =
+                (float)usb->failsafe_control_millionths[1] / 1000000.0F,
+            .stage_one_yaw =
+                (float)usb->failsafe_control_millionths[2] / 1000000.0F,
+            .stage_one_throttle =
+                (float)usb->failsafe_control_millionths[3] / 1000000.0F,
+            .recovery_throttle_maximum =
+                (float)usb->failsafe_control_millionths[4] / 1000000.0F,
+        },
+    };
+    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+        configuration->motors.direction[motor] =
+            (motor_direction_t)usb->directions[motor];
+    }
+}
+
+static const char *configuration_error(
+    flight_configuration_service_result_t result)
+{
+    switch (result) {
+    case FLIGHT_CONFIGURATION_SERVICE_UNSAFE_STATE:
+        return "state_rejected";
+    case FLIGHT_CONFIGURATION_SERVICE_STORAGE_ERROR:
+        return "configuration_storage_error";
+    case FLIGHT_CONFIGURATION_SERVICE_INVALID_ARGUMENT:
+        return "configuration_invalid";
+    case FLIGHT_CONFIGURATION_SERVICE_APPLY_ERROR:
+        return "configuration_apply_error";
+    case FLIGHT_CONFIGURATION_SERVICE_OK:
+        break;
+    }
+    return "configuration_error";
+}
+
+static bool build_configuration_response(
     usb_command_processor_t *processor,
     const usb_json_request_t *request)
 {
-    motor_configuration_t configuration;
-    bool persistent = false;
+    flight_configuration_t configuration;
+    flight_configuration_source_t source;
+    usb_json_configuration_t usb_configuration;
     bool accepted = true;
     const char *error = NULL;
-    const char *direction_names[MOTOR_COMMAND_MOTOR_COUNT];
-    const char *selected_direction = NULL;
-    size_t motor;
+    flight_configuration_service_result_t result =
+        FLIGHT_CONFIGURATION_SERVICE_OK;
 
-    saturating_increment(&processor->statistics.motor_configuration_count);
-    if (request->command == USB_JSON_COMMAND_MOTOR_DIRECTION_SET) {
-        motor_direction_t direction;
-        motor_control_direction_configure_result_t result;
-
-        if (request->direction == USB_JSON_MOTOR_DIRECTION_NORMAL) {
-            direction = MOTOR_DIRECTION_NORMAL;
-        } else if (request->direction ==
-                   USB_JSON_MOTOR_DIRECTION_REVERSED) {
-            direction = MOTOR_DIRECTION_REVERSED;
-        } else {
-            direction = MOTOR_DIRECTION_COUNT;
-        }
-        result = motor_control_configure_direction(request->motor, direction);
-        accepted = result == MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
-        if (!accepted) {
-            error = direction_configuration_error(result);
-        }
-    } else if (request->command ==
-               USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET) {
-        const motor_control_configuration_reset_result_t result =
-            motor_control_reset_configuration();
-
-        accepted = result == MOTOR_CONTROL_CONFIGURATION_RESET_OK;
-        if (!accepted) {
-            error = result == MOTOR_CONTROL_CONFIGURATION_RESET_UNSAFE_STATE
-                        ? "state_rejected"
-                        : "configuration_storage_error";
-        }
+    saturating_increment(&processor->statistics.configuration_count);
+    if (request->command == USB_JSON_COMMAND_CONFIG_WRITE) {
+        configuration_from_usb(&request->configuration, &configuration);
+        result = flight_configuration_service_write(
+            processor->configuration_service, &configuration);
+    } else if (request->command == USB_JSON_COMMAND_CONFIG_RESET) {
+        result = flight_configuration_service_reset(
+            processor->configuration_service);
     }
-
-    if (!motor_control_get_configuration(&configuration, &persistent)) {
+    accepted = result == FLIGHT_CONFIGURATION_SERVICE_OK;
+    if (!accepted) {
+        error = configuration_error(result);
+    }
+    if (!flight_configuration_service_read(
+            processor->configuration_service, &configuration, &source)) {
         return false;
     }
-    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
-        direction_names[motor] =
-            motor_direction_name(configuration.direction[motor]);
-    }
-    if ((request->motor > 0U) &&
-        (request->motor <= MOTOR_COMMAND_MOTOR_COUNT)) {
-        selected_direction = direction_names[request->motor - 1U];
-    }
+    configuration_to_usb(&configuration, &usb_configuration);
 
     if (accepted) {
-        saturating_increment(
-            &processor->statistics.motor_configuration_accepted_count);
+        saturating_increment(&processor->statistics.configuration_accepted_count);
     } else {
-        saturating_increment(
-            &processor->statistics.motor_configuration_rejected_count);
+        saturating_increment(&processor->statistics.configuration_rejected_count);
     }
-    return usb_json_build_motor_configuration_response(
+    return usb_json_build_configuration_response(
         request->command,
         request->request_id,
         accepted,
-        request->motor,
-        selected_direction,
-        persistent ? "PERSISTENT" : "DEFAULT",
-        direction_names,
+        flight_configuration_source_name(source),
+        &usb_configuration,
         system_state_name(processor->state_machine->current),
         error,
         processor->pending_response,
@@ -352,10 +414,10 @@ static bool build_command_response(usb_command_processor_t *processor,
     }
     case USB_JSON_COMMAND_MOTOR_TEST:
         return build_motor_test_response(processor, request);
-    case USB_JSON_COMMAND_MOTOR_DIRECTION:
-    case USB_JSON_COMMAND_MOTOR_DIRECTION_SET:
-    case USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET:
-        return build_motor_configuration_response(processor, request);
+    case USB_JSON_COMMAND_CONFIG_READ:
+    case USB_JSON_COMMAND_CONFIG_WRITE:
+    case USB_JSON_COMMAND_CONFIG_RESET:
+        return build_configuration_response(processor, request);
     case USB_JSON_COMMAND_UNSUPPORTED:
     case USB_JSON_COMMAND_INVALID:
         break;
@@ -370,6 +432,7 @@ usb_command_init_result_t usb_command_processor_initialize(
     fault_system_t *fault_system,
     usb_command_clock_t clock,
     const receiver_inspection_provider_t *receiver_inspection_provider,
+    flight_configuration_service_t *configuration_service,
     const char *firmware_version,
     const char *build_id)
 {
@@ -378,6 +441,7 @@ usb_command_init_result_t usb_command_processor_initialize(
         !fault_system->initialized || (clock == NULL) ||
         (receiver_inspection_provider == NULL) ||
         (receiver_inspection_provider->read == NULL) ||
+        (configuration_service == NULL) || !configuration_service->initialized ||
         (firmware_version == NULL) || (build_id == NULL)) {
         return USB_COMMAND_INIT_INVALID_ARGUMENT;
     }
@@ -387,6 +451,7 @@ usb_command_init_result_t usb_command_processor_initialize(
         .fault_system = fault_system,
         .clock = clock,
         .receiver_inspection_provider = *receiver_inspection_provider,
+        .configuration_service = configuration_service,
         .firmware_version = firmware_version,
         .build_id = build_id,
         .initialized = true,
@@ -410,6 +475,8 @@ usb_command_process_result_t usb_command_processor_process_once(
         !processor->fault_system->initialized ||
         (processor->clock == NULL) ||
         (processor->receiver_inspection_provider.read == NULL) ||
+        (processor->configuration_service == NULL) ||
+        !processor->configuration_service->initialized ||
         (processor->firmware_version == NULL) ||
         (processor->build_id == NULL)) {
         return USB_COMMAND_PROCESS_INVALID_STATE;

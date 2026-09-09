@@ -54,10 +54,21 @@ assert_token_is_private("motor_output_status" ${MOTOR_OUTPUT_FILES})
 set(MOTOR_SUBMISSION_FILES
     firmware/app/motor_control.c
     firmware/app/motor_control.h
+    firmware/app/flight_control.c
     firmware/app/usb_command_processor.c
 )
 
 assert_token_is_private("motor_control_submit" ${MOTOR_SUBMISSION_FILES})
+
+set(MOTOR_FAILSAFE_FILES
+    firmware/app/motor_control.c
+    firmware/app/motor_control.h
+    firmware/app/flight_control.c
+)
+
+assert_token_is_private("motor_control_enter_failsafe" ${MOTOR_FAILSAFE_FILES})
+assert_token_is_private("motor_control_recover_to_disarmed"
+    ${MOTOR_FAILSAFE_FILES})
 
 set(DSHOT_ENCODER_FILES
     firmware/app/dshot_motor_backend.c

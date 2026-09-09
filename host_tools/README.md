@@ -42,20 +42,22 @@ boundaries so observed tones and movement can be assigned to the correct phase.
 Serial reads return as soon as a complete newline-delimited response arrives;
 they do not delay the next lease refresh while waiting to fill a large buffer.
 
-Persistent ESC direction configuration is explicit and disarmed-only:
+The complete flight configuration is managed as one portable JSON document:
 
 ```bash
-./ofc motor direction show
-./ofc motor direction set --motor 3 --direction reversed
-./ofc motor configuration reset
+./ofc config read --output quad.json
+./ofc config write quad.json
+./ofc config reset
 ```
 
-The set command is absolute, not a toggle. Firmware applies all four configured
-directions immediately and reasserts them with ten DShot command frames before
-every arm. `./ofc device arm` waits for this pending preparation to finish
-before reporting success. Normal firmware flashing preserves the dedicated
-configuration sector; a mass erase or the reset command restores compiled
-defaults. See `docs/motor-configuration.md` for the complete contract.
+Read and write always transfer the whole configuration; there are no per-field
+mutation commands. Writes and reset are disarmed-only and atomically replace
+the active motor directions, propeller layout, mixer factors, and receiver
+failsafe policy. Firmware reasserts configured ESC directions with ten DShot
+command frames before every arm. Normal flashing preserves the configuration
+sector; a mass erase or reset restores the defaults compiled from
+`config/default-flight-configuration.json`. See
+`docs/flight-configuration.md` for the complete contract.
 
 Run the host test suite from the repository root with:
 

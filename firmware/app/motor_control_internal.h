@@ -2,7 +2,6 @@
 #define OPENFLIGHTCOMPUTER_MOTOR_CONTROL_INTERNAL_H
 
 #include "motor_control.h"
-#include "motor_configuration_storage.h"
 #include "fault.h"
 #include "motor_output.h"
 #include "system_state.h"
@@ -26,6 +25,6 @@ motor_control_init_result_t motor_control_initialize(
     motor_control_clock_t clock,
     uint64_t command_timeout_us,
     const motor_output_backend_t *backend,
-    const motor_configuration_storage_t *configuration_storage);
+    const motor_configuration_t *configuration);
 
 #endif

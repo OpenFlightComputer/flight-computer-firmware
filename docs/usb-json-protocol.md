@@ -26,9 +26,9 @@ The supported commands are:
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
 | `motor_test` | Submit a leased single-motor command through the production safety gate |
-| `motor_direction` | Report all four effective logical-motor directions and their source |
-| `motor_direction_set` | Persist and apply one absolute logical-motor direction while disarmed |
-| `motor_configuration_reset` | Erase the persistent override and apply compiled defaults while disarmed |
+| `config_read` | Return the complete active flight configuration |
+| `config_write` | Validate, persist, and atomically apply one complete configuration while disarmed |
+| `config_reset` | Erase the override and apply the compiled JSON defaults while disarmed |
 
 `arm` does not itself request nonzero output. The application safety policy
 first requires `OK`, `WARNING`, or `DEGRADED` health;
@@ -57,18 +57,20 @@ and fault behavior are identical to other future command producers. An
 accepted command is a 100 ms lease: without a fresh accepted request, the
 1 kHz motor-control task transmits stop frames and enters failsafe.
 
-Motor direction uses absolute rather than toggle requests:
+Configuration uses complete documents rather than per-field mutations:
 
 ```json
-{"type":"command","request_id":51,"command":"motor_direction"}
-{"type":"command","request_id":52,"command":"motor_direction_set","motor":3,"direction":"REVERSED"}
-{"type":"command","request_id":53,"command":"motor_configuration_reset"}
+{"type":"command","request_id":51,"command":"config_read"}
+{"type":"command","request_id":52,"command":"config_write","configuration":{"schema_version":1,"motors":{"propeller_layout":"PROPS_IN","directions":["NORMAL","NORMAL","REVERSED","NORMAL"]},"mixer":{"roll_factor":0.250000,"pitch_factor":0.250000,"yaw_factor":0.150000},"receiver_failsafe":{"stale_after_us":25000,"loss_detected_after_us":100000,"hold_last_until_us":400000,"stage_two_after_us":1500000,"recovery_stable_us":500000,"stage_one_roll":0.000000,"stage_one_pitch":0.000000,"stage_one_yaw":0.000000,"stage_one_throttle":0.050000,"recovery_throttle_maximum":0.050000}}}
+{"type":"command","request_id":53,"command":"config_reset"}
 ```
 
-Only uppercase `NORMAL` and `REVERSED` are accepted on the wire. Set and reset
-are rejected with `state_rejected` unless the lifecycle is `DISARMED` with no
-arm pending. A storage failure returns `configuration_storage_error`. See
-`docs/motor-configuration.md` for persistence and DShot application behavior.
+Only uppercase `PROPS_IN`/`PROPS_OUT` and `NORMAL`/`REVERSED` values are
+accepted. Decimal controls and factors use at most six fractional digits.
+Write and reset are rejected with `state_rejected` unless the lifecycle is
+`DISARMED` with no arm pending. A storage failure returns
+`configuration_storage_error`. See `docs/flight-configuration.md` for the
+schema, persistence, task, mixer, and DShot application behavior.
 
 ## Responses
 
@@ -84,9 +86,7 @@ Examples, each followed by one newline:
 {"type":"response","request_id":47,"command":"arm","ok":false,"state":"DISARMED","error":"motor_not_ready"}
 {"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":2,"throttle":0.100000}
 {"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":0,"throttle":0.020000,"error":"motor_not_allowed"}
-{"type":"response","request_id":51,"command":"motor_direction","ok":true,"state":"DISARMED","source":"DEFAULT","directions":["NORMAL","NORMAL","NORMAL","NORMAL"]}
-{"type":"response","request_id":52,"command":"motor_direction_set","ok":true,"state":"DISARMED","motor":3,"direction":"REVERSED","source":"PERSISTENT","directions":["NORMAL","NORMAL","REVERSED","NORMAL"]}
-{"type":"response","request_id":53,"command":"motor_configuration_reset","ok":true,"state":"DISARMED","source":"DEFAULT","directions":["NORMAL","NORMAL","NORMAL","NORMAL"]}
+{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":1,"motors":{"propeller_layout":"PROPS_IN","directions":["NORMAL","NORMAL","NORMAL","NORMAL"]},"mixer":{"roll_factor":0.250000,"pitch_factor":0.250000,"yaw_factor":0.150000},"receiver_failsafe":{"stale_after_us":25000,"loss_detected_after_us":100000,"hold_last_until_us":400000,"stage_two_after_us":1500000,"recovery_stable_us":500000,"stage_one_roll":0.000000,"stage_one_pitch":0.000000,"stage_one_yaw":0.000000,"stage_one_throttle":0.050000,"recovery_throttle_maximum":0.050000}}}
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":50,"error":"unsupported_command"}
 ```

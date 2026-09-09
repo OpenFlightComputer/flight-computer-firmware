@@ -3,14 +3,6 @@
 #include <limits.h>
 #include <stddef.h>
 
-#define RECEIVER_FAILSAFE_DEFAULT_STALE_AFTER_US UINT64_C(25000)
-#define RECEIVER_FAILSAFE_DEFAULT_LOSS_DETECTED_AFTER_US UINT64_C(100000)
-#define RECEIVER_FAILSAFE_DEFAULT_HOLD_LAST_UNTIL_US UINT64_C(400000)
-#define RECEIVER_FAILSAFE_DEFAULT_STAGE_TWO_AFTER_US UINT64_C(1500000)
-#define RECEIVER_FAILSAFE_DEFAULT_RECOVERY_STABLE_US UINT64_C(500000)
-#define RECEIVER_FAILSAFE_DEFAULT_STAGE_ONE_THROTTLE 0.05F
-#define RECEIVER_FAILSAFE_DEFAULT_RECOVERY_THROTTLE_MAXIMUM 0.05F
-
 static bool axis_is_valid(float value)
 {
     return (value >= -1.0F) && (value <= 1.0F);
@@ -94,28 +86,6 @@ static void update_stage_two_recovery(
     failsafe->recovery_ready =
         (now_us - failsafe->recovery_started_at_us) >=
         failsafe->config.recovery_stable_us;
-}
-
-void receiver_failsafe_default_config(receiver_failsafe_config_t *config)
-{
-    if (config == NULL) {
-        return;
-    }
-
-    *config = (receiver_failsafe_config_t){
-        .stale_after_us = RECEIVER_FAILSAFE_DEFAULT_STALE_AFTER_US,
-        .loss_detected_after_us =
-            RECEIVER_FAILSAFE_DEFAULT_LOSS_DETECTED_AFTER_US,
-        .hold_last_until_us = RECEIVER_FAILSAFE_DEFAULT_HOLD_LAST_UNTIL_US,
-        .stage_two_after_us = RECEIVER_FAILSAFE_DEFAULT_STAGE_TWO_AFTER_US,
-        .recovery_stable_us = RECEIVER_FAILSAFE_DEFAULT_RECOVERY_STABLE_US,
-        .stage_one_roll = 0.0F,
-        .stage_one_pitch = 0.0F,
-        .stage_one_yaw = 0.0F,
-        .stage_one_throttle = RECEIVER_FAILSAFE_DEFAULT_STAGE_ONE_THROTTLE,
-        .recovery_throttle_maximum =
-            RECEIVER_FAILSAFE_DEFAULT_RECOVERY_THROTTLE_MAXIMUM,
-    };
 }
 
 bool receiver_failsafe_config_is_valid(

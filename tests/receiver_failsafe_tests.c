@@ -21,12 +21,28 @@ static receiver_control_snapshot_t control_at(uint64_t timestamp_us,
     };
 }
 
+static receiver_failsafe_config_t valid_config(void)
+{
+    return (receiver_failsafe_config_t){
+        .stale_after_us = UINT64_C(25000),
+        .loss_detected_after_us = UINT64_C(100000),
+        .hold_last_until_us = UINT64_C(400000),
+        .stage_two_after_us = UINT64_C(1500000),
+        .recovery_stable_us = UINT64_C(500000),
+        .stage_one_roll = 0.0F,
+        .stage_one_pitch = 0.0F,
+        .stage_one_yaw = 0.0F,
+        .stage_one_throttle = 0.05F,
+        .recovery_throttle_maximum = 0.05F,
+    };
+}
+
 static receiver_failsafe_t initialized_policy(uint64_t now_us)
 {
     receiver_failsafe_config_t config;
     receiver_failsafe_t failsafe;
 
-    receiver_failsafe_default_config(&config);
+    config = valid_config();
     assert(receiver_failsafe_initialize(&failsafe, &config, now_us));
     return failsafe;
 }
@@ -44,12 +60,12 @@ static void assert_update(receiver_failsafe_t *failsafe,
     assert(decision.action == expected_action);
 }
 
-static void test_default_config_and_invalid_configs(void)
+static void test_valid_and_invalid_configs(void)
 {
     receiver_failsafe_config_t config;
     receiver_failsafe_t failsafe;
 
-    receiver_failsafe_default_config(&config);
+    config = valid_config();
     assert(receiver_failsafe_config_is_valid(&config));
     assert(config.stale_after_us == UINT64_C(25000));
     assert(config.loss_detected_after_us == UINT64_C(100000));
@@ -61,11 +77,11 @@ static void test_default_config_and_invalid_configs(void)
     assert(!receiver_failsafe_config_is_valid(&config));
     assert(!receiver_failsafe_initialize(&failsafe, &config, 0U));
 
-    receiver_failsafe_default_config(&config);
+    config = valid_config();
     config.stage_one_roll = 1.01F;
     assert(!receiver_failsafe_config_is_valid(&config));
 
-    receiver_failsafe_default_config(&config);
+    config = valid_config();
     config.stage_one_throttle = NAN;
     assert(!receiver_failsafe_config_is_valid(&config));
 }
@@ -229,7 +245,7 @@ static void test_unavailable_and_clock_rollback_fail_closed(void)
 
 int main(void)
 {
-    test_default_config_and_invalid_configs();
+    test_valid_and_invalid_configs();
     test_timing_boundaries_and_requested_controls();
     test_short_loss_recovers_automatically();
     test_stage_two_requires_stable_safe_recovery_and_release();

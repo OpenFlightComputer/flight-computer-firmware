@@ -6,10 +6,16 @@
 
 int main(void)
 {
-    motor_configuration_t configuration;
+    motor_configuration_t configuration = {
+        .direction = {
+            MOTOR_DIRECTION_NORMAL,
+            MOTOR_DIRECTION_NORMAL,
+            MOTOR_DIRECTION_NORMAL,
+            MOTOR_DIRECTION_NORMAL,
+        },
+    };
     size_t motor;
 
-    motor_configuration_defaults(&configuration);
     assert(motor_configuration_is_valid(&configuration));
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         assert(configuration.direction[motor] == MOTOR_DIRECTION_NORMAL);

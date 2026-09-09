@@ -134,6 +134,18 @@ bool receiver_service_control_state(const receiver_service_t *service,
     return true;
 }
 
+bool receiver_service_update_freshness_config(
+    receiver_service_t *service,
+    const receiver_freshness_config_t *config)
+{
+    if ((service == NULL) || !service->initialized ||
+        !receiver_freshness_config_is_valid(config)) {
+        return false;
+    }
+    service->freshness_config = *config;
+    return true;
+}
+
 void receiver_service_task(void *context)
 {
     receiver_service_t *service = context;

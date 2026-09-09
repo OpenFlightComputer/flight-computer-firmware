@@ -1,8 +1,0 @@
-#ifndef OPENFLIGHTCOMPUTER_BOARD_MOTOR_CONFIGURATION_STORAGE_H
-#define OPENFLIGHTCOMPUTER_BOARD_MOTOR_CONFIGURATION_STORAGE_H
-
-#include "motor_configuration_storage.h"
-
-motor_configuration_storage_t board_motor_configuration_storage(void);
-
-#endif

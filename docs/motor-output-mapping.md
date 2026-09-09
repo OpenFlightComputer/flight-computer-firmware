@@ -102,7 +102,7 @@ configuration. ESC-stored direction is now an explicit logical-motor setting,
 persisted by the FC and applied through a disarmed DShot command sequence. The
 logical-to-physical mapping is applied before output, so the direction follows
 the logical aircraft position. Propeller-free confirmation remains required;
-see `docs/motor-configuration.md`.
+see `docs/flight-configuration.md`.
 
 ## Resource review
 
