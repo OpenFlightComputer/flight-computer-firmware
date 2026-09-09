@@ -76,6 +76,26 @@ def test_request_parameters_cannot_replace_correlated_envelope():
         )
 
 
+def test_motor_direction_request_uses_absolute_setting():
+    connection = FakeConnection(
+        [
+            b'{"type":"response","request_id":1,'
+            b'"command":"motor_direction_set","ok":true}'
+        ]
+    )
+    JsonProtocolClient(connection).request(
+        "motor_direction_set",
+        parameters={"motor": 3, "direction": "REVERSED"},
+    )
+    assert json.loads(connection.written[0]) == {
+        "type": "command",
+        "command": "motor_direction_set",
+        "request_id": 1,
+        "motor": 3,
+        "direction": "REVERSED",
+    }
+
+
 def test_correlated_error_is_raised():
     connection = FakeConnection(
         [b'{"type":"error","request_id":1,"error":"unsupported_command"}']

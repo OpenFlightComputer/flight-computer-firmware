@@ -9,6 +9,7 @@
 #include <string.h>
 
 static motor_control_source_t fake_source;
+static motor_control_source_t fake_pending_source;
 static motor_control_arm_result_t fake_arm_result;
 static motor_control_disarm_result_t fake_disarm_result;
 static uint32_t fake_arm_calls;
@@ -19,11 +20,18 @@ motor_control_source_t motor_control_active_source(void)
     return fake_source;
 }
 
+motor_control_source_t motor_control_pending_source(void)
+{
+    return fake_pending_source;
+}
+
 motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
 {
     fake_arm_calls++;
     if (fake_arm_result == MOTOR_CONTROL_ARM_ACCEPTED) {
         fake_source = source;
+    } else if (fake_arm_result == MOTOR_CONTROL_ARM_PENDING) {
+        fake_pending_source = source;
     }
     return fake_arm_result;
 }
@@ -33,6 +41,7 @@ motor_control_disarm_result_t motor_control_disarm(void)
     fake_disarm_calls++;
     if (fake_disarm_result == MOTOR_CONTROL_DISARM_ACCEPTED) {
         fake_source = MOTOR_CONTROL_SOURCE_NONE;
+        fake_pending_source = MOTOR_CONTROL_SOURCE_NONE;
     }
     return fake_disarm_result;
 }
@@ -40,6 +49,7 @@ motor_control_disarm_result_t motor_control_disarm(void)
 static void reset_motor_fake(void)
 {
     fake_source = MOTOR_CONTROL_SOURCE_NONE;
+    fake_pending_source = MOTOR_CONTROL_SOURCE_NONE;
     fake_arm_result = MOTOR_CONTROL_ARM_ACCEPTED;
     fake_disarm_result = MOTOR_CONTROL_DISARM_ACCEPTED;
     fake_arm_calls = 0U;
@@ -258,6 +268,27 @@ static void test_rejected_disarm_is_reported(void)
     assert(arming.disarm_request_count == 1U);
 }
 
+static void test_pending_arm_is_cancelled_when_input_becomes_unusable(void)
+{
+    receiver_arming_t arming = initialized_arming();
+    receiver_control_state_t input = control(false, 0.0F);
+    receiver_failsafe_decision_t failsafe = live_failsafe();
+
+    fake_arm_result = MOTOR_CONTROL_ARM_PENDING;
+    assert(receiver_arming_process(&arming, &input, &failsafe) ==
+           RECEIVER_ARMING_READY);
+    input.snapshot.arm_switch_high = true;
+    assert(receiver_arming_process(&arming, &input, &failsafe) ==
+           RECEIVER_ARMING_ARM_PENDING);
+    assert(fake_pending_source == MOTOR_CONTROL_SOURCE_RECEIVER);
+
+    input.freshness = RECEIVER_FRESHNESS_STALE;
+    assert(receiver_arming_process(&arming, &input, &failsafe) ==
+           RECEIVER_ARMING_INPUT_UNAVAILABLE);
+    assert(fake_disarm_calls == 1U);
+    assert(fake_pending_source == MOTOR_CONTROL_SOURCE_NONE);
+}
+
 int main(void)
 {
     reset_motor_fake();
@@ -278,5 +309,7 @@ int main(void)
     test_rejected_motor_arm_consumes_the_edge();
     reset_motor_fake();
     test_rejected_disarm_is_reported();
+    reset_motor_fake();
+    test_pending_arm_is_cancelled_when_input_becomes_unusable();
     return 0;
 }

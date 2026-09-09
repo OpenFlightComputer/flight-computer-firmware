@@ -5,9 +5,47 @@
 static bool backend_is_valid(const motor_output_backend_t *backend)
 {
     return (backend != NULL) && (backend->initialize != NULL) &&
-           (backend->submit != NULL) && (backend->force_stop != NULL) &&
+           (backend->submit != NULL) &&
+           (backend->submit_directions != NULL) &&
+           (backend->force_stop != NULL) &&
            (backend->status != NULL) &&
            (backend->diagnostic_context != NULL);
+}
+
+motor_output_direction_result_t motor_output_submit_directions(
+    motor_output_t *output,
+    const motor_direction_t directions[MOTOR_COMMAND_MOTOR_COUNT])
+{
+    motor_configuration_t configuration;
+    motor_output_backend_direction_result_t backend_result;
+    size_t motor;
+
+    if ((output == NULL) || (directions == NULL)) {
+        return MOTOR_OUTPUT_DIRECTION_INVALID_ARGUMENT;
+    }
+    if (!output->initialized || !backend_is_valid(&output->backend)) {
+        return MOTOR_OUTPUT_DIRECTION_NOT_INITIALIZED;
+    }
+    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+        configuration.direction[motor] = directions[motor];
+    }
+    if (!motor_configuration_is_valid(&configuration)) {
+        return MOTOR_OUTPUT_DIRECTION_INVALID_CONFIGURATION;
+    }
+
+    backend_result = output->backend.submit_directions(
+        configuration.direction,
+        output->backend.context);
+    switch (backend_result) {
+    case MOTOR_OUTPUT_BACKEND_DIRECTION_ACCEPTED:
+        return MOTOR_OUTPUT_DIRECTION_ACCEPTED;
+    case MOTOR_OUTPUT_BACKEND_DIRECTION_BUSY:
+        return MOTOR_OUTPUT_DIRECTION_BUSY;
+    case MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR:
+        return MOTOR_OUTPUT_DIRECTION_BACKEND_ERROR;
+    }
+
+    return MOTOR_OUTPUT_DIRECTION_BACKEND_ERROR;
 }
 
 motor_output_init_result_t motor_output_initialize(

@@ -96,9 +96,9 @@ the Stage 1 fallback with a validated level/stabilized recovery behavior.
    successful arm latches `USB_TEST` or `RECEIVER`, and every stop path releases
    it without adding lifecycle states.
 2. Safe receiver arming and disarming with startup-low and low-throttle
-   interlocks — implemented for review; receiver motor submission remains
-   prohibited.
-3. Runtime-safe motor direction configuration and physical direction record.
+   interlocks — complete; receiver motor submission remains prohibited.
+3. Runtime-safe motor direction configuration — implemented for review;
+   physical persistence and direction recording remain.
 4. Hardware-independent open-loop quad-X mixer.
 5. Dedicated receiver-control producer task through the existing motor gate.
 6. Receiver-loss policy authority and explicit Stage 2 recovery.

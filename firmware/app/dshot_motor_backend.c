@@ -8,6 +8,8 @@
 
 #define DSHOT_NORMALIZED_THROTTLE_SPAN \
     ((float)(DSHOT_THROTTLE_MAX - DSHOT_THROTTLE_MIN))
+#define DSHOT_COMMAND_DIRECTION_NORMAL UINT16_C(20)
+#define DSHOT_COMMAND_DIRECTION_REVERSED UINT16_C(21)
 
 _Static_assert(MOTOR_COMMAND_MOTOR_COUNT == DSHOT_OUTPUT_COUNT,
                "Every physical motor requires one DShot table column");
@@ -125,6 +127,74 @@ static motor_output_backend_submit_result_t submit_command(
     return MOTOR_OUTPUT_BACKEND_SUBMIT_ERROR;
 }
 
+static motor_output_backend_direction_result_t submit_directions(
+    const motor_direction_t directions[MOTOR_COMMAND_MOTOR_COUNT],
+    void *context)
+{
+    dshot_motor_backend_t *backend = context;
+    uint16_t frames_by_physical_output[MOTOR_COMMAND_MOTOR_COUNT];
+    dshot_dma_buffer_t physical_compare_table;
+    board_motor_output_status_t output_status;
+    size_t physical_output;
+
+    if ((backend == NULL) || !backend->initialized ||
+        (directions == NULL)) {
+        return MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+    }
+
+    output_status = board_motor_output_status();
+    if (output_status == BOARD_MOTOR_OUTPUT_STATUS_ACTIVE) {
+        return MOTOR_OUTPUT_BACKEND_DIRECTION_BUSY;
+    }
+    if (output_status != BOARD_MOTOR_OUTPUT_STATUS_IDLE) {
+        return MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+    }
+
+    for (physical_output = 0U;
+         physical_output < MOTOR_COMMAND_MOTOR_COUNT;
+         physical_output++) {
+        uint16_t dshot_command;
+
+        if (directions[physical_output] == MOTOR_DIRECTION_NORMAL) {
+            dshot_command = DSHOT_COMMAND_DIRECTION_NORMAL;
+        } else if (directions[physical_output] ==
+                   MOTOR_DIRECTION_REVERSED) {
+            dshot_command = DSHOT_COMMAND_DIRECTION_REVERSED;
+        } else {
+            return MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+        }
+
+        /* DShot settings commands require the telemetry/request bit set. */
+        if (dshot_encode_command(
+                dshot_command,
+                true,
+                &frames_by_physical_output[physical_output]) !=
+            DSHOT_ENCODE_OK) {
+            return MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+        }
+    }
+
+    if (dshot_timing_build_dma_buffer(&backend->timing,
+                                      frames_by_physical_output,
+                                      physical_compare_table) !=
+        DSHOT_TIMING_OK) {
+        return MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+    }
+
+    switch (board_motor_output_submit(&physical_compare_table[0][0],
+                                      DSHOT_DMA_SLOT_COUNT *
+                                          DSHOT_OUTPUT_COUNT)) {
+    case BOARD_MOTOR_OUTPUT_SUBMIT_ACCEPTED:
+        return MOTOR_OUTPUT_BACKEND_DIRECTION_ACCEPTED;
+    case BOARD_MOTOR_OUTPUT_SUBMIT_BUSY:
+        return MOTOR_OUTPUT_BACKEND_DIRECTION_BUSY;
+    case BOARD_MOTOR_OUTPUT_SUBMIT_ERROR:
+        return MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+    }
+
+    return MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+}
+
 static motor_output_backend_stop_result_t force_stop(void *context)
 {
     dshot_motor_backend_t *backend = context;
@@ -186,6 +256,7 @@ bool dshot_motor_backend_prepare(dshot_motor_backend_t *backend,
     *output_backend = (motor_output_backend_t){
         .initialize = initialize_backend,
         .submit = submit_command,
+        .submit_directions = submit_directions,
         .force_stop = force_stop,
         .status = backend_status,
         .diagnostic_context = diagnostic_context,

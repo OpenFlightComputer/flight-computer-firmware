@@ -1,5 +1,6 @@
 #include "boot_status.h"
 #include "board.h"
+#include "board_motor_configuration_storage.h"
 #include "board_receiver.h"
 #include "dshot_motor_backend.h"
 #include "fault.h"
@@ -164,6 +165,10 @@ static void receiver_task(void *context)
     if (firmware_receiver_arming_last_result ==
         (uint32_t)RECEIVER_ARMING_ARM_ACCEPTED) {
         LOG_INFO(LOG_MODULE_RECEIVER, "receiver arm accepted");
+    } else if (firmware_receiver_arming_last_result ==
+               (uint32_t)RECEIVER_ARMING_ARM_PENDING) {
+        LOG_INFO(LOG_MODULE_RECEIVER,
+                 "receiver arm pending motor direction configuration");
     } else if (firmware_receiver_arming_last_result ==
                (uint32_t)RECEIVER_ARMING_DISARM_ACCEPTED) {
         LOG_INFO(LOG_MODULE_RECEIVER, "receiver disarm accepted");
@@ -512,6 +517,7 @@ int main(void)
     scheduler_init_result_t scheduler_init_result;
     usb_cdc_init_result_t usb_init_result;
     motor_output_backend_t motor_output_backend;
+    motor_configuration_storage_t motor_configuration_storage;
     motor_control_init_result_t motor_control_result;
     receiver_source_t receiver_source;
     receiver_normalization_config_t receiver_normalization_config;
@@ -582,12 +588,14 @@ int main(void)
                         false,
                         0U);
     }
+    motor_configuration_storage = board_motor_configuration_storage();
     motor_control_result = motor_control_initialize(
         &firmware_system_state_machine,
         &firmware_fault_system,
         time_us,
         MOTOR_COMMAND_DEFAULT_TIMEOUT_US,
-        &motor_output_backend);
+        &motor_output_backend,
+        &motor_configuration_storage);
     firmware_motor_control_initialization_result =
         (uint32_t)motor_control_result;
     if (motor_control_result != MOTOR_CONTROL_INIT_OK) {

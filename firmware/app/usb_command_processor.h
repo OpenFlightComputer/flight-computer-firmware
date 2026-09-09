@@ -30,6 +30,9 @@ typedef struct {
     uint32_t motor_test_count;
     uint32_t motor_test_accepted_count;
     uint32_t motor_test_rejected_count;
+    uint32_t motor_configuration_count;
+    uint32_t motor_configuration_accepted_count;
+    uint32_t motor_configuration_rejected_count;
     uint32_t transition_accepted_count;
     uint32_t transition_rejected_count;
     uint32_t response_sent_count;

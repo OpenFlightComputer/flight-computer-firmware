@@ -125,6 +125,7 @@ bool usb_json_parse_request(const char *line,
     bool request_id_seen = false;
     bool motor_seen = false;
     bool throttle_seen = false;
+    bool direction_seen = false;
     int token_count;
     int index;
 
@@ -136,6 +137,7 @@ bool usb_json_parse_request(const char *line,
     request->request_id = 0U;
     request->motor = 0U;
     request->throttle_millionths = 0U;
+    request->direction = USB_JSON_MOTOR_DIRECTION_INVALID;
     jsmn_init(&parser);
     token_count = jsmn_parse(&parser,
                              line,
@@ -173,6 +175,14 @@ bool usb_json_parse_request(const char *line,
                 request->command = USB_JSON_COMMAND_DISARM;
             } else if (token_equals(line, value, "motor_test")) {
                 request->command = USB_JSON_COMMAND_MOTOR_TEST;
+            } else if (token_equals(line, value, "motor_direction")) {
+                request->command = USB_JSON_COMMAND_MOTOR_DIRECTION;
+            } else if (token_equals(line, value, "motor_direction_set")) {
+                request->command = USB_JSON_COMMAND_MOTOR_DIRECTION_SET;
+            } else if (token_equals(line, value,
+                                    "motor_configuration_reset")) {
+                request->command =
+                    USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET;
             } else {
                 request->command = USB_JSON_COMMAND_UNSUPPORTED;
             }
@@ -199,6 +209,18 @@ bool usb_json_parse_request(const char *line,
                 return false;
             }
             throttle_seen = true;
+        } else if (token_equals(line, key, "direction")) {
+            if (direction_seen || (value->type != JSMN_STRING)) {
+                return false;
+            }
+            if (token_equals(line, value, "NORMAL")) {
+                request->direction = USB_JSON_MOTOR_DIRECTION_NORMAL;
+            } else if (token_equals(line, value, "REVERSED")) {
+                request->direction = USB_JSON_MOTOR_DIRECTION_REVERSED;
+            } else {
+                return false;
+            }
+            direction_seen = true;
         } else {
             return false;
         }
@@ -208,10 +230,16 @@ bool usb_json_parse_request(const char *line,
         return false;
     }
     if (request->command == USB_JSON_COMMAND_MOTOR_TEST) {
-        return motor_seen && throttle_seen && (token_count == 11);
+        return motor_seen && throttle_seen && !direction_seen &&
+               (token_count == 11);
+    }
+    if (request->command == USB_JSON_COMMAND_MOTOR_DIRECTION_SET) {
+        return motor_seen && !throttle_seen && direction_seen &&
+               (token_count == 11);
     }
 
-    return !motor_seen && !throttle_seen && (token_count == 7);
+    return !motor_seen && !throttle_seen && !direction_seen &&
+           (token_count == 7);
 }
 
 const char *usb_json_command_name(usb_json_command_t command)
@@ -229,6 +257,12 @@ const char *usb_json_command_name(usb_json_command_t command)
         return "disarm";
     case USB_JSON_COMMAND_MOTOR_TEST:
         return "motor_test";
+    case USB_JSON_COMMAND_MOTOR_DIRECTION:
+        return "motor_direction";
+    case USB_JSON_COMMAND_MOTOR_DIRECTION_SET:
+        return "motor_direction_set";
+    case USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET:
+        return "motor_configuration_reset";
     case USB_JSON_COMMAND_UNSUPPORTED:
         return "unsupported";
     case USB_JSON_COMMAND_INVALID:
@@ -324,6 +358,7 @@ bool usb_json_build_error_response(bool request_id_valid,
 bool usb_json_build_transition_response(usb_json_command_t command,
                                         uint32_t request_id,
                                         bool accepted,
+                                        bool pending,
                                         const char *state,
                                         const char *error,
                                         char *destination,
@@ -335,11 +370,22 @@ bool usb_json_build_transition_response(usb_json_command_t command,
     if (((command != USB_JSON_COMMAND_ARM) &&
          (command != USB_JSON_COMMAND_DISARM)) ||
         (state == NULL) || (destination == NULL) || (capacity == 0U) ||
-        (length == NULL) || (!accepted && (error == NULL))) {
+        (length == NULL) || (!accepted && (error == NULL)) ||
+        (pending && !accepted)) {
         return false;
     }
 
-    if (accepted) {
+    if (accepted && pending) {
+        written = snprintf(destination,
+                           capacity,
+                           "{\"type\":\"response\",\"request_id\":%lu,"
+                           "\"command\":\"%s\","
+                           "\"ok\":true,\"pending\":true,"
+                           "\"state\":\"%s\"}\n",
+                           (unsigned long)request_id,
+                           usb_json_command_name(command),
+                           state);
+    } else if (accepted) {
         written = snprintf(destination,
                            capacity,
                            "{\"type\":\"response\",\"request_id\":%lu,"
@@ -359,6 +405,83 @@ bool usb_json_build_transition_response(usb_json_command_t command,
                            usb_json_command_name(command),
                            state,
                            error);
+    }
+
+    return finish_response(written, capacity, length);
+}
+
+bool usb_json_build_motor_configuration_response(
+    usb_json_command_t command,
+    uint32_t request_id,
+    bool accepted,
+    uint8_t motor,
+    const char *selected_direction,
+    const char *configuration_source,
+    const char *const directions[4],
+    const char *state,
+    const char *error,
+    char *destination,
+    size_t capacity,
+    size_t *length)
+{
+    int written;
+
+    if (((command != USB_JSON_COMMAND_MOTOR_DIRECTION) &&
+         (command != USB_JSON_COMMAND_MOTOR_DIRECTION_SET) &&
+         (command != USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET)) ||
+        (configuration_source == NULL) || (directions == NULL) ||
+        (directions[0] == NULL) || (directions[1] == NULL) ||
+        (directions[2] == NULL) || (directions[3] == NULL) ||
+        (state == NULL) || (destination == NULL) || (capacity == 0U) ||
+        (length == NULL) || (!accepted && (error == NULL)) ||
+        ((command == USB_JSON_COMMAND_MOTOR_DIRECTION_SET) &&
+         ((motor == 0U) || (selected_direction == NULL)))) {
+        return false;
+    }
+
+    if (accepted &&
+        (command == USB_JSON_COMMAND_MOTOR_DIRECTION_SET)) {
+        written = snprintf(
+            destination,
+            capacity,
+            "{\"type\":\"response\",\"request_id\":%lu,"
+            "\"command\":\"%s\",\"ok\":true,\"state\":\"%s\","
+            "\"motor\":%u,\"direction\":\"%s\",\"source\":\"%s\","
+            "\"directions\":[\"%s\",\"%s\",\"%s\",\"%s\"]}\n",
+            (unsigned long)request_id,
+            usb_json_command_name(command),
+            state,
+            (unsigned int)motor,
+            selected_direction,
+            configuration_source,
+            directions[0], directions[1], directions[2], directions[3]);
+    } else if (accepted) {
+        written = snprintf(
+            destination,
+            capacity,
+            "{\"type\":\"response\",\"request_id\":%lu,"
+            "\"command\":\"%s\",\"ok\":true,\"state\":\"%s\","
+            "\"source\":\"%s\",\"directions\":[\"%s\",\"%s\","
+            "\"%s\",\"%s\"]}\n",
+            (unsigned long)request_id,
+            usb_json_command_name(command),
+            state,
+            configuration_source,
+            directions[0], directions[1], directions[2], directions[3]);
+    } else {
+        written = snprintf(
+            destination,
+            capacity,
+            "{\"type\":\"response\",\"request_id\":%lu,"
+            "\"command\":\"%s\",\"ok\":false,\"state\":\"%s\","
+            "\"source\":\"%s\",\"directions\":[\"%s\",\"%s\","
+            "\"%s\",\"%s\"],\"error\":\"%s\"}\n",
+            (unsigned long)request_id,
+            usb_json_command_name(command),
+            state,
+            configuration_source,
+            directions[0], directions[1], directions[2], directions[3],
+            error);
     }
 
     return finish_response(written, capacity, length);

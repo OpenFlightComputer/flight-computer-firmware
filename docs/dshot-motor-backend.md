@@ -40,6 +40,13 @@ dshot value = 48 + round(throttle * 1999)
 
 Exact normalized zero uses DShot value zero. Telemetry requests remain clear.
 
+Direction configuration is a separate backend operation. `NORMAL` maps to
+DShot command 20 and `REVERSED` to command 21, with the request bit set. One
+submission contains the command for all four physical outputs in the same
+synchronized 18-by-4 table used by throttle frames. The motor controller owns
+the required ten repetitions and never mixes direction commands with a
+nonzero throttle submission.
+
 ## Buffer ownership
 
 The application adapter builds each normal 18-by-4 `uint16_t` table in physical
@@ -128,6 +135,7 @@ selected STM32 register names, interrupt symbol, and static linkage.
 Physical testing confirmed DShot300 acceptance, synchronized four-channel
 operation, and the default motor order on the initial SpeedyBee BLS 60A ESC.
 Pin voltage, exact waveform widths, force-stop latency, heartbeat-loss behavior,
-and motor direction still require separate measurement or propeller-free
-validation. The implementation always treats the command and DMA burst as one
-atomic four-channel operation.
+direction-command acceptance, persistent configuration, and final motor
+directions still require separate measurement or propeller-free validation.
+The implementation always treats the command and DMA burst as one atomic
+four-channel operation.

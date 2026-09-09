@@ -8,18 +8,35 @@
 typedef struct {
     motor_output_backend_init_result_t init_result;
     motor_output_backend_submit_result_t submit_result;
+    motor_output_backend_direction_result_t direction_result;
     motor_output_backend_stop_result_t stop_result;
     motor_output_backend_status_t status_result;
     uint32_t diagnostic_context;
     const motor_command_t *expected_caller_command;
     motor_command_t copied_command;
+    motor_direction_t copied_directions[MOTOR_COMMAND_MOTOR_COUNT];
     uint32_t initialize_count;
     uint32_t submit_count;
+    uint32_t direction_count;
     uint32_t stop_count;
     uint32_t status_count;
     bool submit_received_distinct_storage;
     bool copied_command_valid;
 } fake_backend_t;
+
+static motor_output_backend_direction_result_t fake_submit_directions(
+    const motor_direction_t directions[MOTOR_COMMAND_MOTOR_COUNT],
+    void *context)
+{
+    fake_backend_t *fake = context;
+    size_t motor;
+
+    fake->direction_count++;
+    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+        fake->copied_directions[motor] = directions[motor];
+    }
+    return fake->direction_result;
+}
 
 static motor_output_backend_init_result_t fake_initialize(void *context)
 {
@@ -73,6 +90,7 @@ static fake_backend_t successful_fake(void)
     return (fake_backend_t){
         .init_result = MOTOR_OUTPUT_BACKEND_INIT_OK,
         .submit_result = MOTOR_OUTPUT_BACKEND_SUBMIT_ACCEPTED,
+        .direction_result = MOTOR_OUTPUT_BACKEND_DIRECTION_ACCEPTED,
         .stop_result = MOTOR_OUTPUT_BACKEND_STOP_ACCEPTED,
         .status_result = MOTOR_OUTPUT_BACKEND_STATUS_IDLE,
     };
@@ -83,6 +101,7 @@ static motor_output_backend_t backend_for(fake_backend_t *fake)
     return (motor_output_backend_t){
         .initialize = fake_initialize,
         .submit = fake_submit,
+        .submit_directions = fake_submit_directions,
         .force_stop = fake_force_stop,
         .status = fake_status,
         .diagnostic_context = fake_diagnostic_context,
@@ -132,6 +151,10 @@ static void initialization_requires_complete_backend(void)
            MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
     backend = backend_for(&fake);
     backend.force_stop = NULL;
+    assert(motor_output_initialize(&output, &backend) ==
+           MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
+    backend = backend_for(&fake);
+    backend.submit_directions = NULL;
     assert(motor_output_initialize(&output, &backend) ==
            MOTOR_OUTPUT_INIT_INVALID_ARGUMENT);
     backend = backend_for(&fake);
@@ -301,6 +324,44 @@ static void backend_descriptor_is_copied_during_initialization(void)
     assert(fake.stop_count == 2U);
 }
 
+static void direction_configuration_is_validated_and_mapped(void)
+{
+    fake_backend_t fake = successful_fake();
+    motor_output_backend_t backend = backend_for(&fake);
+    motor_output_t output = {0};
+    motor_direction_t directions[MOTOR_COMMAND_MOTOR_COUNT] = {
+        MOTOR_DIRECTION_NORMAL,
+        MOTOR_DIRECTION_REVERSED,
+        MOTOR_DIRECTION_NORMAL,
+        MOTOR_DIRECTION_REVERSED,
+    };
+
+    assert(motor_output_submit_directions(NULL, directions) ==
+           MOTOR_OUTPUT_DIRECTION_INVALID_ARGUMENT);
+    assert(motor_output_submit_directions(&output, NULL) ==
+           MOTOR_OUTPUT_DIRECTION_INVALID_ARGUMENT);
+    assert(motor_output_submit_directions(&output, directions) ==
+           MOTOR_OUTPUT_DIRECTION_NOT_INITIALIZED);
+    assert(motor_output_initialize(&output, &backend) == MOTOR_OUTPUT_INIT_OK);
+    assert(motor_output_submit_directions(&output, directions) ==
+           MOTOR_OUTPUT_DIRECTION_ACCEPTED);
+    assert(fake.direction_count == 1U);
+    assert(fake.copied_directions[1] == MOTOR_DIRECTION_REVERSED);
+
+    directions[2] = MOTOR_DIRECTION_COUNT;
+    assert(motor_output_submit_directions(&output, directions) ==
+           MOTOR_OUTPUT_DIRECTION_INVALID_CONFIGURATION);
+    assert(fake.direction_count == 1U);
+
+    directions[2] = MOTOR_DIRECTION_NORMAL;
+    fake.direction_result = MOTOR_OUTPUT_BACKEND_DIRECTION_BUSY;
+    assert(motor_output_submit_directions(&output, directions) ==
+           MOTOR_OUTPUT_DIRECTION_BUSY);
+    fake.direction_result = MOTOR_OUTPUT_BACKEND_DIRECTION_ERROR;
+    assert(motor_output_submit_directions(&output, directions) ==
+           MOTOR_OUTPUT_DIRECTION_BACKEND_ERROR);
+}
+
 static void status_maps_backend_results(void)
 {
     fake_backend_t fake = successful_fake();
@@ -363,6 +424,7 @@ int main(void)
     submission_revalidates_manually_modified_commands();
     submission_maps_backend_results();
     backend_descriptor_is_copied_during_initialization();
+    direction_configuration_is_validated_and_mapped();
     force_stop_has_no_busy_outcome();
     status_maps_backend_results();
     return 0;

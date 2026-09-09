@@ -140,6 +140,101 @@ static bool build_motor_test_response(
         &processor->pending_response_length);
 }
 
+static const char *direction_configuration_error(
+    motor_control_direction_configure_result_t result)
+{
+    switch (result) {
+    case MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE:
+        return "state_rejected";
+    case MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT:
+        return "motor_direction_invalid";
+    case MOTOR_CONTROL_DIRECTION_CONFIGURE_STORAGE_ERROR:
+        return "configuration_storage_error";
+    case MOTOR_CONTROL_DIRECTION_CONFIGURE_NOT_INITIALIZED:
+        return "motor_output_error";
+    case MOTOR_CONTROL_DIRECTION_CONFIGURE_OK:
+        break;
+    }
+    return "motor_output_error";
+}
+
+static bool build_motor_configuration_response(
+    usb_command_processor_t *processor,
+    const usb_json_request_t *request)
+{
+    motor_configuration_t configuration;
+    bool persistent = false;
+    bool accepted = true;
+    const char *error = NULL;
+    const char *direction_names[MOTOR_COMMAND_MOTOR_COUNT];
+    const char *selected_direction = NULL;
+    size_t motor;
+
+    saturating_increment(&processor->statistics.motor_configuration_count);
+    if (request->command == USB_JSON_COMMAND_MOTOR_DIRECTION_SET) {
+        motor_direction_t direction;
+        motor_control_direction_configure_result_t result;
+
+        if (request->direction == USB_JSON_MOTOR_DIRECTION_NORMAL) {
+            direction = MOTOR_DIRECTION_NORMAL;
+        } else if (request->direction ==
+                   USB_JSON_MOTOR_DIRECTION_REVERSED) {
+            direction = MOTOR_DIRECTION_REVERSED;
+        } else {
+            direction = MOTOR_DIRECTION_COUNT;
+        }
+        result = motor_control_configure_direction(request->motor, direction);
+        accepted = result == MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
+        if (!accepted) {
+            error = direction_configuration_error(result);
+        }
+    } else if (request->command ==
+               USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET) {
+        const motor_control_configuration_reset_result_t result =
+            motor_control_reset_configuration();
+
+        accepted = result == MOTOR_CONTROL_CONFIGURATION_RESET_OK;
+        if (!accepted) {
+            error = result == MOTOR_CONTROL_CONFIGURATION_RESET_UNSAFE_STATE
+                        ? "state_rejected"
+                        : "configuration_storage_error";
+        }
+    }
+
+    if (!motor_control_get_configuration(&configuration, &persistent)) {
+        return false;
+    }
+    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+        direction_names[motor] =
+            motor_direction_name(configuration.direction[motor]);
+    }
+    if ((request->motor > 0U) &&
+        (request->motor <= MOTOR_COMMAND_MOTOR_COUNT)) {
+        selected_direction = direction_names[request->motor - 1U];
+    }
+
+    if (accepted) {
+        saturating_increment(
+            &processor->statistics.motor_configuration_accepted_count);
+    } else {
+        saturating_increment(
+            &processor->statistics.motor_configuration_rejected_count);
+    }
+    return usb_json_build_motor_configuration_response(
+        request->command,
+        request->request_id,
+        accepted,
+        request->motor,
+        selected_direction,
+        persistent ? "PERSISTENT" : "DEFAULT",
+        direction_names,
+        system_state_name(processor->state_machine->current),
+        error,
+        processor->pending_response,
+        sizeof(processor->pending_response),
+        &processor->pending_response_length);
+}
+
 static bool build_command_response(usb_command_processor_t *processor,
                                    const usb_json_request_t *request)
 {
@@ -198,10 +293,12 @@ static bool build_command_response(usb_command_processor_t *processor,
         motor_control_disarm_result_t disarm_result =
             MOTOR_CONTROL_DISARM_BLOCKED_STATE;
         const bool arm_requested = request->command == USB_JSON_COMMAND_ARM;
+        bool arm_pending = false;
         const char *error = "transition_rejected";
 
         if (arm_requested) {
             arm_result = motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST);
+            arm_pending = arm_result == MOTOR_CONTROL_ARM_PENDING;
             if (arm_result == MOTOR_CONTROL_ARM_BLOCKED_HEALTH) {
                 error = "health_rejected";
             } else if (arm_result == MOTOR_CONTROL_ARM_BLOCKED_PREPARATION) {
@@ -210,7 +307,7 @@ static bool build_command_response(usb_command_processor_t *processor,
                 error = "control_source_rejected";
             }
             processor->last_transition_result =
-                arm_result == MOTOR_CONTROL_ARM_ACCEPTED
+                ((arm_result == MOTOR_CONTROL_ARM_ACCEPTED) || arm_pending)
                     ? SYSTEM_STATE_TRANSITION_OK
                     : SYSTEM_STATE_TRANSITION_REJECTED;
         } else {
@@ -233,6 +330,7 @@ static bool build_command_response(usb_command_processor_t *processor,
                 request->command,
                 request->request_id,
                 true,
+                arm_pending,
                 system_state_name(processor->state_machine->current),
                 NULL,
                 processor->pending_response,
@@ -245,6 +343,7 @@ static bool build_command_response(usb_command_processor_t *processor,
             request->command,
             request->request_id,
             false,
+            false,
             system_state_name(processor->state_machine->current),
             error,
             processor->pending_response,
@@ -253,6 +352,10 @@ static bool build_command_response(usb_command_processor_t *processor,
     }
     case USB_JSON_COMMAND_MOTOR_TEST:
         return build_motor_test_response(processor, request);
+    case USB_JSON_COMMAND_MOTOR_DIRECTION:
+    case USB_JSON_COMMAND_MOTOR_DIRECTION_SET:
+    case USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET:
+        return build_motor_configuration_response(processor, request);
     case USB_JSON_COMMAND_UNSUPPORTED:
     case USB_JSON_COMMAND_INVALID:
         break;

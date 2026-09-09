@@ -52,6 +52,22 @@ typedef enum {
     BOARD_MOTOR_DIAGNOSTIC_IRQ_UNEXPECTED_STATE = 110,
 } board_motor_output_diagnostic_reason_t;
 
+typedef enum {
+    BOARD_PERSISTENT_STORAGE_READ_OK = 0,
+    BOARD_PERSISTENT_STORAGE_READ_EMPTY,
+    BOARD_PERSISTENT_STORAGE_READ_ERROR,
+} board_persistent_storage_read_result_t;
+
+typedef enum {
+    BOARD_PERSISTENT_STORAGE_WRITE_OK = 0,
+    BOARD_PERSISTENT_STORAGE_WRITE_ERROR,
+} board_persistent_storage_write_result_t;
+
+typedef enum {
+    BOARD_PERSISTENT_STORAGE_CLEAR_OK = 0,
+    BOARD_PERSISTENT_STORAGE_CLEAR_ERROR,
+} board_persistent_storage_clear_result_t;
+
 board_init_result_t board_initialize(void);
 _Noreturn void board_halt(void);
 
@@ -68,5 +84,14 @@ board_motor_output_stop_result_t board_motor_output_force_stop(
     size_t compare_value_count);
 board_motor_output_status_t board_motor_output_status(void);
 uint32_t board_motor_output_error_context(void);
+
+/* One board-owned append-only persistent configuration payload. */
+board_persistent_storage_read_result_t board_persistent_storage_read(
+    void *destination,
+    size_t length);
+board_persistent_storage_write_result_t board_persistent_storage_write(
+    const void *source,
+    size_t length);
+board_persistent_storage_clear_result_t board_persistent_storage_clear(void);
 
 #endif

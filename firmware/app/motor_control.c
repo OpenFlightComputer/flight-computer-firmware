@@ -13,13 +13,19 @@ typedef struct {
     uint64_t command_timeout_us;
     motor_output_t physical_output;
     motor_mapping_t mapping;
+    motor_configuration_t configuration;
+    motor_configuration_storage_t configuration_storage;
     motor_command_t retained_command;
     motor_control_source_t active_source;
+    motor_control_source_t pending_source;
     uint64_t transfer_started_at_us;
     uint64_t stop_stream_started_at_us;
     bool transfer_in_progress;
     bool stop_stream_started;
     bool arming_preparation_complete;
+    uint8_t direction_repetitions_remaining;
+    bool direction_sequence_active;
+    bool persistent_configuration;
     bool outputs_stopped;
     bool initialized;
 } motor_control_state_t;
@@ -97,6 +103,9 @@ static bool force_stop_internal(void)
         motor_output_force_stop(&control.physical_output);
 
     control.active_source = MOTOR_CONTROL_SOURCE_NONE;
+    control.pending_source = MOTOR_CONTROL_SOURCE_NONE;
+    control.direction_sequence_active = false;
+    control.direction_repetitions_remaining = 0U;
     control.transfer_in_progress = false;
     control.stop_stream_started = false;
     control.arming_preparation_complete = false;
@@ -110,6 +119,77 @@ static bool force_stop_internal(void)
     }
 
     control.outputs_stopped = true;
+    return true;
+}
+
+static bool configuration_storage_is_valid(
+    const motor_configuration_storage_t *storage)
+{
+    return (storage != NULL) && (storage->load != NULL) &&
+           (storage->save != NULL) && (storage->clear != NULL);
+}
+
+static void start_direction_sequence(void)
+{
+    control.direction_repetitions_remaining =
+        MOTOR_CONTROL_DIRECTION_COMMAND_REPETITIONS;
+    control.direction_sequence_active = true;
+}
+
+static bool map_directions_to_physical(
+    motor_direction_t physical[MOTOR_COMMAND_MOTOR_COUNT])
+{
+    bool seen[MOTOR_COMMAND_MOTOR_COUNT] = {false};
+    size_t logical_motor;
+
+    if (!motor_configuration_is_valid(&control.configuration) ||
+        !motor_mapping_is_valid(&control.mapping)) {
+        return false;
+    }
+
+    for (logical_motor = 0U;
+         logical_motor < MOTOR_COMMAND_MOTOR_COUNT;
+         logical_motor++) {
+        const uint8_t physical_output =
+            control.mapping.logical_to_physical[logical_motor];
+
+        if ((physical_output >= MOTOR_COMMAND_MOTOR_COUNT) ||
+            seen[physical_output]) {
+            return false;
+        }
+        physical[physical_output] =
+            control.configuration.direction[logical_motor];
+        seen[physical_output] = true;
+    }
+    return true;
+}
+
+static bool complete_pending_arm(void)
+{
+    system_state_transition_result_t transition_result;
+    const motor_control_source_t source = control.pending_source;
+
+    if (source == MOTOR_CONTROL_SOURCE_NONE) {
+        return true;
+    }
+    control.pending_source = MOTOR_CONTROL_SOURCE_NONE;
+    if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
+        !motor_fault_state_allows_arm(control.fault_system) ||
+        !control.arming_preparation_complete) {
+        return true;
+    }
+
+    transition_result = system_state_machine_handle_event(
+        control.state_machine,
+        SYSTEM_STATE_EVENT_ARM_REQUESTED);
+    if (transition_result != SYSTEM_STATE_TRANSITION_OK) {
+        report_motor_fault(FAULT_ID_STATE_MACHINE_TRANSITION,
+                           (uint32_t)transition_result);
+        return false;
+    }
+
+    control.active_source = source;
+    motor_command_invalidate(&control.retained_command);
     return true;
 }
 
@@ -174,9 +254,11 @@ motor_control_init_result_t motor_control_initialize(
     fault_system_t *fault_system,
     motor_control_clock_t clock,
     uint64_t command_timeout_us,
-    const motor_output_backend_t *backend)
+    const motor_output_backend_t *backend,
+    const motor_configuration_storage_t *configuration_storage)
 {
     motor_output_init_result_t output_result;
+    motor_configuration_load_result_t configuration_result;
 
     if (control.initialized) {
         return MOTOR_CONTROL_INIT_ALREADY_INITIALIZED;
@@ -185,6 +267,7 @@ motor_control_init_result_t motor_control_initialize(
         (fault_system == NULL) || !fault_system->initialized ||
         (fault_system->state_machine != state_machine) || (clock == NULL) ||
         (command_timeout_us == 0U) || (backend == NULL) ||
+        !configuration_storage_is_valid(configuration_storage) ||
         !motor_fault_policy_is_valid(fault_system)) {
         return MOTOR_CONTROL_INIT_INVALID_ARGUMENT;
     }
@@ -194,9 +277,23 @@ motor_control_init_result_t motor_control_initialize(
         .fault_system = fault_system,
         .clock = clock,
         .command_timeout_us = command_timeout_us,
+        .configuration_storage = *configuration_storage,
     };
     motor_mapping_initialize(&control.mapping);
+    motor_configuration_defaults(&control.configuration);
     motor_command_initialize(&control.retained_command);
+
+    configuration_result = control.configuration_storage.load(
+        control.configuration_storage.context,
+        &control.configuration);
+    if (configuration_result == MOTOR_CONFIGURATION_LOAD_OK) {
+        if (!motor_configuration_is_valid(&control.configuration)) {
+            return MOTOR_CONTROL_INIT_INVALID_ARGUMENT;
+        }
+        control.persistent_configuration = true;
+    } else if (configuration_result != MOTOR_CONFIGURATION_LOAD_EMPTY) {
+        return MOTOR_CONTROL_INIT_INVALID_ARGUMENT;
+    }
 
     output_result = motor_output_initialize(&control.physical_output, backend);
     if (output_result == MOTOR_OUTPUT_INIT_INITIAL_STOP_ERROR) {
@@ -217,8 +314,6 @@ motor_control_init_result_t motor_control_initialize(
 
 motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
 {
-    system_state_transition_result_t transition_result;
-
     if (!control.initialized) {
         return MOTOR_CONTROL_ARM_NOT_INITIALIZED;
     }
@@ -227,7 +322,8 @@ motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
         return MOTOR_CONTROL_ARM_INVALID_SOURCE;
     }
     if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
-        (control.active_source != MOTOR_CONTROL_SOURCE_NONE)) {
+        (control.active_source != MOTOR_CONTROL_SOURCE_NONE) ||
+        (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
         return MOTOR_CONTROL_ARM_BLOCKED_STATE;
     }
     if (!motor_fault_state_allows_arm(control.fault_system)) {
@@ -237,16 +333,10 @@ motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
         return MOTOR_CONTROL_ARM_BLOCKED_PREPARATION;
     }
 
-    transition_result = system_state_machine_handle_event(
-        control.state_machine,
-        SYSTEM_STATE_EVENT_ARM_REQUESTED);
-    if (transition_result != SYSTEM_STATE_TRANSITION_OK) {
-        return MOTOR_CONTROL_ARM_TRANSITION_ERROR;
-    }
-
-    control.active_source = source;
+    control.pending_source = source;
     motor_command_invalidate(&control.retained_command);
-    return MOTOR_CONTROL_ARM_ACCEPTED;
+    start_direction_sequence();
+    return MOTOR_CONTROL_ARM_PENDING;
 }
 
 motor_control_disarm_result_t motor_control_disarm(void)
@@ -255,6 +345,12 @@ motor_control_disarm_result_t motor_control_disarm(void)
 
     if (!control.initialized) {
         return MOTOR_CONTROL_DISARM_NOT_INITIALIZED;
+    }
+
+    if ((control.state_machine->current == SYSTEM_STATE_DISARMED) &&
+        (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
+        control.pending_source = MOTOR_CONTROL_SOURCE_NONE;
+        return MOTOR_CONTROL_DISARM_ACCEPTED;
     }
 
     transition_result = system_state_machine_handle_event(
@@ -364,6 +460,8 @@ motor_control_sync_result_t motor_control_synchronize(void)
         (control.state_machine->current == SYSTEM_STATE_INITIALIZING) ||
         (control.state_machine->current == SYSTEM_STATE_FAULT)) {
         control.active_source = MOTOR_CONTROL_SOURCE_NONE;
+        control.pending_source = MOTOR_CONTROL_SOURCE_NONE;
+        control.direction_sequence_active = false;
         motor_command_invalidate(&control.retained_command);
         if (control.outputs_stopped) {
             return MOTOR_CONTROL_SYNC_STOPPED;
@@ -418,6 +516,42 @@ motor_control_sync_result_t motor_control_synchronize(void)
         }
         return failsafe_entered ? MOTOR_CONTROL_SYNC_FAILSAFE_ENTERED
                                 : MOTOR_CONTROL_SYNC_SAFE;
+    }
+
+    if ((control.state_machine->current == SYSTEM_STATE_DISARMED) &&
+        control.direction_sequence_active) {
+        motor_direction_t physical_directions[MOTOR_COMMAND_MOTOR_COUNT];
+        motor_output_direction_result_t direction_result;
+
+        if (control.direction_repetitions_remaining == 0U) {
+            control.direction_sequence_active = false;
+            if (!complete_pending_arm()) {
+                return MOTOR_CONTROL_SYNC_BACKEND_ERROR;
+            }
+        } else {
+            if (!map_directions_to_physical(physical_directions)) {
+                report_motor_fault(FAULT_ID_MOTOR_OUTPUT, 3U);
+                return force_stop_internal()
+                           ? MOTOR_CONTROL_SYNC_BACKEND_ERROR
+                           : MOTOR_CONTROL_SYNC_FORCE_STOP_ERROR;
+            }
+            direction_result = motor_output_submit_directions(
+                &control.physical_output,
+                physical_directions);
+            if (direction_result != MOTOR_OUTPUT_DIRECTION_ACCEPTED) {
+                report_motor_fault(FAULT_ID_MOTOR_OUTPUT,
+                                   output_fault_context(
+                                       (uint32_t)direction_result));
+                return force_stop_internal()
+                           ? MOTOR_CONTROL_SYNC_BACKEND_ERROR
+                           : MOTOR_CONTROL_SYNC_FORCE_STOP_ERROR;
+            }
+            control.direction_repetitions_remaining--;
+            control.transfer_started_at_us = now_us;
+            control.transfer_in_progress = true;
+            control.outputs_stopped = false;
+            return MOTOR_CONTROL_SYNC_SAFE;
+        }
     }
 
     submit_result = motor_output_submit(&control.physical_output,
@@ -479,6 +613,75 @@ motor_control_mapping_configure_result_t motor_control_configure_mapping(
     return MOTOR_CONTROL_MAPPING_CONFIGURE_INVALID_ARGUMENT;
 }
 
+motor_control_direction_configure_result_t motor_control_configure_direction(
+    uint8_t logical_motor,
+    motor_direction_t direction)
+{
+    motor_configuration_t candidate;
+
+    if (!control.initialized) {
+        return MOTOR_CONTROL_DIRECTION_CONFIGURE_NOT_INITIALIZED;
+    }
+    if ((logical_motor == 0U) ||
+        (logical_motor > MOTOR_COMMAND_MOTOR_COUNT) ||
+        ((direction != MOTOR_DIRECTION_NORMAL) &&
+         (direction != MOTOR_DIRECTION_REVERSED))) {
+        return MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT;
+    }
+    if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
+        (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
+        return MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE;
+    }
+
+    candidate = control.configuration;
+    candidate.direction[logical_motor - 1U] = direction;
+    if (control.configuration_storage.save(
+            control.configuration_storage.context,
+            &candidate) != MOTOR_CONFIGURATION_SAVE_OK) {
+        return MOTOR_CONTROL_DIRECTION_CONFIGURE_STORAGE_ERROR;
+    }
+
+    control.configuration = candidate;
+    control.persistent_configuration = true;
+    start_direction_sequence();
+    return MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
+}
+
+motor_control_configuration_reset_result_t
+    motor_control_reset_configuration(void)
+{
+    if (!control.initialized) {
+        return MOTOR_CONTROL_CONFIGURATION_RESET_NOT_INITIALIZED;
+    }
+    if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
+        (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
+        return MOTOR_CONTROL_CONFIGURATION_RESET_UNSAFE_STATE;
+    }
+    if (control.configuration_storage.clear(
+            control.configuration_storage.context) !=
+        MOTOR_CONFIGURATION_CLEAR_OK) {
+        return MOTOR_CONTROL_CONFIGURATION_RESET_STORAGE_ERROR;
+    }
+
+    motor_configuration_defaults(&control.configuration);
+    control.persistent_configuration = false;
+    start_direction_sequence();
+    return MOTOR_CONTROL_CONFIGURATION_RESET_OK;
+}
+
+bool motor_control_get_configuration(motor_configuration_t *configuration,
+                                     bool *persistent_override)
+{
+    if (!control.initialized || (configuration == NULL) ||
+        (persistent_override == NULL)) {
+        return false;
+    }
+
+    *configuration = control.configuration;
+    *persistent_override = control.persistent_configuration;
+    return true;
+}
+
 bool motor_control_is_initialized(void)
 {
     return control.initialized;
@@ -517,6 +720,15 @@ motor_control_source_t motor_control_active_source(void)
         return MOTOR_CONTROL_SOURCE_NONE;
     }
     return control.active_source;
+}
+
+motor_control_source_t motor_control_pending_source(void)
+{
+    if (!control.initialized ||
+        (control.state_machine->current != SYSTEM_STATE_DISARMED)) {
+        return MOTOR_CONTROL_SOURCE_NONE;
+    }
+    return control.pending_source;
 }
 
 const char *motor_control_source_name(motor_control_source_t source)

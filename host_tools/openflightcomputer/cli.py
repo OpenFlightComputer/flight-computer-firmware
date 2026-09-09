@@ -113,6 +113,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--throttle", type=float, required=True, metavar=">0.001..1.0"
     )
     motor_run.add_argument("--duration", type=float, required=True, metavar="SECONDS")
+    motor_direction = motor_commands.add_parser(
+        "direction", help="inspect or set persistent motor directions"
+    )
+    motor_direction_commands = motor_direction.add_subparsers(
+        dest="motor_direction_command", required=True
+    )
+    motor_direction_show = motor_direction_commands.add_parser(
+        "show", help="show all configured motor directions"
+    )
+    _add_device_options(motor_direction_show)
+    motor_direction_set = motor_direction_commands.add_parser(
+        "set", help="set one motor's persistent direction"
+    )
+    _add_device_options(motor_direction_set)
+    motor_direction_set.add_argument(
+        "--motor", type=int, choices=range(1, 5), required=True
+    )
+    motor_direction_set.add_argument(
+        "--direction", choices=("normal", "reversed"), required=True
+    )
+    motor_configuration = motor_commands.add_parser(
+        "configuration", help="manage persistent motor configuration"
+    )
+    motor_configuration_commands = motor_configuration.add_subparsers(
+        dest="motor_configuration_command", required=True
+    )
+    motor_configuration_reset = motor_configuration_commands.add_parser(
+        "reset", help="restore compiled motor defaults"
+    )
+    _add_device_options(motor_configuration_reset)
 
     smoke = commands.add_parser(
         "smoke", help="optionally flash, then run non-arming status and health checks"
@@ -139,9 +169,24 @@ def _default_report_path() -> Path:
 def _device_request(arguments: argparse.Namespace, command: str) -> int:
     port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
     with UsbCdcConnection.open(port) as connection:
-        response = JsonProtocolClient(connection).request(
+        client = JsonProtocolClient(connection)
+        response = client.request(
             command, timeout_seconds=arguments.timeout
         )
+        if command == "arm" and response.get("pending") is True:
+            deadline = time.monotonic() + arguments.timeout
+            while response.get("state") != "ARMED":
+                if time.monotonic() >= deadline:
+                    raise ProtocolError("timed out waiting for arm preparation")
+                status = client.request(
+                    "status", timeout_seconds=max(0.01, deadline - time.monotonic())
+                )
+                if status.get("state") == "FAULT":
+                    raise ProtocolError("arm preparation entered FAULT")
+                response["state"] = status.get("state")
+                if response["state"] != "ARMED":
+                    time.sleep(0.01)
+            response["pending"] = False
     print(json.dumps(response, indent=2, sort_keys=True))
     return 0
 
@@ -225,6 +270,32 @@ def _motor_run(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _motor_configuration_request(arguments: argparse.Namespace) -> int:
+    if arguments.motor_command == "direction":
+        if arguments.motor_direction_command == "show":
+            command = "motor_direction"
+            parameters = None
+        else:
+            command = "motor_direction_set"
+            parameters = {
+                "motor": arguments.motor,
+                "direction": arguments.direction.upper(),
+            }
+    else:
+        command = "motor_configuration_reset"
+        parameters = None
+
+    port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
+    with UsbCdcConnection.open(port) as connection:
+        response = JsonProtocolClient(connection).request(
+            command,
+            parameters=parameters,
+            timeout_seconds=arguments.timeout,
+        )
+    print(json.dumps(response, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     try:
@@ -252,7 +323,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _device_receiver(arguments)
             return _device_request(arguments, arguments.device_command)
         if arguments.command == "motor":
-            return _motor_run(arguments)
+            if arguments.motor_command == "run":
+                return _motor_run(arguments)
+            return _motor_configuration_request(arguments)
         return _smoke(arguments)
     except KeyboardInterrupt:
         return 130

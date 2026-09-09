@@ -28,6 +28,10 @@ static motor_command_t captured_motor_command;
 static uint32_t motor_submit_count;
 static bool motor_ready_for_arm;
 static bool motor_outputs_stopped;
+static motor_configuration_t motor_configuration;
+static bool motor_configuration_persistent;
+static motor_control_direction_configure_result_t motor_direction_result;
+static motor_control_configuration_reset_result_t motor_reset_result;
 static receiver_inspection_t receiver_inspection;
 static bool receiver_inspection_read_result;
 static uint32_t receiver_inspection_read_count;
@@ -107,6 +111,42 @@ bool motor_control_outputs_stopped(void)
     return motor_outputs_stopped;
 }
 
+motor_control_direction_configure_result_t motor_control_configure_direction(
+    uint8_t logical_motor,
+    motor_direction_t direction)
+{
+    if (motor_direction_result != MOTOR_CONTROL_DIRECTION_CONFIGURE_OK) {
+        return motor_direction_result;
+    }
+    if ((logical_motor == 0U) ||
+        (logical_motor > MOTOR_COMMAND_MOTOR_COUNT) ||
+        (direction >= MOTOR_DIRECTION_COUNT)) {
+        return MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT;
+    }
+    motor_configuration.direction[logical_motor - 1U] = direction;
+    motor_configuration_persistent = true;
+    return MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
+}
+
+motor_control_configuration_reset_result_t
+    motor_control_reset_configuration(void)
+{
+    if (motor_reset_result != MOTOR_CONTROL_CONFIGURATION_RESET_OK) {
+        return motor_reset_result;
+    }
+    motor_configuration_defaults(&motor_configuration);
+    motor_configuration_persistent = false;
+    return MOTOR_CONTROL_CONFIGURATION_RESET_OK;
+}
+
+bool motor_control_get_configuration(motor_configuration_t *configuration,
+                                     bool *persistent_override)
+{
+    *configuration = motor_configuration;
+    *persistent_override = motor_configuration_persistent;
+    return true;
+}
+
 static bool fake_receiver_inspection_read(
     void *context,
     receiver_inspection_t *inspection)
@@ -184,6 +224,10 @@ static void reset_fakes(void)
     motor_submit_count = 0U;
     motor_ready_for_arm = true;
     motor_outputs_stopped = false;
+    motor_configuration_defaults(&motor_configuration);
+    motor_configuration_persistent = false;
+    motor_direction_result = MOTOR_CONTROL_DIRECTION_CONFIGURE_OK;
+    motor_reset_result = MOTOR_CONTROL_CONFIGURATION_RESET_OK;
     receiver_inspection = (receiver_inspection_t){
         .freshness = RECEIVER_FRESHNESS_UNAVAILABLE,
         .failsafe_state = RECEIVER_FAILSAFE_UNAVAILABLE,
@@ -504,6 +548,70 @@ static void motor_test_is_bounded_and_uses_the_motor_gate(void)
     assert(processor.statistics.motor_test_rejected_count == 3U);
 }
 
+static void motor_configuration_commands_are_explicit_and_disarmed_only(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+
+    queue_input("{\"type\":\"command\",\"request_id\":60,"
+                "\"command\":\"motor_direction\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"source\":\"DEFAULT\"") != NULL);
+
+    queue_input("{\"type\":\"command\",\"request_id\":61,"
+                "\"command\":\"motor_direction_set\",\"motor\":3,"
+                "\"direction\":\"REVERSED\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"ok\":true") != NULL);
+    assert(strstr(captured_response, "\"motor\":3") != NULL);
+    assert(strstr(captured_response, "\"direction\":\"REVERSED\"") != NULL);
+    assert(strstr(captured_response, "\"source\":\"PERSISTENT\"") != NULL);
+
+    motor_direction_result = MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE;
+    queue_input("{\"type\":\"command\",\"request_id\":62,"
+                "\"command\":\"motor_direction_set\",\"motor\":2,"
+                "\"direction\":\"NORMAL\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"error\":\"state_rejected\"") != NULL);
+
+    queue_input("{\"type\":\"command\",\"request_id\":63,"
+                "\"command\":\"motor_configuration_reset\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"source\":\"DEFAULT\"") != NULL);
+    assert(processor.statistics.motor_configuration_count == 4U);
+    assert(processor.statistics.motor_configuration_accepted_count == 3U);
+    assert(processor.statistics.motor_configuration_rejected_count == 1U);
+}
+
+static void asynchronous_arm_is_reported_as_pending(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+    motor_arm_result = MOTOR_CONTROL_ARM_PENDING;
+    queue_input("{\"type\":\"command\",\"request_id\":64,"
+                "\"command\":\"arm\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(state_machine.current == SYSTEM_STATE_DISARMED);
+    assert(strstr(captured_response, "\"ok\":true") != NULL);
+    assert(strstr(captured_response, "\"pending\":true") != NULL);
+    assert(processor.last_transition_result == SYSTEM_STATE_TRANSITION_OK);
+}
+
 static void invalid_unsupported_and_busy_responses_are_bounded(void)
 {
     usb_command_processor_t processor;
@@ -584,6 +692,8 @@ int main(void)
     unknown_health_rejects_arm_before_the_state_machine();
     motor_preparation_rejects_arm_before_the_state_machine();
     motor_test_is_bounded_and_uses_the_motor_gate();
+    motor_configuration_commands_are_explicit_and_disarmed_only();
+    asynchronous_arm_is_reported_as_pending();
     invalid_unsupported_and_busy_responses_are_bounded();
     initialization_and_invalid_state_are_checked();
     return 0;

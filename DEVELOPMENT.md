@@ -6,17 +6,41 @@ Phase 3 — open-loop receiver-to-motor integration.
 
 ## Current milestone
 
-Milestone 3.2 — safe receiver arming and disarming — implemented and awaiting
-owner review.
+Milestone 3.3 — persistent runtime motor direction configuration — implemented
+and awaiting owner review and propeller-free validation.
 
 ## Last completed milestone
 
-Milestone 3.1 — exclusive motor-command source authority. A successful arm
-latches `USB_TEST` or `RECEIVER`; wrong-source commands cannot replace the
-owner's retained command; disarm and every fail-closed stop path release
-authority.
+Milestone 3.2 — safe receiver arming and disarming. Fresh/live input,
+startup-low qualification, a low-to-high switch edge, and low throttle are
+required; a fresh low switch disarms only receiver-owned control.
 
 ## Current implementation status
+
+- Added one absolute `NORMAL`/`REVERSED` setting per logical motor with
+  compiled defaults of all `NORMAL`, validation, and no toggle operation.
+- Added disarmed-only USB and CLI show/set/reset paths. A successful set is
+  persisted before replacing the active configuration, while an erase restores
+  compiled defaults.
+- Reserved STM32F405 sector 11 at `0x080E0000` for append-only configuration
+  records with schema and format versions, sequence numbers, CRC32, and a
+  commit word written last. Normal linked images exclude the sector; a mass
+  erase clears it, and incompatible/corrupt storage fails startup closed.
+- Added synchronized DShot direction submission: command 20 for `NORMAL`, 21
+  for `REVERSED`, and the request bit set on all four physical outputs.
+- Reasserted all four directions with ten frames after a configuration change
+  and before every arm. The lifecycle stays `DISARMED` with an internal pending
+  source until completion; disarm, receiver switch-low, or unusable receiver
+  input can cancel a pending receiver arm.
+- Updated `./ofc device arm` to wait for pending direction preparation and
+  added `./ofc motor direction show|set` plus
+  `./ofc motor configuration reset`.
+- All 35 native tests and 53 host-tool tests pass. Debug and Release firmware
+  build with Arm GCC 15.3.1 and warnings as errors; Debug uses 94,756 bytes of
+  application Flash and 16,720 bytes of RAM, while Release uses 64,320 bytes
+  and 16,720 bytes. The separate 128 KiB configuration region has no linked
+  image content. Flashing and physical persistence/direction checks remain
+  pending owner review.
 
 - Added a receiver arming interlock called by the existing 1 kHz receiver task
   after normalization, freshness, and failsafe evaluation; no new scheduler
@@ -488,11 +512,11 @@ can request nonzero throttle.
   `SYSTEM_STATE_DISARMED`; the mapping module rejects a false condition but
   cannot detect a dishonest caller. Physical hard-stop is no longer required
   because a logical permutation cannot turn all-zero stop frames into power.
-- Logical aircraft positions now match the default output order, but the mixer
-  convention, expected CW/CCW directions, ESC-stored direction, and
-  configuration persistence are not yet selected. Before first flight, add a
-  disarmed-only runtime direction operation; never expose ESC direction as an
-  ordinary power command.
+- Logical aircraft positions match the default output order. ESC-stored
+  direction is now a persistent, disarmed-only configuration operation rather
+  than an ordinary power command. The mixer convention, expected CW/CCW
+  directions, and physically observed directions remain to be selected and
+  recorded.
 - The selected V1 routes, DMA execution, DShot300 ESC acceptance, synchronized
   four-channel operation, and motor positions are physically verified. Exact
   waveform measurements and motor directions remain open.
@@ -508,12 +532,12 @@ can request nonzero throttle.
 
 ## Next step
 
-Review Milestone 3.2, then implement Milestone 3.3's disarmed-only runtime
-motor-direction configuration and physically record each motor's direction.
-Receiver motor submission remains prohibited until the later mixer and
-producer milestones.
-Physical motor heartbeat-loss timing and per-motor direction configuration
-remain explicit pre-flight tasks; DShot600 remains deferred.
+Review Milestone 3.3, then flash and validate configuration persistence and all
+four motor directions without propellers. After recording the required
+directions, implement Milestone 3.4's hardware-independent open-loop quad-X
+mixer. Receiver motor submission remains prohibited until the later producer
+milestone. Physical motor heartbeat-loss timing remains an explicit pre-flight
+task; DShot600 remains deferred.
 
 ## Milestone 2.2 CRSF and V1 receiver backend import
 

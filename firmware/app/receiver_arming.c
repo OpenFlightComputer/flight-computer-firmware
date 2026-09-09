@@ -90,11 +90,18 @@ receiver_arming_result_t receiver_arming_process(
     }
 
     if (!input_is_usable(control, failsafe)) {
+        if (motor_control_pending_source() ==
+            MOTOR_CONTROL_SOURCE_RECEIVER) {
+            (void)motor_control_disarm();
+        }
         clear_arm_qualification(arming);
         return set_result(arming, RECEIVER_ARMING_INPUT_UNAVAILABLE);
     }
 
     source = motor_control_active_source();
+    if (source == MOTOR_CONTROL_SOURCE_NONE) {
+        source = motor_control_pending_source();
+    }
     if ((source != MOTOR_CONTROL_SOURCE_NONE) &&
         (source != MOTOR_CONTROL_SOURCE_RECEIVER)) {
         clear_arm_qualification(arming);
@@ -139,9 +146,16 @@ receiver_arming_result_t receiver_arming_process(
         return set_result(arming, RECEIVER_ARMING_BLOCKED_THROTTLE);
     }
 
-    if (motor_control_arm(MOTOR_CONTROL_SOURCE_RECEIVER) ==
-        MOTOR_CONTROL_ARM_ACCEPTED) {
-        return set_result(arming, RECEIVER_ARMING_ARM_ACCEPTED);
+    {
+        const motor_control_arm_result_t result =
+            motor_control_arm(MOTOR_CONTROL_SOURCE_RECEIVER);
+
+        if (result == MOTOR_CONTROL_ARM_PENDING) {
+            return set_result(arming, RECEIVER_ARMING_ARM_PENDING);
+        }
+        if (result == MOTOR_CONTROL_ARM_ACCEPTED) {
+            return set_result(arming, RECEIVER_ARMING_ARM_ACCEPTED);
+        }
     }
 
     saturating_increment(&arming->rejected_arm_count);
@@ -158,6 +172,7 @@ const char *receiver_arming_result_name(receiver_arming_result_t result)
         "READY",
         "RECEIVER_ACTIVE",
         "BLOCKED_THROTTLE",
+        "ARM_PENDING",
         "ARM_ACCEPTED",
         "ARM_REJECTED",
         "DISARM_ACCEPTED",

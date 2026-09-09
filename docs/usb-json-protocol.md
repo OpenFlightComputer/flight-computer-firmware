@@ -26,14 +26,20 @@ The supported commands are:
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
 | `motor_test` | Submit a leased single-motor command through the production safety gate |
+| `motor_direction` | Report all four effective logical-motor directions and their source |
+| `motor_direction_set` | Persist and apply one absolute logical-motor direction while disarmed |
+| `motor_configuration_reset` | Erase the persistent override and apply compiled defaults while disarmed |
 
-`arm` changes only the software lifecycle state and does not itself request
-nonzero output. The application safety policy first requires `OK`, `WARNING`,
-or `DEGRADED` health;
+`arm` does not itself request nonzero output. The application safety policy
+first requires `OK`, `WARNING`, or `DEGRADED` health;
 `UNKNOWN`/`CRITICAL` returns `health_rejected` without sending an arm event.
-The state machine remains the sole transition authority after admission: arm
-is accepted only in `DISARMED`, while disarm is accepted in `ARMED` or
-`FAILSAFE`. `FAULT` remains terminal until reset.
+An accepted arm request first returns `pending:true` while the motor task sends
+ten frames reasserting all configured ESC directions. The public lifecycle
+remains `DISARMED` during this short internal preparation and becomes `ARMED`
+only after successful completion. The state machine remains the sole
+transition authority: arm is accepted only in `DISARMED`, while disarm is
+accepted in `ARMED` or `FAILSAFE`. Disarm also cancels a pending arm. `FAULT`
+remains terminal until reset.
 
 The only accepted manual output request is:
 
@@ -51,6 +57,19 @@ and fault behavior are identical to other future command producers. An
 accepted command is a 100 ms lease: without a fresh accepted request, the
 1 kHz motor-control task transmits stop frames and enters failsafe.
 
+Motor direction uses absolute rather than toggle requests:
+
+```json
+{"type":"command","request_id":51,"command":"motor_direction"}
+{"type":"command","request_id":52,"command":"motor_direction_set","motor":3,"direction":"REVERSED"}
+{"type":"command","request_id":53,"command":"motor_configuration_reset"}
+```
+
+Only uppercase `NORMAL` and `REVERSED` are accepted on the wire. Set and reset
+are rejected with `state_rejected` unless the lifecycle is `DISARMED` with no
+arm pending. A storage failure returns `configuration_storage_error`. See
+`docs/motor-configuration.md` for persistence and DShot application behavior.
+
 ## Responses
 
 Examples, each followed by one newline:
@@ -59,12 +78,15 @@ Examples, each followed by one newline:
 {"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","control_source":"NONE","uptime_us":123456,"firmware_version":"0.1.0","build_id":"5db525a"}
 {"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
 {"type":"response","request_id":44,"command":"receiver","ok":true,"available":true,"sequence":7,"age_us":1250,"freshness":"FRESH","channels":[174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189],"normalized":{"roll":-0.500000,"pitch":0.250000,"yaw":0.000000,"throttle":1.000000,"arm":true},"failsafe":{"state":"LIVE","action":"LIVE","stage_two_latched":false,"recovery_ready":false},"link_statistics_present":true,"uplink_rssi_dbm":-42,"uplink_link_quality_percent":99,"uplink_snr_db":8,"uart_bytes":135014,"valid_frames":5000,"crc_errors":0,"framing_errors":0,"dma_overruns":0,"dma_bytes_dropped":0}
-{"type":"response","request_id":44,"command":"arm","ok":true,"state":"ARMED"}
+{"type":"response","request_id":44,"command":"arm","ok":true,"pending":true,"state":"DISARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
 {"type":"response","request_id":46,"command":"arm","ok":false,"state":"DISARMED","error":"health_rejected"}
 {"type":"response","request_id":47,"command":"arm","ok":false,"state":"DISARMED","error":"motor_not_ready"}
 {"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":2,"throttle":0.100000}
 {"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":0,"throttle":0.020000,"error":"motor_not_allowed"}
+{"type":"response","request_id":51,"command":"motor_direction","ok":true,"state":"DISARMED","source":"DEFAULT","directions":["NORMAL","NORMAL","NORMAL","NORMAL"]}
+{"type":"response","request_id":52,"command":"motor_direction_set","ok":true,"state":"DISARMED","motor":3,"direction":"REVERSED","source":"PERSISTENT","directions":["NORMAL","NORMAL","REVERSED","NORMAL"]}
+{"type":"response","request_id":53,"command":"motor_configuration_reset","ok":true,"state":"DISARMED","source":"DEFAULT","directions":["NORMAL","NORMAL","NORMAL","NORMAL"]}
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":50,"error":"unsupported_command"}
 ```
@@ -104,9 +126,10 @@ the exact image for diagnostics, but they are not a protocol-version or
 compatibility guarantee.
 
 `control_source` is `NONE`, `USB_TEST`, or `RECEIVER`. A successful USB arm
-selects `USB_TEST`, so only USB motor-test commands can renew output until
-disarm. Commands from another source cannot replace the retained command.
-Disarm and all fail-safe stop paths remain source-independent.
+selects `USB_TEST` after direction preparation completes, so only USB
+motor-test commands can renew output until disarm. Commands from another
+source cannot replace the retained command. Disarm and all fail-safe stop
+paths remain source-independent.
 
 ## Log events
 

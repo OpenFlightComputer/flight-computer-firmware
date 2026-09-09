@@ -154,6 +154,7 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 )
 
 add_executable(flight_firmware
+    app/board_motor_configuration_storage.c
     app/dshot_motor_backend.c
     app/motor_control.c
     app/motor_safety_policy.c
@@ -175,6 +176,7 @@ add_executable(flight_firmware
     app/usb_receiver_response.c
     "${FIRMWARE_IDENTITY_SOURCE}"
     flight/actuators/motor_command.c
+    flight/actuators/motor_configuration.c
     flight/actuators/motor_mapping.c
     flight/actuators/motor_output.c
     flight/receiver/receiver_freshness.c
@@ -192,6 +194,7 @@ add_executable(flight_firmware
     peripherals/usb/usb_json_protocol.c
     hardware/boards/flightcomputer_v1/board.c
     hardware/boards/flightcomputer_v1/board_motor_output.c
+    hardware/boards/flightcomputer_v1/board_persistent_storage.c
     hardware/boards/flightcomputer_v1/board_receiver.c
     hardware/boards/flightcomputer_v1/motor_output_map.c
     hardware/boards/flightcomputer_v1/rgb_led_safe_state.c

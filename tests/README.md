@@ -118,6 +118,12 @@ canonicalization, all-zero stop commands, NaN/infinity/out-of-range rejection
 without replacement, invalidation, timeout boundaries, future timestamps, and
 freshness near the 64-bit time limit.
 
+The native `motor_configuration_tests` target verifies all-normal compiled
+defaults, per-motor direction validation, invalid configurations, and stable
+direction names. `board_motor_configuration_storage_tests` verifies the
+versioned eight-byte board payload, valid load/save/clear behavior, corrupt or
+incompatible data rejection, and board-storage error propagation.
+
 The native `motor_mapping_tests` target verifies identity defaults, exhaustively
 classifies all 256 in-range assignments, rejects configuration unless the
 disarmed condition is supplied, preserves mappings atomically on
@@ -128,14 +134,15 @@ The native `motor_output_tests` target uses an injected fake backend to verify
 complete callback validation, backend and initial-stop failure handling,
 descriptor copying, command revalidation/canonicalization, distinct facade
 storage, accepted-copy lifetime, busy/error/unknown mapping, and force-stop's
-accepted-or-error contract. It also verifies asynchronous backend status
-mapping.
+accepted-or-error contract. It also verifies complete direction-set
+validation/result mapping and asynchronous backend status mapping.
 
 The native `dshot_motor_backend_tests` target replaces the V1 board engine with
 a fake and verifies DShot300 initialization, normalized-throttle conversion,
 exact physical `M1`-through-`M4` table order, caller-independent copying, busy
-behavior, all-zero force-stop storage, board result/status error mapping, and
-compact board failure-context propagation.
+behavior, exact direction command 20/21 frames with the request bit, all-zero
+force-stop storage, board result/status error mapping, and compact board
+failure-context propagation.
 
 The native `dshot_encoder_tests` target exhaustively covers all 2,048 protocol
 values with telemetry both clear and set, independently verifies the checksum

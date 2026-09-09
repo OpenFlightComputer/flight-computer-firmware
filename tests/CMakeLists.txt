@@ -296,6 +296,7 @@ add_executable(motor_control_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/health.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_mapping.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_output.c"
 )
@@ -339,6 +340,46 @@ target_compile_options(motor_command_tests PRIVATE
 
 add_test(NAME motor_command COMMAND motor_command_tests)
 
+add_executable(motor_configuration_tests
+    motor_configuration_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
+)
+
+target_include_directories(motor_configuration_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+)
+
+target_compile_options(motor_configuration_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME motor_configuration COMMAND motor_configuration_tests)
+
+add_executable(board_motor_configuration_storage_tests
+    board_motor_configuration_storage_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/board_motor_configuration_storage.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
+)
+
+target_include_directories(board_motor_configuration_storage_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
+)
+
+target_compile_options(board_motor_configuration_storage_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME board_motor_configuration_storage
+         COMMAND board_motor_configuration_storage_tests)
+
 add_executable(motor_mapping_tests
     motor_mapping_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
@@ -361,6 +402,7 @@ add_test(NAME motor_mapping COMMAND motor_mapping_tests)
 add_executable(motor_output_tests
     motor_output_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_output.c"
 )
 
@@ -381,6 +423,7 @@ add_executable(dshot_motor_backend_tests
     dshot_motor_backend_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/dshot_motor_backend.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_output.c"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot/dshot_encoder.c"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/dshot/dshot_timing.c"
@@ -633,6 +676,7 @@ add_executable(usb_command_processor_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_freshness.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb/usb_json_protocol.c"
 )
 

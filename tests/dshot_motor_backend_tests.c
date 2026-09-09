@@ -98,6 +98,15 @@ static uint16_t independently_encode(uint16_t value)
     return (uint16_t)((payload << 4U) | checksum);
 }
 
+static uint16_t independently_encode_command(uint16_t value)
+{
+    const uint16_t payload = (uint16_t)((value << 1U) | UINT16_C(1));
+    const uint16_t checksum =
+        (uint16_t)((payload ^ (payload >> 4U) ^ (payload >> 8U)) & 0x0FU);
+
+    return (uint16_t)((payload << 4U) | checksum);
+}
+
 static void expect_physical_output_frame(
     const uint16_t values[DMA_VALUE_COUNT],
     size_t physical_output,
@@ -239,10 +248,43 @@ static void busy_error_status_and_stop_results_are_mapped(void)
            MOTOR_OUTPUT_STOP_BACKEND_ERROR);
 }
 
+static void direction_commands_use_explicit_dshot_settings(void)
+{
+    dshot_motor_backend_t backend_state;
+    motor_output_backend_t backend;
+    motor_output_t output;
+    const motor_direction_t directions[MOTOR_COMMAND_MOTOR_COUNT] = {
+        MOTOR_DIRECTION_NORMAL,
+        MOTOR_DIRECTION_REVERSED,
+        MOTOR_DIRECTION_NORMAL,
+        MOTOR_DIRECTION_REVERSED,
+    };
+
+    reset_fake_board();
+    assert(dshot_motor_backend_prepare(&backend_state, &backend));
+    assert(motor_output_initialize(&output, &backend) == MOTOR_OUTPUT_INIT_OK);
+    assert(motor_output_submit_directions(&output, directions) ==
+           MOTOR_OUTPUT_DIRECTION_ACCEPTED);
+    assert(fake_board.submit_count == 1U);
+    expect_physical_output_frame(fake_board.submitted_values,
+                                 0U,
+                                 independently_encode_command(UINT16_C(20)));
+    expect_physical_output_frame(fake_board.submitted_values,
+                                 1U,
+                                 independently_encode_command(UINT16_C(21)));
+    expect_physical_output_frame(fake_board.submitted_values,
+                                 2U,
+                                 independently_encode_command(UINT16_C(20)));
+    expect_physical_output_frame(fake_board.submitted_values,
+                                 3U,
+                                 independently_encode_command(UINT16_C(21)));
+}
+
 int main(void)
 {
     preparation_and_initialization_are_fail_closed();
     complete_commands_reach_the_board_in_physical_order();
+    direction_commands_use_explicit_dshot_settings();
     busy_error_status_and_stop_results_are_mapped();
     return 0;
 }

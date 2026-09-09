@@ -97,10 +97,12 @@ producers.
 ## Motor direction
 
 Logical expected CW/CCW direction and the actual direction stored by each ESC
-are separate concepts. Neither is guessed here. Expected direction belongs to
-the later aircraft/mixer configuration. Changing an ESC's stored direction
-requires an explicit disarmed maintenance operation, enforced zero output,
-the ESC-specific DShot command sequence, and propeller-free confirmation.
+are separate concepts. Expected direction belongs to the later aircraft/mixer
+configuration. ESC-stored direction is now an explicit logical-motor setting,
+persisted by the FC and applied through a disarmed DShot command sequence. The
+logical-to-physical mapping is applied before output, so the direction follows
+the logical aircraft position. Propeller-free confirmation remains required;
+see `docs/motor-configuration.md`.
 
 ## Resource review
 
@@ -139,7 +141,7 @@ Physical identification has established:
 | 4 | 3 | `ESC_M4` | Rear right |
 
 All four physical positions therefore match the default identity mapping. The
-bench command now accepts any motor from 1 through 4 while still constructing
-exactly one nonzero logical command entry. Rotation direction will be a
-disarmed-only runtime ESC configuration, so it will not require recompilation
-or wiring changes.
+bench command accepts any motor from 1 through 4 while still constructing
+exactly one nonzero logical command entry. Runtime direction settings now avoid
+recompilation or wiring changes; each physical direction still needs to be
+observed and recorded.

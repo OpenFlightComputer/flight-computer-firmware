@@ -47,6 +47,7 @@ set(MOTOR_OUTPUT_FILES
 assert_token_is_private("motor_output_t" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_initialize" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_submit" ${MOTOR_OUTPUT_FILES})
+assert_token_is_private("motor_output_submit_directions" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_force_stop" ${MOTOR_OUTPUT_FILES})
 assert_token_is_private("motor_output_status" ${MOTOR_OUTPUT_FILES})
 

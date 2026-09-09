@@ -140,9 +140,10 @@ firmware link must not be recorded as proof that the flight image works.
 - [ ] Physically validate loss of the 100 ms producer heartbeat and record the
   actual motor-stop latency. This is deferred by owner decision while receiver
   development begins.
-- [ ] Record every motor's rotation direction and implement a disarmed-only
-  runtime direction configuration before first flight. Do not require firmware
-  recompilation or wiring changes to reverse one motor.
+- [x] Implement a persistent, disarmed-only runtime direction configuration
+  without requiring firmware recompilation or wiring changes.
+- [ ] Confirm persistence across a power cycle and a normal firmware flash,
+  then record every motor's rotation direction before first flight.
 
 ## Flight-image evidence log
 

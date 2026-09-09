@@ -20,7 +20,8 @@ DShot, PWM, CAN, fake, or other lower implementation
 
 The facade accepts only `motor_command_t`, so flight producers do not know
 protocol values, timer channels, DMA buffers, routed pins, or ESC timing. The
-backend is injected as four callbacks plus an opaque context pointer.
+backend is injected as throttle, direction, stop, status, diagnostic, and
+initialization callbacks plus an opaque context pointer.
 
 To preserve `app -> flight -> peripherals -> hardware` dependency direction, a
 production adapter that understands both this facade and a selected
@@ -34,8 +35,10 @@ flight-layer header or acquire knowledge of `motor_command_t`.
 typedef struct {
     motor_output_backend_initialize_t initialize;
     motor_output_backend_submit_t submit;
+    motor_output_backend_submit_directions_t submit_directions;
     motor_output_backend_force_stop_t force_stop;
     motor_output_backend_status_fn_t status;
+    motor_output_backend_diagnostic_context_t diagnostic_context;
     void *context;
 } motor_output_backend_t;
 ```
@@ -90,6 +93,12 @@ backend-owned frame buffer before returning accepted.
 The facade maps accepted, busy, error, and unknown backend results to explicit
 outcomes. It does not retry or queue commands; `motor_control` retains only
 the last actually accepted command for periodic freshness enforcement.
+
+`motor_output_submit_directions()` validates all four direction values and
+passes them as one atomic set. As with throttle submission, `ACCEPTED` means
+the backend copied or converted the complete set before returning. This
+mechanism does not decide when direction changes are safe or how often a
+protocol requires repetition; `motor_control` owns both policies.
 
 `motor_output_status()` maps the backend's asynchronous idle, busy, and error
 state without exposing its timer or DMA representation. The 1 kHz safety task

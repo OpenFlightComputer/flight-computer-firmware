@@ -14,15 +14,58 @@
 typedef struct {
     motor_output_backend_init_result_t initialize_result;
     motor_output_backend_submit_result_t submit_result;
+    motor_output_backend_direction_result_t direction_result;
     motor_output_backend_stop_result_t stop_result;
     motor_output_backend_status_t status_result;
     uint32_t diagnostic_context;
     motor_command_t last_command;
+    motor_direction_t last_directions[MOTOR_COMMAND_MOTOR_COUNT];
     uint32_t initialize_count;
     uint32_t submit_count;
+    uint32_t direction_count;
     uint32_t stop_count;
     uint32_t status_count;
 } fake_backend_t;
+
+static motor_configuration_t saved_configuration;
+static uint32_t configuration_save_count;
+static uint32_t configuration_clear_count;
+
+static motor_configuration_load_result_t fake_configuration_load(
+    void *context,
+    motor_configuration_t *configuration)
+{
+    (void)context;
+    (void)configuration;
+    return MOTOR_CONFIGURATION_LOAD_EMPTY;
+}
+
+static motor_configuration_save_result_t fake_configuration_save(
+    void *context,
+    const motor_configuration_t *configuration)
+{
+    (void)context;
+    if (!motor_configuration_is_valid(configuration)) {
+        return MOTOR_CONFIGURATION_SAVE_ERROR;
+    }
+    saved_configuration = *configuration;
+    configuration_save_count++;
+    return MOTOR_CONFIGURATION_SAVE_OK;
+}
+
+static motor_configuration_clear_result_t fake_configuration_clear(
+    void *context)
+{
+    (void)context;
+    configuration_clear_count++;
+    return MOTOR_CONFIGURATION_CLEAR_OK;
+}
+
+static const motor_configuration_storage_t configuration_storage = {
+    .load = fake_configuration_load,
+    .save = fake_configuration_save,
+    .clear = fake_configuration_clear,
+};
 
 static uint64_t current_time_us;
 
@@ -50,6 +93,21 @@ static motor_output_backend_submit_result_t fake_submit(
         fake->last_command = *command;
     }
     return fake->submit_result;
+}
+
+static motor_output_backend_direction_result_t fake_submit_directions(
+    const motor_direction_t directions[MOTOR_COMMAND_MOTOR_COUNT],
+    void *context)
+{
+    fake_backend_t *fake = context;
+    size_t motor;
+
+    assert(directions != NULL);
+    fake->direction_count++;
+    for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+        fake->last_directions[motor] = directions[motor];
+    }
+    return fake->direction_result;
 }
 
 static motor_output_backend_stop_result_t fake_force_stop(void *context)
@@ -80,6 +138,7 @@ static motor_output_backend_t backend_for(fake_backend_t *fake)
     return (motor_output_backend_t){
         .initialize = fake_initialize,
         .submit = fake_submit,
+        .submit_directions = fake_submit_directions,
         .force_stop = fake_force_stop,
         .status = fake_status,
         .diagnostic_context = fake_diagnostic_context,
@@ -125,14 +184,29 @@ static void enter_disarmed(system_state_machine_t *state_machine)
            SYSTEM_STATE_TRANSITION_OK);
 }
 
-static void enter_armed(system_state_machine_t *state_machine)
+static void enter_armed_as(system_state_machine_t *state_machine,
+                           motor_control_source_t source)
 {
+    uint32_t repetition;
+
     assert(state_machine->current == SYSTEM_STATE_DISARMED);
-    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST) ==
-           MOTOR_CONTROL_ARM_ACCEPTED);
+    assert(motor_control_arm(source) ==
+           MOTOR_CONTROL_ARM_PENDING);
+    assert(motor_control_pending_source() ==
+           source);
+    for (repetition = 0U;
+         repetition <= MOTOR_CONTROL_DIRECTION_COMMAND_REPETITIONS;
+         repetition++) {
+        assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    }
     assert(state_machine->current == SYSTEM_STATE_ARMED);
     assert(motor_control_active_source() ==
-           MOTOR_CONTROL_SOURCE_USB_TEST);
+           source);
+}
+
+static void enter_armed(system_state_machine_t *state_machine)
+{
+    enter_armed_as(state_machine, MOTOR_CONTROL_SOURCE_USB_TEST);
 }
 
 static void leave_failsafe(system_state_machine_t *state_machine)
@@ -226,7 +300,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        fault_system,
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
-                                       &backend) ==
+                                       &backend,
+                                       &configuration_storage) ==
            MOTOR_CONTROL_INIT_INVALID_ARGUMENT);
 
     system_state_machine_initialize(&incomplete_state);
@@ -238,7 +313,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        &incomplete_fault_system,
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
-                                       &backend) ==
+                                       &backend,
+                                       &configuration_storage) ==
            MOTOR_CONTROL_INIT_INVALID_ARGUMENT);
 
     fake->initialize_result = MOTOR_OUTPUT_BACKEND_INIT_ERROR;
@@ -246,7 +322,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        fault_system,
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
-                                       &backend) ==
+                                       &backend,
+                                       &configuration_storage) ==
            MOTOR_CONTROL_INIT_BACKEND_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(
@@ -260,7 +337,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        fault_system,
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
-                                       &backend) ==
+                                       &backend,
+                                       &configuration_storage) ==
            MOTOR_CONTROL_INIT_INITIAL_STOP_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(fault_system,
@@ -285,7 +363,9 @@ static void successful_initialization_is_stopped_and_singleton(
                                        fault_system,
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
-                                       &backend) == MOTOR_CONTROL_INIT_OK);
+                                       &backend,
+                                       &configuration_storage) ==
+           MOTOR_CONTROL_INIT_OK);
     assert(motor_control_is_initialized());
     assert(motor_control_outputs_stopped());
     assert(!motor_control_ready_for_arm());
@@ -293,7 +373,8 @@ static void successful_initialization_is_stopped_and_singleton(
                                        fault_system,
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
-                                       &backend) ==
+                                       &backend,
+                                       &configuration_storage) ==
            MOTOR_CONTROL_INIT_ALREADY_INITIALIZED);
 }
 
@@ -368,8 +449,7 @@ static void command_source_is_exclusive_and_hands_off_after_disarm(
                                 &owner_command) ==
            MOTOR_CONTROL_SUBMIT_BLOCKED_STATE);
 
-    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_RECEIVER) ==
-           MOTOR_CONTROL_ARM_ACCEPTED);
+    enter_armed_as(state_machine, MOTOR_CONTROL_SOURCE_RECEIVER);
     assert(motor_control_active_source() == MOTOR_CONTROL_SOURCE_RECEIVER);
     assert(motor_control_submit(MOTOR_CONTROL_SOURCE_USB_TEST,
                                 &owner_command) ==
@@ -378,6 +458,71 @@ static void command_source_is_exclusive_and_hands_off_after_disarm(
                                 &owner_command) ==
            MOTOR_CONTROL_SUBMIT_ACCEPTED);
     assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
+}
+
+static void directions_are_persistent_disarmed_and_reapplied_before_arm(
+    system_state_machine_t *state_machine,
+    fake_backend_t *fake)
+{
+    motor_configuration_t configuration;
+    bool persistent;
+    uint32_t direction_count;
+    uint32_t repetition;
+
+    assert(state_machine->current == SYSTEM_STATE_DISARMED);
+    assert(motor_control_get_configuration(&configuration, &persistent));
+    assert(!persistent);
+    assert(configuration.direction[2] == MOTOR_DIRECTION_NORMAL);
+    assert(motor_control_configure_direction(
+               0U, MOTOR_DIRECTION_REVERSED) ==
+           MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT);
+    assert(motor_control_configure_direction(
+               5U, MOTOR_DIRECTION_REVERSED) ==
+           MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT);
+    assert(motor_control_configure_direction(
+               3U, MOTOR_DIRECTION_COUNT) ==
+           MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT);
+    assert(motor_control_configure_direction(
+               3U, (motor_direction_t)-1) ==
+           MOTOR_CONTROL_DIRECTION_CONFIGURE_INVALID_ARGUMENT);
+    assert(configuration_save_count == 0U);
+    assert(motor_control_configure_direction(3U,
+                                             MOTOR_DIRECTION_REVERSED) ==
+           MOTOR_CONTROL_DIRECTION_CONFIGURE_OK);
+    assert(configuration_save_count == 1U);
+    assert(saved_configuration.direction[2] == MOTOR_DIRECTION_REVERSED);
+    assert(motor_control_get_configuration(&configuration, &persistent));
+    assert(persistent);
+    assert(configuration.direction[2] == MOTOR_DIRECTION_REVERSED);
+
+    direction_count = fake->direction_count;
+    for (repetition = 0U;
+         repetition <= MOTOR_CONTROL_DIRECTION_COMMAND_REPETITIONS;
+         repetition++) {
+        assert(motor_control_synchronize() == MOTOR_CONTROL_SYNC_SAFE);
+    }
+    assert(fake->direction_count ==
+           direction_count + MOTOR_CONTROL_DIRECTION_COMMAND_REPETITIONS);
+    /* The earlier reverse mapping maps logical motor 3 to physical output 2. */
+    assert(fake->last_directions[1] == MOTOR_DIRECTION_REVERSED);
+
+    direction_count = fake->direction_count;
+    enter_armed(state_machine);
+    assert(fake->direction_count ==
+           direction_count + MOTOR_CONTROL_DIRECTION_COMMAND_REPETITIONS);
+    assert(motor_control_configure_direction(3U,
+                                             MOTOR_DIRECTION_NORMAL) ==
+           MOTOR_CONTROL_DIRECTION_CONFIGURE_UNSAFE_STATE);
+    assert(motor_control_reset_configuration() ==
+           MOTOR_CONTROL_CONFIGURATION_RESET_UNSAFE_STATE);
+    assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
+
+    assert(motor_control_reset_configuration() ==
+           MOTOR_CONTROL_CONFIGURATION_RESET_OK);
+    assert(configuration_clear_count == 1U);
+    assert(motor_control_get_configuration(&configuration, &persistent));
+    assert(!persistent);
+    assert(configuration.direction[2] == MOTOR_DIRECTION_NORMAL);
 }
 
 static void allowed_health_passes_fresh_commands_with_mapping(
@@ -677,6 +822,8 @@ int main(void)
     arming_is_blocked_before_stop_preparation(
         &state_machine, &fake);
     mapping_is_private_and_requires_disarmed_output(&state_machine);
+    directions_are_persistent_disarmed_and_reapplied_before_arm(
+        &state_machine, &fake);
     command_source_is_exclusive_and_hands_off_after_disarm(&state_machine,
                                                            &fake);
     allowed_health_passes_fresh_commands_with_mapping(

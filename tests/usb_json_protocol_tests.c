@@ -46,6 +46,18 @@ static void valid_commands_and_key_order_are_accepted(void)
                     "\"throttle\":0.000001}");
     assert(request.motor == UINT8_MAX);
     assert(request.throttle_millionths == 1U);
+    assert(parse("{\"type\":\"command\",\"request_id\":7,"
+                 "\"command\":\"motor_direction\"}").command ==
+           USB_JSON_COMMAND_MOTOR_DIRECTION);
+    request = parse("{\"type\":\"command\",\"request_id\":8,"
+                    "\"command\":\"motor_direction_set\",\"motor\":3,"
+                    "\"direction\":\"REVERSED\"}");
+    assert(request.command == USB_JSON_COMMAND_MOTOR_DIRECTION_SET);
+    assert(request.motor == 3U);
+    assert(request.direction == USB_JSON_MOTOR_DIRECTION_REVERSED);
+    assert(parse("{\"type\":\"command\",\"request_id\":9,"
+                 "\"command\":\"motor_configuration_reset\"}").command ==
+           USB_JSON_COMMAND_MOTOR_CONFIGURATION_RESET);
     assert(parse("{\"type\":\"command\",\"request_id\":4,"
                  "\"command\":\"future\"}").command ==
            USB_JSON_COMMAND_UNSUPPORTED);
@@ -85,6 +97,12 @@ static void malformed_or_noncanonical_requests_are_rejected(void)
         "\"request_id\":1,\"motor\":256,\"throttle\":0.1}",
         "{\"type\":\"command\",\"command\":\"status\","
         "\"request_id\":1,\"motor\":1,\"throttle\":0.1}",
+        "{\"type\":\"command\",\"command\":\"motor_direction_set\","
+        "\"request_id\":1,\"motor\":1}",
+        "{\"type\":\"command\",\"command\":\"motor_direction_set\","
+        "\"request_id\":1,\"motor\":1,\"direction\":\"reverse\"}",
+        "{\"type\":\"command\",\"command\":\"motor_direction\","
+        "\"request_id\":1,\"motor\":1,\"direction\":\"NORMAL\"}",
     };
     size_t index;
 
@@ -132,6 +150,9 @@ static void response_builders_are_exact_and_bounded(void)
         "\"command\":\"motor_test\",\"ok\":false,"
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
+    static const char *const directions[4] = {
+        "NORMAL", "NORMAL", "REVERSED", "NORMAL",
+    };
 
     assert(usb_json_build_status_response("DISARMED", "NONE", 42U, 42U,
                                           "0.1.0", "abcdef0-dirty", output,
@@ -155,13 +176,37 @@ static void response_builders_are_exact_and_bounded(void)
                                            NULL, "build", output,
                                            sizeof(output), &length));
     assert(usb_json_build_transition_response(USB_JSON_COMMAND_ARM, 7U, true,
+                                              false,
                                               "ARMED", NULL, output,
                                               sizeof(output), &length));
     assert(memcmp(output, accepted, length) == 0);
     assert(usb_json_build_transition_response(USB_JSON_COMMAND_DISARM, 8U, false,
+                                              false,
                                               "BOOT", "transition_rejected",
                                               output, sizeof(output), &length));
     assert(memcmp(output, rejected, length) == 0);
+    assert(usb_json_build_transition_response(USB_JSON_COMMAND_ARM, 12U, true,
+                                              true, "DISARMED", NULL, output,
+                                              sizeof(output), &length));
+    assert(strstr(output, "\"pending\":true") != NULL);
+    assert(usb_json_build_motor_configuration_response(
+        USB_JSON_COMMAND_MOTOR_DIRECTION_SET,
+        13U,
+        true,
+        3U,
+        "REVERSED",
+        "PERSISTENT",
+        directions,
+        "DISARMED",
+        NULL,
+        output,
+        sizeof(output),
+        &length));
+    assert(strstr(output, "\"command\":\"motor_direction_set\"") != NULL);
+    assert(strstr(output, "\"motor\":3") != NULL);
+    assert(strstr(output,
+                  "\"directions\":[\"NORMAL\",\"NORMAL\","
+                  "\"REVERSED\",\"NORMAL\"]") != NULL);
     assert(usb_json_build_error_response(false, 0U, "invalid_request", output,
                                          sizeof(output), &length));
     assert(memcmp(output, error, length) == 0);

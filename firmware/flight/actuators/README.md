@@ -1,13 +1,14 @@
 # Actuator contracts
 
 This directory contains hardware-independent data and policy shared by future
-actuator producers and consumers. `motor_command` defines an atomic normalized
+motor-control producers and consumers. `motor_command` defines an atomic normalized
 four-motor snapshot, validation, exact-stop canonicalization, invalidation, and
 freshness checks. `motor_mapping` owns an atomic logical-to-physical
 permutation, the disarmed configuration precondition, and complete-command
-reordering. `motor_output` defines the instance-based facade and injected
-backend contract for initialization, complete-command submission, and
-unconditional force-stop.
+reordering. `motor_configuration` defines validated logical-motor direction
+values and compiled defaults. `motor_output` defines the instance-based facade
+and injected backend contract for initialization, complete throttle/direction
+submission, status, diagnostics, and unconditional force-stop.
 
 DShot framing belongs in the hardware-independent peripheral protocol module.
 The application-owned motor controller will bridge that lower API to this facade
