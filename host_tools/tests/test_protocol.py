@@ -78,7 +78,7 @@ def test_request_parameters_cannot_replace_correlated_envelope():
 
 def test_configuration_write_sends_the_complete_document():
     configuration = {
-        "schema_version": 2,
+        "schema_version": 3,
         "motors": {
             "propeller_layout": "PROPS_IN",
             "directions": ["NORMAL", "NORMAL", "REVERSED", "NORMAL"],
@@ -106,7 +106,16 @@ def test_configuration_write_sends_the_complete_document():
                 "sample_duration_us": 500000,
                 "maximum_rate_dps": 5.0,
                 "maximum_standard_deviation_dps": 0.5,
-            }
+            },
+            "gyro_filter": {
+                "type": "FIRST_ORDER_LOW_PASS",
+                "cutoff_hz": 80.0,
+            },
+            "attitude_estimator": {
+                "type": "COMPLEMENTARY",
+                "accelerometer_correction_time_constant_s": 0.5,
+                "maximum_gap_us": 10000,
+            },
         },
     }
     connection = FakeConnection(

@@ -12,8 +12,9 @@ compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
 therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, the
 initial mixer factors, and the reviewed receiver-failsafe values in that file.
-Schema 2 also carries the startup gyro-calibration settling/sample durations
-and stationary-motion thresholds.
+Schema 3 also carries the startup gyro-calibration policy, the selected gyro
+filter and cutoff, and the selected attitude estimator, correction time
+constant, and maximum accepted sample gap.
 
 The motor array always uses logical aircraft order:
 
@@ -44,10 +45,12 @@ erases the persistent override and reapplies the compiled JSON defaults.
 
 Write and reset require lifecycle `DISARMED` with no pending arm. A successful
 write is persisted before the active snapshot is replaced. Runtime application
-updates all four motor directions, receiver freshness thresholds, and receiver
-failsafe policy as one operation. Direction changes start a ten-frame DShot
-configuration sequence, and all four directions are reasserted again before
-every arm.
+updates all four motor directions, receiver freshness thresholds, receiver
+failsafe policy, and the IMU processing pipeline as one operation. Replacing
+the filter or estimator configuration clears its history so the next fresh IMU
+sample seeds a new estimate instead of mixing two configurations. Direction
+changes start a ten-frame DShot configuration sequence, and all four directions
+are reasserted again before every arm.
 
 Gyro-calibration fields are startup policy. A write persists them with the
 same complete document, and they take effect on the next boot; the bias itself
@@ -59,16 +62,41 @@ Flight Computer V1 reserves STM32F405 sector 11 at `0x080E0000` through
 `0x080FFFFF`. The application linker region ends before it, so normal flashing
 does not overwrite settings. A programmer mass erase still clears the sector.
 
-The board layer stores an 84-byte versioned payload inside fixed 120-byte
+The board layer stores a 96-byte versioned payload inside fixed 120-byte
 append-only records. Each record has a format version, sequence, payload
 length, CRC32, and a commit word programmed last. The sector holds 1,092 full
 configuration records before an explicit reset is needed.
 
-The loader can migrate both the prior 88-byte schema-1 flight document and the
-earlier eight-byte motor-direction payload. During migration it preserves all
-fields that existed in the old payload and fills new gyro-calibration fields
-from the canonical JSON defaults. Corrupt or unknown nonempty storage still
-fails startup closed.
+The loader can migrate the prior 84-byte schema-2 document, the earlier
+88-byte schema-1 document, and the eight-byte motor-direction payload. During
+migration it preserves all fields that existed in the old payload and fills
+new fields from the canonical JSON defaults. Corrupt or unknown nonempty
+storage still fails startup closed.
+
+## IMU processing configuration
+
+The initial supported pipeline is intentionally small and explicit:
+
+```json
+"imu": {
+  "gyro_filter": {
+    "type": "FIRST_ORDER_LOW_PASS",
+    "cutoff_hz": 80.0
+  },
+  "attitude_estimator": {
+    "type": "COMPLEMENTARY",
+    "accelerometer_correction_time_constant_s": 0.5,
+    "maximum_gap_us": 10000
+  }
+}
+```
+
+The string `type` fields are selections rather than hidden hard-coded
+branches. Only the listed types are accepted today; future implementations can
+add another module and selection without nesting it inside the acquisition
+task. Filter and estimator changes take effect immediately after a successful
+disarmed write. Startup-calibration settings still take effect on the next
+boot because the accepted bias is deliberately immutable for that boot.
 
 ## Control-task relationship
 
@@ -97,7 +125,7 @@ A new low-to-high arm-switch edge is still required to arm again.
 
 Native tests cover JSON-derived defaults, configuration validation,
 serialization, legacy migration, disarmed-only replacement/reset, runtime
-application, mixer equations, exact-zero handling, clamping, source ownership,
-and immediate Stage 2 failsafe entry. Debug and Release cross-builds verify the
-generated header and flash integration. A propeller-free receiver-to-motor
-test is still required before Phase 3 can be called physically complete.
+application including processing-pipeline replacement, mixer equations,
+exact-zero handling, clamping, source ownership, and immediate Stage 2
+failsafe entry. Debug and Release cross-builds verify the generated header and
+flash integration.

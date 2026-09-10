@@ -63,6 +63,13 @@ class ImuSample:
     calibration_samples: int
     calibration_restarts: int
     calibration_bias_raw: tuple[int, int, int] | None
+    attitude_roll_degrees: float | None
+    attitude_pitch_degrees: float | None
+    filtered_gyroscope_dps: tuple[float, float, float] | None
+    processing_processed: int
+    processing_duplicates: int
+    processing_rejected: int
+    processing_continuity_resets: int
     reads: int
     published: int
     source_errors: int
@@ -85,6 +92,7 @@ class ImuSample:
         service = _required_object(response, "service")
         high_rate = _required_object(response, "high_rate")
         calibration = _required_object(response, "calibration")
+        processing = _required_object(response, "processing")
         calibration_state = calibration.get("state")
         if calibration_state not in {"SETTLING", "COLLECTING", "READY"}:
             raise ProtocolError("IMU calibration state is invalid")
@@ -92,6 +100,8 @@ class ImuSample:
         sequence = age_us = None
         acceleration = gyroscope = corrected_gyroscope = calibration_bias = None
         task_values: tuple[int | None, ...] = (None,) * 5
+        attitude_roll = attitude_pitch = None
+        filtered_gyroscope = None
         if available:
             sequence = _required_int(
                 response, "sequence", minimum=0, maximum=0xFFFFFFFFFFFFFFFF
@@ -124,13 +134,45 @@ class ImuSample:
             )
         ):
             raise ProtocolError("unavailable IMU data must use null snapshots")
+        if response.get("attitude") is not None:
+            if not available:
+                raise ProtocolError("unavailable IMU data must not include attitude")
+            attitude = _required_object(response, "attitude")
+            attitude_sequence = _required_int(
+                attitude, "source_sequence", minimum=0,
+                maximum=0xFFFFFFFFFFFFFFFF,
+            )
+            if attitude_sequence != sequence:
+                raise ProtocolError("IMU attitude must match the raw sample sequence")
+            attitude_roll = _required_int(
+                attitude, "roll_millidegrees", minimum=-0x80000000,
+                maximum=0x7FFFFFFF,
+            ) / 1000.0
+            attitude_pitch = _required_int(
+                attitude, "pitch_millidegrees", minimum=-0x80000000,
+                maximum=0x7FFFFFFF,
+            ) / 1000.0
+            filtered_axes = _axis_triplet(
+                attitude, "filtered_gyroscope_millidps"
+            )
+            filtered_gyroscope = tuple(value / 1000.0 for value in filtered_axes)
         if calibration.get("bias_raw") is not None:
             calibration_bias = _axis_triplet(calibration, "bias_raw")
         if calibration_state == "READY":
-            if calibration_bias is None or (available and corrected_gyroscope is None):
-                raise ProtocolError("ready IMU calibration must include bias and corrected gyro")
-        elif calibration_bias is not None or corrected_gyroscope is not None:
-            raise ProtocolError("unfinished IMU calibration must use null corrected values")
+            if calibration_bias is None or (
+                available and corrected_gyroscope is None
+            ):
+                raise ProtocolError(
+                    "ready IMU calibration must include bias and corrected gyro"
+                )
+        elif (
+            calibration_bias is not None
+            or corrected_gyroscope is not None
+            or filtered_gyroscope is not None
+        ):
+            raise ProtocolError(
+                "unfinished IMU calibration must use null corrected values"
+            )
 
         return cls(
             available=available,
@@ -151,6 +193,22 @@ class ImuSample:
                 calibration, "restarts", minimum=0, maximum=0xFFFFFFFF
             ),
             calibration_bias_raw=calibration_bias,
+            attitude_roll_degrees=attitude_roll,
+            attitude_pitch_degrees=attitude_pitch,
+            filtered_gyroscope_dps=filtered_gyroscope,
+            processing_processed=_required_int(
+                processing, "processed", minimum=0, maximum=0xFFFFFFFF
+            ),
+            processing_duplicates=_required_int(
+                processing, "duplicates", minimum=0, maximum=0xFFFFFFFF
+            ),
+            processing_rejected=_required_int(
+                processing, "rejected", minimum=0, maximum=0xFFFFFFFF
+            ),
+            processing_continuity_resets=_required_int(
+                processing, "continuity_resets", minimum=0,
+                maximum=0xFFFFFFFF,
+            ),
             reads=_required_int(service, "reads", minimum=0, maximum=0xFFFFFFFF),
             published=_required_int(
                 service, "published", minimum=0, maximum=0xFFFFFFFF
@@ -175,7 +233,9 @@ class ImuSample:
     def acceleration_g(self) -> tuple[float, float, float] | None:
         if self.acceleration_raw is None:
             return None
-        return tuple(value / ACCELERATION_COUNTS_PER_G for value in self.acceleration_raw)
+        return tuple(
+            value / ACCELERATION_COUNTS_PER_G for value in self.acceleration_raw
+        )
 
     @property
     def gyroscope_dps(self) -> tuple[float, float, float] | None:
@@ -236,7 +296,10 @@ class ImuView:
         table = Table(title="BMI270 — body-axis IMU")
         table.add_column("Measurement")
         table.add_column("Value", justify="right")
-        table.add_row("Status", "Available" if sample and sample.available else "Unavailable")
+        table.add_row(
+            "Status",
+            "Available" if sample and sample.available else "Unavailable",
+        )
         table.add_row("Freshness", sample.freshness if sample else "—")
         table.add_row(
             "Sample age",
@@ -259,6 +322,20 @@ class ImuView:
             if sample and sample.calibration_bias_dps else "—",
         )
         table.add_row(
+            "Estimated roll / pitch",
+            (f"{sample.attitude_roll_degrees:+.2f}° / "
+             f"{sample.attitude_pitch_degrees:+.2f}°")
+            if sample and sample.attitude_roll_degrees is not None
+            and sample.attitude_pitch_degrees is not None else "—",
+        )
+        table.add_row(
+            "Processed / duplicates / rejected / resets",
+            (f"{sample.processing_processed} / {sample.processing_duplicates} / "
+             f"{sample.processing_rejected} / "
+             f"{sample.processing_continuity_resets}")
+            if sample else "—",
+        )
+        table.add_row(
             "Reads / published / errors",
             f"{sample.reads} / {sample.published} / {sample.source_errors}"
             if sample
@@ -278,7 +355,8 @@ class ImuView:
         )
         table.add_row(
             "1 kHz worst-case budget",
-            f"{sample.high_rate_budget_us} µs ({sample.high_rate_utilization_permille / 10:.1f}%)"
+            (f"{sample.high_rate_budget_us} µs "
+             f"({sample.high_rate_utilization_permille / 10:.1f}%)")
             if sample
             else "—",
         )
@@ -288,7 +366,8 @@ class ImuView:
         sample = self.sample
         acceleration = sample.acceleration_g if sample else None
         gyroscope = (
-            sample.corrected_gyroscope_dps or sample.gyroscope_dps
+            sample.filtered_gyroscope_dps or sample.corrected_gyroscope_dps
+            or sample.gyroscope_dps
             if sample else None
         )
         table = Table(title="X forward · Y right · Z down")

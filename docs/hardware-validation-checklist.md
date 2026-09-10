@@ -115,6 +115,14 @@ firmware link must not be recorded as proof that the flight image works.
   stays yellow, and arming remains rejected until a complete still window.
 - [ ] Inspect `./ofc device imu --watch`; confirm progress, sample count,
   restart count, bias, and corrected stationary gyro values are plausible.
+- [ ] After calibration, keep the board level and confirm estimated roll and
+  pitch settle near zero without sustained drift.
+- [ ] Tilt and rotate one axis at a time; confirm estimated roll/pitch signs,
+  filtered gyro signs, convergence back to the stationary accelerometer angle,
+  and plausible behavior through the intended first-hover angle range.
+- [ ] Delay or interrupt IMU samples and confirm duplicate samples do no work,
+  gaps over the configured maximum reset estimator continuity, and recovery
+  does not integrate across the missing interval.
 - [ ] Arm and confirm the RGB LED turns off before DShot direction preparation;
   disarm and confirm motor stop behavior is not delayed by the later green
   background update.

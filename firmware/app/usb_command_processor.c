@@ -168,6 +168,9 @@ static void build_imu_diagnostics(
                                            processor->clock());
     diagnostics->calibration_ready = gyro_calibration_bias(
         processor->gyro_calibration, diagnostics->calibration_bias);
+    diagnostics->processing_statistics =
+        processor->imu_processing_pipeline->statistics;
+    diagnostics->attitude = processor->imu_processing_pipeline->latest;
     if (diagnostics->calibration_ready) {
         (void)gyro_calibration_correct(processor->gyro_calibration,
                                        &diagnostics->state.snapshot,
@@ -265,6 +268,18 @@ static void configuration_to_usb(
                             .maximum_standard_deviation_dps * 1000000.0F) +
                        0.5F),
         },
+        .gyro_filter_cutoff_millionths =
+            (uint32_t)((configuration->gyro_filter.cutoff_hz * 1000000.0F) +
+                       0.5F),
+        .accelerometer_correction_time_constant_millionths =
+            (uint32_t)((configuration->attitude_estimator
+                            .accelerometer_correction_time_constant_s *
+                        1000000.0F) + 0.5F),
+        .attitude_maximum_gap_us =
+            configuration->attitude_estimator.maximum_gap_us,
+        .gyro_filter_type = (uint8_t)configuration->gyro_filter.type,
+        .attitude_estimator_type =
+            (uint8_t)configuration->attitude_estimator.type,
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         usb->directions[motor] =
@@ -310,6 +325,20 @@ static void configuration_from_usb(
                 (float)usb->gyro_threshold_millionths[0] / 1000000.0F,
             .maximum_standard_deviation_dps =
                 (float)usb->gyro_threshold_millionths[1] / 1000000.0F,
+        },
+        .gyro_filter = {
+            .type = (flight_gyro_filter_type_t)usb->gyro_filter_type,
+            .cutoff_hz =
+                (float)usb->gyro_filter_cutoff_millionths / 1000000.0F,
+        },
+        .attitude_estimator = {
+            .type = (flight_attitude_estimator_type_t)
+                usb->attitude_estimator_type,
+            .accelerometer_correction_time_constant_s =
+                (float)usb
+                    ->accelerometer_correction_time_constant_millionths /
+                1000000.0F,
+            .maximum_gap_us = usb->attitude_maximum_gap_us,
         },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
@@ -542,6 +571,7 @@ usb_command_init_result_t usb_command_processor_initialize(
     const receiver_inspection_provider_t *receiver_inspection_provider,
     const imu_service_t *imu_service,
     const gyro_calibration_t *gyro_calibration,
+    const imu_processing_pipeline_t *imu_processing_pipeline,
     const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
     const char *firmware_version,
@@ -554,6 +584,8 @@ usb_command_init_result_t usb_command_processor_initialize(
         (receiver_inspection_provider->read == NULL) ||
         (imu_service == NULL) || (gyro_calibration == NULL) ||
         !gyro_calibration->initialized ||
+        (imu_processing_pipeline == NULL) ||
+        !imu_processing_pipeline->initialized ||
         (task_registry == NULL) ||
         (configuration_service == NULL) || !configuration_service->initialized ||
         (firmware_version == NULL) || (build_id == NULL)) {
@@ -567,6 +599,7 @@ usb_command_init_result_t usb_command_processor_initialize(
         .receiver_inspection_provider = *receiver_inspection_provider,
         .imu_service = imu_service,
         .gyro_calibration = gyro_calibration,
+        .imu_processing_pipeline = imu_processing_pipeline,
         .task_registry = task_registry,
         .configuration_service = configuration_service,
         .firmware_version = firmware_version,

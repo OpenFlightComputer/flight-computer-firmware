@@ -73,3 +73,4 @@ receiver_failsafe_decision_t firmware_receiver_failsafe_decision;
 flight_configuration_service_t firmware_flight_configuration_service;
 imu_service_t firmware_imu_service;
 gyro_calibration_t firmware_gyro_calibration;
+imu_processing_pipeline_t firmware_imu_processing_pipeline;

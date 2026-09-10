@@ -24,6 +24,22 @@ def response() -> dict:
             "restarts": 1,
             "bias_raw": {"x": 4, "y": -6, "z": 2},
         },
+        "attitude": {
+            "source_sequence": 7,
+            "roll_millidegrees": 1250,
+            "pitch_millidegrees": -2500,
+            "filtered_gyroscope_millidps": {
+                "x": 1000,
+                "y": -2000,
+                "z": 3000,
+            },
+        },
+        "processing": {
+            "processed": 8,
+            "duplicates": 1,
+            "rejected": 2,
+            "continuity_resets": 3,
+        },
         "service": {"reads": 10, "published": 9, "source_errors": 1},
         "task": {
             "executions": 11,
@@ -42,6 +58,8 @@ def test_sample_converts_independent_acceleration_and_gyro_scales():
     assert sample.acceleration_g == pytest.approx((1.0, -0.5, 0.0))
     assert sample.gyroscope_dps == pytest.approx((1000.0, -250.0, 0.0))
     assert sample.task_maximum_execution_us == 13
+    assert sample.attitude_roll_degrees == pytest.approx(1.25)
+    assert sample.filtered_gyroscope_dps == pytest.approx((1.0, -2.0, 3.0))
     assert sample.calibration_bias_dps == pytest.approx((0.244140625, -0.3662109375, 0.1220703125))
 
 
@@ -56,6 +74,7 @@ def test_unavailable_response_accepts_only_null_snapshot_fields():
         gyroscope_corrected_raw=None,
         task=None,
         freshness="UNAVAILABLE",
+        attitude=None,
     )
     data["calibration"] = {
         "state": "SETTLING",
@@ -68,6 +87,18 @@ def test_unavailable_response_accepts_only_null_snapshot_fields():
     assert sample.acceleration_g is None
 
     data["sequence"] = 1
+    with pytest.raises(ProtocolError):
+        ImuSample.from_response(data)
+
+
+def test_attitude_must_match_available_raw_sample():
+    data = response()
+    data["attitude"]["source_sequence"] += 1
+    with pytest.raises(ProtocolError):
+        ImuSample.from_response(data)
+
+    data = response()
+    data["available"] = False
     with pytest.raises(ProtocolError):
         ImuSample.from_response(data)
 

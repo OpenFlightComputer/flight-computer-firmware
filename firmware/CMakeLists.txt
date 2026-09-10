@@ -206,6 +206,10 @@ add_executable(flight_firmware
     flight/actuators/motor_output.c
     flight/configuration/flight_configuration.c
     flight/control/quad_x_mixer.c
+    flight/estimation/accelerometer_attitude.c
+    flight/estimation/attitude_estimator.c
+    flight/estimation/imu_processing_pipeline.c
+    flight/sensors/gyro_filter.c
     flight/sensors/imu_sample.c
     flight/sensors/gyro_calibration.c
     flight/receiver/receiver_freshness.c
@@ -248,6 +252,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/actuators"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/configuration"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/control"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/estimation"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/receiver"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/sensors"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
@@ -262,7 +267,7 @@ target_include_directories(flight_firmware PRIVATE
     "${BMI270_SENSOR_API_ROOT}"
 )
 
-target_link_libraries(flight_firmware PRIVATE firmware_common stm32cube_f4)
+target_link_libraries(flight_firmware PRIVATE firmware_common stm32cube_f4 m)
 
 target_compile_options(flight_firmware PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-Wall>

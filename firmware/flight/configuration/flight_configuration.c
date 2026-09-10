@@ -1,6 +1,8 @@
 #include "flight_configuration.h"
 
 #include "flight_configuration_defaults.h"
+#include "attitude_estimator.h"
+#include "gyro_filter.h"
 
 #include <stddef.h>
 
@@ -46,6 +48,16 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
             .maximum_standard_deviation_dps =
                 OFC_DEFAULT_GYRO_CALIBRATION_MAXIMUM_STANDARD_DEVIATION_DPS,
         },
+        .gyro_filter = {
+            .type = OFC_DEFAULT_GYRO_FILTER_TYPE,
+            .cutoff_hz = OFC_DEFAULT_GYRO_FILTER_CUTOFF_HZ,
+        },
+        .attitude_estimator = {
+            .type = OFC_DEFAULT_ATTITUDE_ESTIMATOR_TYPE,
+            .accelerometer_correction_time_constant_s =
+                OFC_DEFAULT_ACCELEROMETER_CORRECTION_TIME_CONSTANT_S,
+            .maximum_gap_us = OFC_DEFAULT_ATTITUDE_MAXIMUM_GAP_US,
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         configuration->motors.direction[motor] = directions[motor];
@@ -82,5 +94,22 @@ bool flight_configuration_is_valid(
            (configuration->gyro_calibration
                 .maximum_standard_deviation_dps > 0.0F) &&
            (configuration->gyro_calibration
-                .maximum_standard_deviation_dps <= 2000.0F);
+                .maximum_standard_deviation_dps <= 2000.0F) &&
+           (configuration->gyro_filter.type ==
+            FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS) &&
+           gyro_filter_config_is_valid(&(gyro_filter_config_t){
+               .type = GYRO_FILTER_FIRST_ORDER_LOW_PASS,
+               .cutoff_hz = configuration->gyro_filter.cutoff_hz,
+           }) &&
+           (configuration->attitude_estimator.type ==
+            FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY) &&
+           attitude_estimator_config_is_valid(
+               &(attitude_estimator_config_t){
+                   .type = ATTITUDE_ESTIMATOR_COMPLEMENTARY,
+                   .accelerometer_correction_time_constant_s =
+                       configuration->attitude_estimator
+                           .accelerometer_correction_time_constant_s,
+               }) &&
+           (configuration->attitude_estimator.maximum_gap_us > 0U) &&
+           (configuration->attitude_estimator.maximum_gap_us <= 1000000U);
 }

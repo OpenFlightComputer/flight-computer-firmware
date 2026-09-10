@@ -201,7 +201,9 @@ The native `uint64_decimal_tests` target verifies zero, decimal boundaries,
 `UINT64_MAX`, bounded zero padding, invalid arguments, and exact-capacity
 rejection without any formatted long-long I/O.
 
-Future hardware-independent tests will cover sampling publication, calibration,
-attitude estimation, and closed-loop control as their milestones are approved.
+The native IMU targets cover sample publication, stationary gyro calibration,
+first-order gyro filtering, accelerometer angle calculation, timestamp-derived
+complementary estimation, duplicate/stale/gap handling, and invalid
+configuration. Closed-loop control remains for its approved milestone.
 
 Hardware tests remain separate and must not be represented as passing host tests.

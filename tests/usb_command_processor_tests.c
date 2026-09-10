@@ -36,6 +36,7 @@ static bool receiver_inspection_read_result;
 static uint32_t receiver_inspection_read_count;
 static imu_service_t imu_service;
 static gyro_calibration_t gyro_calibration;
+static imu_processing_pipeline_t imu_processing_pipeline;
 static task_registry_t task_registry;
 
 static imu_source_result_t fake_imu_read(void *context,
@@ -245,7 +246,7 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 2U,
+            .schema_version = 3U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
@@ -266,6 +267,15 @@ static void reset_fakes(void)
                 .sample_duration_us = 500000U,
                 .maximum_rate_dps = 5.0F,
                 .maximum_standard_deviation_dps = 0.5F,
+            },
+            .gyro_filter = {
+                .type = FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS,
+                .cutoff_hz = 80.0F,
+            },
+            .attitude_estimator = {
+                .type = FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY,
+                .accelerometer_correction_time_constant_s = 0.5F,
+                .maximum_gap_us = 10000U,
             },
         },
         .source = FLIGHT_CONFIGURATION_SOURCE_DEFAULT,
@@ -302,6 +312,9 @@ static void reset_fakes(void)
 
         assert(imu_service_initialize(&imu_service, &source, fake_clock,
                                       &mapping, &freshness));
+        imu_processing_pipeline = (imu_processing_pipeline_t){
+            .initialized = true,
+        };
         {
             const gyro_calibration_config_t calibration_config = {
                 .settling_duration_us = 100000U,
@@ -347,6 +360,7 @@ static void initialize_system(usb_command_processor_t *processor,
                                             &receiver_provider,
                                             &imu_service,
                                             &gyro_calibration,
+                                            &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
                                             "0.1.0",
@@ -710,7 +724,7 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":2,"
+        "\"config_write\",\"configuration\":{\"schema_version\":3,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
@@ -723,7 +737,11 @@ static void complete_configuration_commands_replace_singular_commands(void)
         "\"recovery_throttle_maximum\":0.05},\"imu\":{"
         "\"gyro_calibration\":{\"settling_duration_us\":100000,"
         "\"sample_duration_us\":500000,\"maximum_rate_dps\":5.0,"
-        "\"maximum_standard_deviation_dps\":0.5}}}}");
+        "\"maximum_standard_deviation_dps\":0.5},\"gyro_filter\":{"
+        "\"type\":\"FIRST_ORDER_LOW_PASS\",\"cutoff_hz\":80.0},"
+        "\"attitude_estimator\":{\"type\":\"COMPLEMENTARY\","
+        "\"accelerometer_correction_time_constant_s\":0.5,"
+        "\"maximum_gap_us\":10000}}}}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(strstr(captured_response, "\"ok\":true") != NULL);
@@ -830,6 +848,7 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &receiver_provider,
                                             &imu_service,
                                             &gyro_calibration,
+                                            &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
                                             "0.1.0", "test-build") ==
@@ -840,6 +859,7 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &receiver_provider,
                                             &imu_service,
                                             &gyro_calibration,
+                                            &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
                                             NULL, "test-build") ==

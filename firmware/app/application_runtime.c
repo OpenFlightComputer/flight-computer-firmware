@@ -187,6 +187,7 @@ static void initialize_motor_control(void)
             &firmware_system_state_machine,
             &firmware_receiver_failsafe,
             &firmware_receiver_service,
+            &firmware_imu_processing_pipeline,
             time_us) != FLIGHT_CONFIGURATION_SERVICE_OK) {
         stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
                         FAULT_ID_MOTOR_INITIALIZATION,
@@ -421,6 +422,7 @@ static bool initialize_usb(void)
             application_receiver_inspection_provider(),
             &firmware_imu_service,
             &firmware_gyro_calibration,
+            &firmware_imu_processing_pipeline,
             &firmware_task_registry,
             &firmware_flight_configuration_service,
             firmware_version,

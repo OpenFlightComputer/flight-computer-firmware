@@ -77,7 +77,7 @@ static void valid_commands_and_key_order_are_accepted(void)
     request = parse(
         "{\"type\":\"command\",\"request_id\":8,"
         "\"command\":\"config_write\",\"configuration\":{"
-        "\"schema_version\":2,\"motors\":{\"propeller_layout\":"
+        "\"schema_version\":3,\"motors\":{\"propeller_layout\":"
         "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
         "\"NORMAL\",\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
         "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
@@ -89,7 +89,11 @@ static void valid_commands_and_key_order_are_accepted(void)
         "\"recovery_throttle_maximum\":0.05},\"imu\":{"
         "\"gyro_calibration\":{\"settling_duration_us\":100000,"
         "\"sample_duration_us\":500000,\"maximum_rate_dps\":5.0,"
-        "\"maximum_standard_deviation_dps\":0.5}}}}");
+        "\"maximum_standard_deviation_dps\":0.5},\"gyro_filter\":{"
+        "\"type\":\"FIRST_ORDER_LOW_PASS\",\"cutoff_hz\":80.0},"
+        "\"attitude_estimator\":{\"type\":\"COMPLEMENTARY\","
+        "\"accelerometer_correction_time_constant_s\":0.5,"
+        "\"maximum_gap_us\":10000}}}}");
     assert(request.command == USB_JSON_COMMAND_CONFIG_WRITE);
     assert(request.configuration.propeller_layout == 1U);
     assert(request.configuration.directions[0] == 1U);
@@ -97,6 +101,11 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(request.configuration.failsafe_control_millionths[0] == -100000);
     assert(request.configuration.gyro_timing_us[1] == 500000U);
     assert(request.configuration.gyro_threshold_millionths[0] == 5000000U);
+    assert(request.configuration.gyro_filter_cutoff_millionths == 80000000U);
+    assert(request.configuration
+               .accelerometer_correction_time_constant_millionths ==
+           500000U);
+    assert(request.configuration.attitude_maximum_gap_us == 10000U);
     assert(parse("{\"type\":\"command\",\"request_id\":4,"
                  "\"command\":\"future\"}").command ==
            USB_JSON_COMMAND_UNSUPPORTED);
@@ -188,7 +197,7 @@ static void response_builders_are_exact_and_bounded(void)
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
     const usb_json_configuration_t configuration = {
-        .schema_version = 2U,
+        .schema_version = 3U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {-100000, 0, 0, 50000, 50000},
         .mixer_factor_millionths = {250000U, 250000U, 150000U},
@@ -196,6 +205,9 @@ static void response_builders_are_exact_and_bounded(void)
         .propeller_layout = 0U,
         .gyro_timing_us = {100000U, 500000U},
         .gyro_threshold_millionths = {5000000U, 500000U},
+        .gyro_filter_cutoff_millionths = 80000000U,
+        .accelerometer_correction_time_constant_millionths = 500000U,
+        .attitude_maximum_gap_us = 10000U,
     };
 
     assert(usb_json_build_status_response("DISARMED", "NONE", 42U, 42U,

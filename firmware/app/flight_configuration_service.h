@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_SERVICE_H
 
 #include "flight_configuration_storage.h"
+#include "imu_processing_pipeline.h"
 #include "receiver_failsafe.h"
 #include "receiver_service.h"
 #include "system_state.h"
@@ -30,6 +31,7 @@ typedef struct {
     system_state_machine_t *state_machine;
     receiver_failsafe_t *receiver_failsafe;
     receiver_service_t *receiver_service;
+    imu_processing_pipeline_t *imu_processing_pipeline;
     flight_configuration_clock_t clock;
     flight_configuration_source_t source;
     bool initialized;
@@ -41,6 +43,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     system_state_machine_t *state_machine,
     receiver_failsafe_t *receiver_failsafe,
     receiver_service_t *receiver_service,
+    imu_processing_pipeline_t *imu_processing_pipeline,
     flight_configuration_clock_t clock);
 flight_configuration_service_result_t flight_configuration_service_write(
     flight_configuration_service_t *service,

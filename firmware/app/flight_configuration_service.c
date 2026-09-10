@@ -4,6 +4,38 @@
 
 #include <stddef.h>
 
+#define BMI270_ACCELERATION_COUNTS_PER_G 16384.0F
+#define BMI270_GYROSCOPE_COUNTS_PER_DPS 16.384F
+
+static bool apply_imu_processing_configuration(
+    imu_processing_pipeline_t *pipeline,
+    const flight_configuration_t *configuration)
+{
+    if ((configuration->gyro_filter.type !=
+         FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS) ||
+        (configuration->attitude_estimator.type !=
+         FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY)) {
+        return false;
+    }
+    const imu_processing_config_t processing = {
+        .gyro_filter = {
+            .type = GYRO_FILTER_FIRST_ORDER_LOW_PASS,
+            .cutoff_hz = configuration->gyro_filter.cutoff_hz,
+        },
+        .attitude_estimator = {
+            .type = ATTITUDE_ESTIMATOR_COMPLEMENTARY,
+            .accelerometer_correction_time_constant_s = configuration
+                ->attitude_estimator.accelerometer_correction_time_constant_s,
+        },
+        .maximum_gap_us =
+            configuration->attitude_estimator.maximum_gap_us,
+        .acceleration_counts_per_g = BMI270_ACCELERATION_COUNTS_PER_G,
+        .gyroscope_counts_per_dps = BMI270_GYROSCOPE_COUNTS_PER_DPS,
+    };
+
+    return imu_processing_pipeline_initialize(pipeline, &processing);
+}
+
 static bool storage_is_valid(const flight_configuration_storage_t *storage)
 {
     return (storage != NULL) && (storage->load != NULL) &&
@@ -25,6 +57,10 @@ static bool apply_runtime(flight_configuration_service_t *service,
             configuration->receiver_failsafe.loss_detected_after_us,
     };
 
+    if (!apply_imu_processing_configuration(
+            service->imu_processing_pipeline, configuration)) {
+        return false;
+    }
     if (motor_control_apply_configuration(&configuration->motors) !=
         MOTOR_CONTROL_CONFIGURATION_APPLY_OK) {
         return false;
@@ -45,6 +81,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     system_state_machine_t *state_machine,
     receiver_failsafe_t *receiver_failsafe,
     receiver_service_t *receiver_service,
+    imu_processing_pipeline_t *imu_processing_pipeline,
     flight_configuration_clock_t clock)
 {
     flight_configuration_load_result_t load_result;
@@ -52,7 +89,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     if ((service == NULL) || !storage_is_valid(storage) ||
         (state_machine == NULL) || !state_machine->initialized ||
         (receiver_failsafe == NULL) || (receiver_service == NULL) ||
-        (clock == NULL)) {
+        (imu_processing_pipeline == NULL) || (clock == NULL)) {
         return FLIGHT_CONFIGURATION_SERVICE_INVALID_ARGUMENT;
     }
 
@@ -61,6 +98,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
         .state_machine = state_machine,
         .receiver_failsafe = receiver_failsafe,
         .receiver_service = receiver_service,
+        .imu_processing_pipeline = imu_processing_pipeline,
         .clock = clock,
     };
     flight_configuration_defaults(&service->active);
@@ -75,6 +113,10 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
         service->source = FLIGHT_CONFIGURATION_SOURCE_DEFAULT;
     } else {
         return FLIGHT_CONFIGURATION_SERVICE_STORAGE_ERROR;
+    }
+    if (!apply_imu_processing_configuration(
+            service->imu_processing_pipeline, &service->active)) {
+        return FLIGHT_CONFIGURATION_SERVICE_APPLY_ERROR;
     }
     service->initialized = true;
     return FLIGHT_CONFIGURATION_SERVICE_OK;

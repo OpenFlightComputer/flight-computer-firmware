@@ -86,6 +86,23 @@ target_compile_options(gyro_calibration_tests PRIVATE
 )
 add_test(NAME gyro_calibration COMMAND gyro_calibration_tests)
 
+add_executable(imu_processing_pipeline_tests
+    imu_processing_pipeline_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/imu_processing_pipeline.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
+)
+target_include_directories(imu_processing_pipeline_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+target_link_libraries(imu_processing_pipeline_tests PRIVATE m)
+target_compile_options(imu_processing_pipeline_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME imu_processing_pipeline COMMAND imu_processing_pipeline_tests)
+
 add_executable(imu_service_tests
     imu_service_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/imu_service.c"
@@ -456,6 +473,8 @@ add_executable(board_flight_configuration_storage_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
 )
 
 target_include_directories(board_flight_configuration_storage_tests PRIVATE
@@ -464,6 +483,8 @@ target_include_directories(board_flight_configuration_storage_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
     "${CMAKE_BINARY_DIR}/generated"
 )
@@ -485,6 +506,10 @@ add_executable(flight_configuration_service_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/imu_processing_pipeline.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
 )
 target_include_directories(flight_configuration_service_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
@@ -492,11 +517,14 @@ target_include_directories(flight_configuration_service_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${CMAKE_BINARY_DIR}/generated"
 )
 target_compile_options(flight_configuration_service_tests PRIVATE
     -Wall -Wextra -Wpedantic -Werror
 )
+target_link_libraries(flight_configuration_service_tests PRIVATE m)
 add_test(NAME flight_configuration_service
          COMMAND flight_configuration_service_tests)
 
@@ -824,6 +852,7 @@ add_executable(usb_imu_response_tests
 
 target_include_directories(usb_imu_response_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
@@ -867,6 +896,7 @@ target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"

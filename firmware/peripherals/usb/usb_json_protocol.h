@@ -38,6 +38,11 @@ typedef struct {
     uint64_t gyro_timing_us[USB_JSON_CONFIGURATION_GYRO_TIMING_COUNT];
     uint32_t gyro_threshold_millionths[
         USB_JSON_CONFIGURATION_GYRO_THRESHOLD_COUNT];
+    uint32_t gyro_filter_cutoff_millionths;
+    uint32_t accelerometer_correction_time_constant_millionths;
+    uint32_t attitude_maximum_gap_us;
+    uint8_t gyro_filter_type;
+    uint8_t attitude_estimator_type;
 } usb_json_configuration_t;
 
 typedef struct {

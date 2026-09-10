@@ -3,8 +3,6 @@
 #include "application_state.h"
 #include "fault_catalog.h"
 #include "imu_service.h"
-#include "gyro_calibration.h"
-#include "time.h"
 #include "logging.h"
 
 #define IMU_TASK_PERIOD_US UINT32_C(1000)
@@ -78,6 +76,7 @@ static task_callback_result_t run_imu_task(void *context)
 {
     imu_service_t *service = context;
     imu_service_state_t state;
+    int32_t calibration_bias[3];
     const imu_service_result_t result = imu_service_process_once(service);
 
     firmware_imu_service_last_result = (uint32_t)result;
@@ -97,10 +96,14 @@ static task_callback_result_t run_imu_task(void *context)
     firmware_imu_body_gyroscope_y = state.snapshot.gyroscope_y;
     firmware_imu_body_gyroscope_z = state.snapshot.gyroscope_z;
 
-    gyro_calibration_process(&firmware_gyro_calibration,
-                             &state.snapshot,
-                             state.freshness,
-                             time_us());
+    if (gyro_calibration_bias(&firmware_gyro_calibration,
+                              calibration_bias)) {
+        (void)imu_processing_pipeline_process(
+            &firmware_imu_processing_pipeline,
+            &state.snapshot,
+            state.freshness,
+            calibration_bias);
+    }
 
     update_communication_fault(service, state.freshness);
     log_communication_state(service, state.freshness);

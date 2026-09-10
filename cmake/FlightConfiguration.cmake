@@ -25,8 +25,8 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 2)
-    message(FATAL_ERROR "Default configuration schema_version must be 2")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 3)
+    message(FATAL_ERROR "Default configuration schema_version must be 3")
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -64,6 +64,26 @@ ofc_json_get(OFC_CONFIG_GYRO_SAMPLE imu gyro_calibration sample_duration_us)
 ofc_json_get(OFC_CONFIG_GYRO_MAXIMUM_RATE imu gyro_calibration maximum_rate_dps)
 ofc_json_get(OFC_CONFIG_GYRO_MAXIMUM_STANDARD_DEVIATION
     imu gyro_calibration maximum_standard_deviation_dps)
+ofc_json_get(gyro_filter_type imu gyro_filter type)
+if(gyro_filter_type STREQUAL "FIRST_ORDER_LOW_PASS")
+    set(OFC_CONFIG_GYRO_FILTER_TYPE
+        "FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS")
+else()
+    message(FATAL_ERROR "Invalid gyro filter type: ${gyro_filter_type}")
+endif()
+ofc_json_get(OFC_CONFIG_GYRO_FILTER_CUTOFF imu gyro_filter cutoff_hz)
+ofc_json_get(attitude_estimator_type imu attitude_estimator type)
+if(attitude_estimator_type STREQUAL "COMPLEMENTARY")
+    set(OFC_CONFIG_ATTITUDE_ESTIMATOR_TYPE
+        "FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY")
+else()
+    message(FATAL_ERROR
+        "Invalid attitude estimator type: ${attitude_estimator_type}")
+endif()
+ofc_json_get(OFC_CONFIG_ACCELEROMETER_CORRECTION_TIME_CONSTANT
+    imu attitude_estimator accelerometer_correction_time_constant_s)
+ofc_json_get(OFC_CONFIG_ATTITUDE_MAXIMUM_GAP
+    imu attitude_estimator maximum_gap_us)
 
 foreach(factor IN ITEMS OFC_CONFIG_MIXER_ROLL OFC_CONFIG_MIXER_PITCH
                         OFC_CONFIG_MIXER_YAW)
@@ -76,6 +96,14 @@ if(NOT OFC_CONFIG_FAILSAFE_STALE LESS OFC_CONFIG_FAILSAFE_LOSS OR
    NOT OFC_CONFIG_FAILSAFE_HOLD LESS OFC_CONFIG_FAILSAFE_STAGE_TWO OR
    OFC_CONFIG_FAILSAFE_RECOVERY LESS_EQUAL 0)
     message(FATAL_ERROR "Default receiver failsafe timing is invalid")
+endif()
+if(OFC_CONFIG_GYRO_FILTER_CUTOFF LESS_EQUAL 0 OR
+   OFC_CONFIG_GYRO_FILTER_CUTOFF GREATER 500 OR
+   OFC_CONFIG_ACCELEROMETER_CORRECTION_TIME_CONSTANT LESS_EQUAL 0 OR
+   OFC_CONFIG_ACCELEROMETER_CORRECTION_TIME_CONSTANT GREATER 10 OR
+   OFC_CONFIG_ATTITUDE_MAXIMUM_GAP LESS_EQUAL 0 OR
+   OFC_CONFIG_ATTITUDE_MAXIMUM_GAP GREATER 1000000)
+    message(FATAL_ERROR "Default IMU processing configuration is invalid")
 endif()
 if(OFC_CONFIG_GYRO_SETTLING LESS 0 OR
    OFC_CONFIG_GYRO_SETTLING GREATER 10000000 OR

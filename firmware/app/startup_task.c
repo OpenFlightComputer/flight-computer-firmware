@@ -2,20 +2,32 @@
 
 #include "application_state.h"
 #include "gyro_calibration.h"
+#include "imu_service.h"
 #include "logging.h"
 #include "status_indicator.h"
+#include "time.h"
 
-#define STARTUP_TASK_PERIOD_US UINT32_C(10000)
+#define STARTUP_TASK_PERIOD_US UINT32_C(1000)
 
 static task_callback_result_t run_startup_task(void *context)
 {
+    imu_service_state_t imu_state;
     system_state_transition_result_t result;
 
     (void)context;
     if ((firmware_system_state_machine.current !=
          SYSTEM_STATE_INITIALIZING) ||
-        !firmware_gyro_calibration.initialized ||
-        (firmware_gyro_calibration.state != GYRO_CALIBRATION_READY)) {
+        !firmware_gyro_calibration.initialized) {
+        return TASK_CALLBACK_CONTINUE;
+    }
+    if ((firmware_gyro_calibration.state != GYRO_CALIBRATION_READY) &&
+        imu_service_state(&firmware_imu_service, &imu_state)) {
+        gyro_calibration_process(&firmware_gyro_calibration,
+                                 &imu_state.snapshot,
+                                 imu_state.freshness,
+                                 time_us());
+    }
+    if (firmware_gyro_calibration.state != GYRO_CALIBRATION_READY) {
         return TASK_CALLBACK_CONTINUE;
     }
 
@@ -44,7 +56,7 @@ const task_definition_t *startup_task_definition(void)
     static const task_definition_t definition = {
         .name = "startup",
         .period_us = STARTUP_TASK_PERIOD_US,
-        .priority = TASK_PRIORITY_NORMAL,
+        .priority = TASK_PRIORITY_HIGH,
         .callback = run_startup_task,
         .context = NULL,
     };

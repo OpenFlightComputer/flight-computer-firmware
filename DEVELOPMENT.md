@@ -6,8 +6,8 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.3b — stationary startup gyro calibration and lifecycle indication —
-implemented and awaiting owner review and flight-image physical validation.
+Milestone 4.4 — bounded gyro filtering and roll/pitch attitude estimation —
+implemented in software and awaiting owner review and physical validation.
 
 ## Last completed milestone
 
@@ -17,6 +17,30 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Added a flat hardware-independent IMU processing pipeline after the existing
+  sample publication and startup gyro calibration. It converts mapped counts
+  to g/degrees per second, subtracts the frozen bias, filters all three gyro
+  axes, derives an accelerometer roll/pitch reference, and publishes the latest
+  complementary-filter estimate.
+- Added independently replaceable `gyro_filter` and `attitude_estimator`
+  modules. The initial selections are a first-order low-pass filter at 80 Hz
+  and a complementary estimator with a 0.5 s accelerometer correction time
+  constant.
+- Derives every filter/estimator step from consecutive acquisition timestamps.
+  Duplicate samples do no work; stale data, time/sequence rollback, and gaps
+  over 10 ms invalidate continuity instead of integrating missing time.
+- Moved calibration sample consumption fully into the temporary high-priority
+  1 kHz startup task. It disables itself after entering `DISARMED`; the
+  permanent IMU task now performs only acquisition, processing, and runtime
+  health/diagnostics.
+- Extended the unified configuration to schema 3. Filter/estimator selections
+  and parameters persist, migrate from schemas 1 and 2, and are reapplied
+  immediately by a successful disarmed write. Reapplication resets processing
+  history; startup-calibration policy still takes effect on the next boot.
+- Extended the existing request-driven `imu` response and host visualization
+  with filtered gyro, estimated roll/pitch, and bounded processing counters.
+  No extra sensor read, snapshot producer, or scheduled diagnostics task was
+  introduced.
 - Increased both BMI270 output data rates from the Milestone 4.1 boot setting
   of 100 Hz to 1.6 kHz, then added a high-priority 1 kHz IMU service. Each run
   performs one bounded six-axis register read; no interrupt or dynamic
@@ -56,8 +80,9 @@ the receiver, mixer, authority gate, and DShot output path.
   the configured BMI270 raw counts to g and degrees per second and renders
   independent acceleration and gyro bars using the tester-proven scales.
   Watch polling is host-driven and bounded to at most 10 requests per second.
-- Added a bounded, hardware-independent stationary gyro calibration fed by the
-  existing 1 kHz IMU task. It waits 100 ms, then requires both 500 ms and 500
+- Added a bounded, hardware-independent stationary gyro calibration, now fed
+  by the temporary 1 kHz startup task. It waits 100 ms, then requires both
+  500 ms and 500
   distinct fresh samples; excessive instantaneous rate or end-of-window
   variance restarts collection.
 - Accumulated signed 64-bit sums and squared sums produce one rounded bias per
@@ -69,7 +94,7 @@ the receiver, mixer, authority gate, and DShot output path.
 - Task callbacks can now explicitly return `TASK_CALLBACK_DISABLE`; the
   scheduler records the final invocation and then excludes the task from later
   ready batches. The startup task uses this after its successful transition to
-  `DISARMED`, avoiding a permanent 100 Hz no-op.
+  `DISARMED`, avoiding a permanent 1 kHz no-op.
 - Extended the unified configuration to schema 2 with gyro settling, sampling,
   maximum-rate, and maximum-standard-deviation settings. Persistent schema-1
   documents migrate with their prior fields preserved and new values filled
@@ -80,15 +105,14 @@ the receiver, mixer, authority gate, and DShot output path.
   not delayed by the roughly 2 ms reset-bounded LED transaction.
 - Extended `imu` diagnostics and the host view with calibration state,
   progress, samples, restarts, raw bias, and bias-corrected gyro values.
-- All 44 native tests and all 66 Python host-tool tests pass, including the
+- All 45 native tests and all 67 Python host-tool tests pass, including the
   address/undefined-behavior sanitizer build. Debug and Release firmware build
-  with warnings as errors. Debug uses 136,520 bytes of Flash and 25,160 bytes
-  of RAM; Release uses 95,220 bytes of Flash and 25,144 bytes of RAM.
-- Filtering, attitude estimation, and motor-control use remain outside
-  Milestone 4.3b. The existing open-loop motor path is unchanged; the
-  fail-closed IMU control gate belongs to Milestone 4.8.
+  with warnings as errors. Debug uses 147,232 bytes of Flash and 25,368 bytes
+  of RAM; Release uses 102,592 bytes of Flash and 25,352 bytes of RAM.
+- Motor-control use remains outside Milestone 4.4. The existing open-loop motor
+  path is unchanged; the fail-closed IMU control gate belongs to Milestone 4.8.
 
-## Milestone 4.3b assumptions and safety boundary
+## Milestone 4.4 assumptions and safety boundary
 
 - The provisional V1 body mapping assumes the PCB top is aircraft forward and
   the component side is up. This is not yet physical evidence.
@@ -112,12 +136,17 @@ the receiver, mixer, authority gate, and DShot output path.
 - The verified WS2812 pulse timings are reused from the manufacturing tester,
   but the complete lifecycle color sequence still requires flight-image
   validation.
+- The accelerometer correction is intentionally not gated by acceleration
+  magnitude in this initial forgiving angle-mode design. More advanced
+  free-fall/aggressive-mode behavior remains explicitly deferred.
+- The estimate is diagnostic-only. It has no motor authority until the later
+  controller and fail-closed freshness gate are implemented and physically
+  validated.
 
 ## Next proposed milestone
 
-Milestone 4.4 — add bounded IMU filtering without connecting the result to
-motor control. First physically validate the 4.3b startup lock, RGB sequence,
-bias stability, axis signs, and scheduler timing on the flight image.
+Milestone 4.5 — add configurable input curves, deadbands, angle/rate limits,
+and the initial throttle curve without yet closing the IMU feedback loop.
 
 ## Historical milestone record
 

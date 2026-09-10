@@ -134,6 +134,7 @@ int main(void)
     };
     receiver_failsafe_t failsafe = {0};
     receiver_service_t receiver_service = {.initialized = true};
+    imu_processing_pipeline_t imu_processing_pipeline = {0};
     flight_configuration_service_t service;
     flight_configuration_t configuration;
     flight_configuration_t read_back;
@@ -145,6 +146,7 @@ int main(void)
                &state_machine,
                &failsafe,
                &receiver_service,
+               &imu_processing_pipeline,
                fake_clock) == FLIGHT_CONFIGURATION_SERVICE_OK);
     assert(storage.load_count == 1U);
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_DEFAULT);
@@ -155,6 +157,9 @@ int main(void)
     configuration.motors.direction[2] = MOTOR_DIRECTION_REVERSED;
     configuration.mixer.yaw_factor = 0.2F;
     configuration.receiver_failsafe.stale_after_us = 30000U;
+    configuration.gyro_filter.cutoff_hz = 60.0F;
+    configuration.attitude_estimator
+        .accelerometer_correction_time_constant_s = 0.75F;
     now_us = 123U;
     assert(flight_configuration_service_write(&service, &configuration) ==
            FLIGHT_CONFIGURATION_SERVICE_OK);
@@ -165,6 +170,10 @@ int main(void)
     assert(applied_motors.direction[2] == MOTOR_DIRECTION_REVERSED);
     assert(applied_freshness.fresh_through_us == 30000U);
     assert(applied_failsafe.stale_after_us == 30000U);
+    assert(imu_processing_pipeline.initialized);
+    assert(imu_processing_pipeline.config.gyro_filter.cutoff_hz == 60.0F);
+    assert(imu_processing_pipeline.config.attitude_estimator
+               .accelerometer_correction_time_constant_s == 0.75F);
     assert(failsafe.initialized_at_us == 123U);
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_PERSISTENT);
 
@@ -185,6 +194,8 @@ int main(void)
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_DEFAULT);
     assert(service.active.propeller_layout == PROPELLER_LAYOUT_PROPS_IN);
     assert(service.active.motors.direction[2] == MOTOR_DIRECTION_NORMAL);
+    assert(imu_processing_pipeline.config.gyro_filter.cutoff_hz == 80.0F);
+    assert(imu_processing_pipeline.statistics.processed_sample_count == 0U);
 
     assert(flight_configuration_service_read(
         &service, &read_back, &source));
@@ -209,6 +220,7 @@ int main(void)
                &state_machine,
                &failsafe,
                &receiver_service,
+               &imu_processing_pipeline,
                fake_clock) == FLIGHT_CONFIGURATION_SERVICE_STORAGE_ERROR);
     return 0;
 }

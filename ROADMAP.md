@@ -144,11 +144,11 @@ Planned milestones:
      implemented in software; physical axis/rate/timing validation remains.
    - 4.3b stationary gyro calibration — implemented in software; physical
      startup-lock, calibration, and lifecycle-indicator validation remains.
-   - Before Phase 4 closes, move startup-only calibration sample consumption
-     out of the permanent IMU task and into a temporary 1 kHz startup task.
-     That task should consume the IMU service's published samples and disable
-     itself after the successful transition to `DISARMED`.
-4. Roll/pitch attitude estimation with bounded basic gyro filtering.
+   - Startup-only sample consumption now belongs to a temporary 1 kHz startup
+     task, which disables itself after the successful `DISARMED` transition.
+4. Roll/pitch attitude estimation with bounded basic gyro filtering —
+   implemented in software; physical estimate sign, convergence, timing, and
+   motion validation remains.
 5. Configurable input curves, deadbands, angle/rate limits, and throttle curve.
 6. Bounded rate PID control with anti-windup and zero-throttle integral reset.
 7. Self-leveling roll/pitch outer loop feeding the three-axis rate controller.

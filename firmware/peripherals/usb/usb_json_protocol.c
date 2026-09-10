@@ -297,6 +297,8 @@ static bool parse_configuration(const char *line,
     const jsmntok_t *failsafe;
     const jsmntok_t *imu;
     const jsmntok_t *gyro_calibration;
+    const jsmntok_t *gyro_filter;
+    const jsmntok_t *attitude_estimator;
     const jsmntok_t *layout;
     const jsmntok_t *directions;
     uint32_t schema_value;
@@ -318,12 +320,12 @@ static bool parse_configuration(const char *line,
     imu = object_member(line, tokens, token_count,
                         token_index(tokens, object), "imu");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 2U) || (motors == NULL) ||
+        (schema_value != 3U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
         (mixer == NULL) || (mixer->type != JSMN_OBJECT) ||
         (mixer->size != 6) || (failsafe == NULL) ||
         (failsafe->type != JSMN_OBJECT) || (failsafe->size != 20) ||
-        (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 2)) {
+        (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 6)) {
         return false;
     }
     *configuration = (usb_json_configuration_t){
@@ -402,6 +404,49 @@ static bool parse_configuration(const char *line,
             &configuration->gyro_threshold_millionths[1])) {
         return false;
     }
+    gyro_filter = object_member(line, tokens, token_count,
+                                token_index(tokens, imu), "gyro_filter");
+    attitude_estimator = object_member(line, tokens, token_count,
+                                       token_index(tokens, imu),
+                                       "attitude_estimator");
+    if ((gyro_filter == NULL) || (gyro_filter->type != JSMN_OBJECT) ||
+        (gyro_filter->size != 4) ||
+        !token_equals(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, gyro_filter), "type"),
+            "FIRST_ORDER_LOW_PASS") ||
+        !parse_positive_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, gyro_filter), "cutoff_hz"),
+            &configuration->gyro_filter_cutoff_millionths) ||
+        (attitude_estimator == NULL) ||
+        (attitude_estimator->type != JSMN_OBJECT) ||
+        (attitude_estimator->size != 6) ||
+        !token_equals(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, attitude_estimator), "type"),
+            "COMPLEMENTARY") ||
+        !parse_positive_millionths(
+            line,
+            object_member(
+                line, tokens, token_count,
+                token_index(tokens, attitude_estimator),
+                "accelerometer_correction_time_constant_s"),
+            &configuration
+                 ->accelerometer_correction_time_constant_millionths) ||
+        !parse_uint32(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, attitude_estimator),
+                          "maximum_gap_us"),
+            &configuration->attitude_maximum_gap_us)) {
+        return false;
+    }
+    configuration->gyro_filter_type = 0U;
+    configuration->attitude_estimator_type = 0U;
     return (configuration->failsafe_control_millionths[3] >= 0) &&
            (configuration->failsafe_control_millionths[4] >= 0);
 }
@@ -724,7 +769,9 @@ bool usb_json_build_configuration_response(
         (configuration_source == NULL) || (configuration == NULL) ||
         (state == NULL) || (destination == NULL) || (capacity == 0U) ||
         (length == NULL) || (!accepted && (error == NULL)) ||
-        (configuration->propeller_layout > 1U)) {
+        (configuration->propeller_layout > 1U) ||
+        (configuration->gyro_filter_type != 0U) ||
+        (configuration->attitude_estimator_type != 0U)) {
         return false;
     }
 
@@ -778,7 +825,12 @@ bool usb_json_build_configuration_response(
         "\"recovery_throttle_maximum\":%s},\"imu\":{"
         "\"gyro_calibration\":{\"settling_duration_us\":%s,"
         "\"sample_duration_us\":%s,\"maximum_rate_dps\":%lu.%06lu,"
-        "\"maximum_standard_deviation_dps\":%lu.%06lu}}}%s%s%s}\n",
+        "\"maximum_standard_deviation_dps\":%lu.%06lu},"
+        "\"gyro_filter\":{\"type\":\"FIRST_ORDER_LOW_PASS\","
+        "\"cutoff_hz\":%lu.%06lu},\"attitude_estimator\":{"
+        "\"type\":\"COMPLEMENTARY\","
+        "\"accelerometer_correction_time_constant_s\":%lu.%06lu,"
+        "\"maximum_gap_us\":%lu}}}%s%s%s}\n",
         (unsigned long)request_id, usb_json_command_name(command),
         accepted ? "true" : "false", state, configuration_source,
         (unsigned long)configuration->schema_version, layout,
@@ -800,6 +852,17 @@ bool usb_json_build_configuration_response(
                         1000000U),
         (unsigned long)(configuration->gyro_threshold_millionths[1] %
                         1000000U),
+        (unsigned long)(configuration->gyro_filter_cutoff_millionths /
+                        1000000U),
+        (unsigned long)(configuration->gyro_filter_cutoff_millionths %
+                        1000000U),
+        (unsigned long)(configuration
+                            ->accelerometer_correction_time_constant_millionths /
+                        1000000U),
+        (unsigned long)(configuration
+                            ->accelerometer_correction_time_constant_millionths %
+                        1000000U),
+        (unsigned long)configuration->attitude_maximum_gap_us,
         accepted ? "" : ",\"error\":\"", accepted ? "" : error,
         accepted ? "" : "\"");
 
