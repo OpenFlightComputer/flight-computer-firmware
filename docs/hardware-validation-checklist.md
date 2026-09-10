@@ -108,6 +108,16 @@ firmware link must not be recorded as proof that the flight image works.
 - [ ] Confirm SPI3 mode 0, the 656.25 kHz clock, PB3/PB4/PB5 AF6 routing, and
   active-low PD2 chip select on the flight image. Tester evidence does not
   replace this flight-image validation.
+- [ ] Power the 4.3b image while the secured, propeller-free vehicle is still;
+  confirm yellow during calibration, green only after `DISARMED`, and an
+  approximately 600 ms minimum startup delay.
+- [ ] Move the board during startup and confirm calibration restarts, the LED
+  stays yellow, and arming remains rejected until a complete still window.
+- [ ] Inspect `./ofc device imu --watch`; confirm progress, sample count,
+  restart count, bias, and corrected stationary gyro values are plausible.
+- [ ] Arm and confirm the RGB LED turns off before DShot direction preparation;
+  disarm and confirm motor stop behavior is not delayed by the later green
+  background update.
 
 ## Manufacturing evidence to preserve
 

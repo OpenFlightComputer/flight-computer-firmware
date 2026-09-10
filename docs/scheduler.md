@@ -32,6 +32,12 @@ chooses:
 One call to `scheduler_run_once()` executes at most one callback. The
 application repeatedly calls it from the main loop.
 
+A callback returns either `TASK_CALLBACK_CONTINUE` or
+`TASK_CALLBACK_DISABLE`. The latter records the completed invocation and then
+disables that task. A disabled task is omitted from all future ready batches;
+the scheduler does not remove or compact its registry entry, so task identity,
+registration order, and accumulated diagnostics remain stable.
+
 ## Starvation behavior
 
 The ready-batch boundary prevents a high-frequency, high-priority task from

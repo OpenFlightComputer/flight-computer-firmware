@@ -25,8 +25,8 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 1)
-    message(FATAL_ERROR "Default configuration schema_version must be 1")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 2)
+    message(FATAL_ERROR "Default configuration schema_version must be 2")
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -59,6 +59,11 @@ ofc_json_get(OFC_CONFIG_FAILSAFE_YAW receiver_failsafe stage_one_yaw)
 ofc_json_get(OFC_CONFIG_FAILSAFE_THROTTLE receiver_failsafe stage_one_throttle)
 ofc_json_get(OFC_CONFIG_FAILSAFE_RECOVERY_THROTTLE
     receiver_failsafe recovery_throttle_maximum)
+ofc_json_get(OFC_CONFIG_GYRO_SETTLING imu gyro_calibration settling_duration_us)
+ofc_json_get(OFC_CONFIG_GYRO_SAMPLE imu gyro_calibration sample_duration_us)
+ofc_json_get(OFC_CONFIG_GYRO_MAXIMUM_RATE imu gyro_calibration maximum_rate_dps)
+ofc_json_get(OFC_CONFIG_GYRO_MAXIMUM_STANDARD_DEVIATION
+    imu gyro_calibration maximum_standard_deviation_dps)
 
 foreach(factor IN ITEMS OFC_CONFIG_MIXER_ROLL OFC_CONFIG_MIXER_PITCH
                         OFC_CONFIG_MIXER_YAW)
@@ -71,6 +76,16 @@ if(NOT OFC_CONFIG_FAILSAFE_STALE LESS OFC_CONFIG_FAILSAFE_LOSS OR
    NOT OFC_CONFIG_FAILSAFE_HOLD LESS OFC_CONFIG_FAILSAFE_STAGE_TWO OR
    OFC_CONFIG_FAILSAFE_RECOVERY LESS_EQUAL 0)
     message(FATAL_ERROR "Default receiver failsafe timing is invalid")
+endif()
+if(OFC_CONFIG_GYRO_SETTLING LESS 0 OR
+   OFC_CONFIG_GYRO_SETTLING GREATER 10000000 OR
+   OFC_CONFIG_GYRO_SAMPLE LESS_EQUAL 0 OR
+   OFC_CONFIG_GYRO_SAMPLE GREATER 10000000 OR
+   OFC_CONFIG_GYRO_MAXIMUM_RATE LESS_EQUAL 0 OR
+   OFC_CONFIG_GYRO_MAXIMUM_RATE GREATER 2000 OR
+   OFC_CONFIG_GYRO_MAXIMUM_STANDARD_DEVIATION LESS_EQUAL 0 OR
+   OFC_CONFIG_GYRO_MAXIMUM_STANDARD_DEVIATION GREATER 2000)
+    message(FATAL_ERROR "Default gyro calibration configuration is invalid")
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")

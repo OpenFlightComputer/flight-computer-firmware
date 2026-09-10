@@ -83,7 +83,7 @@ static void update_receiver_connection_fault(
     }
 }
 
-static void run_flight_control_task(void *context)
+static task_callback_result_t run_flight_control_task(void *context)
 {
     receiver_service_t *service = context;
     receiver_control_state_t control = {0};
@@ -100,7 +100,7 @@ static void run_flight_control_task(void *context)
                                   control_snapshot,
                                   now_us,
                                   &decision)) {
-        return;
+        return TASK_CALLBACK_CONTINUE;
     }
 
     firmware_receiver_failsafe_decision = decision;
@@ -129,13 +129,14 @@ static void run_flight_control_task(void *context)
             LOG_INFO(LOG_MODULE_RECEIVER,
                      "receiver failsafe recovered to disarmed");
         }
-        return;
+        return TASK_CALLBACK_CONTINUE;
     }
     firmware_flight_control_submit_last_result =
         (uint32_t)flight_control_process_receiver(
             &firmware_flight_configuration_service.active,
             &decision,
             now_us);
+    return TASK_CALLBACK_CONTINUE;
 }
 
 const task_definition_t *flight_control_task_definition(void)

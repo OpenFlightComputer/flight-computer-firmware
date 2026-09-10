@@ -12,6 +12,8 @@ compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
 therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, the
 initial mixer factors, and the reviewed receiver-failsafe values in that file.
+Schema 2 also carries the startup gyro-calibration settling/sample durations
+and stationary-motion thresholds.
 
 The motor array always uses logical aircraft order:
 
@@ -47,21 +49,26 @@ failsafe policy as one operation. Direction changes start a ten-frame DShot
 configuration sequence, and all four directions are reasserted again before
 every arm.
 
+Gyro-calibration fields are startup policy. A write persists them with the
+same complete document, and they take effect on the next boot; the bias itself
+is deliberately RAM-only and is measured again on every power-up or reset.
+
 ## Persistent storage
 
 Flight Computer V1 reserves STM32F405 sector 11 at `0x080E0000` through
 `0x080FFFFF`. The application linker region ends before it, so normal flashing
 does not overwrite settings. A programmer mass erase still clears the sector.
 
-The board layer stores an 88-byte versioned payload inside fixed 120-byte
+The board layer stores an 84-byte versioned payload inside fixed 120-byte
 append-only records. Each record has a format version, sequence, payload
 length, CRC32, and a commit word programmed last. The sector holds 1,092 full
 configuration records before an explicit reset is needed.
 
-The loader can migrate the prior eight-byte motor-direction payload. During
-that one-way migration, it keeps those four directions and fills every new
-field from the canonical JSON defaults. Corrupt or unknown nonempty storage
-still fails startup closed.
+The loader can migrate both the prior 88-byte schema-1 flight document and the
+earlier eight-byte motor-direction payload. During migration it preserves all
+fields that existed in the old payload and fills new gyro-calibration fields
+from the canonical JSON defaults. Corrupt or unknown nonempty storage still
+fails startup closed.
 
 ## Control-task relationship
 

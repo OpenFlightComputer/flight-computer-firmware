@@ -59,7 +59,7 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 
 | MCU pin | Net | Direction | Semantic role | Peripheral/mode | Selection status |
 | --- | --- | --- | --- | --- | --- |
-| PA1 | `WS2812_DI` | Output | RGB LED data | Boot-safe GPIO low plus one DWT-timed all-zero frame; TIM2_CH2 AF1 remains a candidate | Physical GPIO waveform worked; timer/DMA attempt did not |
+| PA1 | `WS2812_DI` | Output | RGB LED data | Tester-proven DWT-timed GRB GPIO output; yellow initializing, green disarmed, off before arm | Physical GPIO waveform worked; timer/DMA attempt did not |
 | PA2 | `GPS_RX` | Output | MCU-to-GPS serial | USART2_TX AF7 | Unambiguous intended UART function |
 | PA3 | `GPS_TX` | Input | GPS-to-MCU serial | USART2_RX AF7 | Unambiguous intended UART function |
 | PA4 | `VBAT_ADC` | Analog input | Battery-voltage sense | ADC1_IN4 | Routed; conversion policy deferred |

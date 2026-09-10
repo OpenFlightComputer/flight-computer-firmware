@@ -10,12 +10,12 @@
 static void assert_valid_json_line(const char *line, size_t length)
 {
     jsmn_parser parser;
-    jsmntok_t tokens[64];
+    jsmntok_t tokens[96];
 
     assert(length > 1U);
     assert(line[length - 1U] == '\n');
     jsmn_init(&parser);
-    assert(jsmn_parse(&parser, line, length - 1U, tokens, 64U) > 0);
+    assert(jsmn_parse(&parser, line, length - 1U, tokens, 96U) > 0);
 }
 
 static void available_snapshot_is_complete(void)
@@ -48,6 +48,13 @@ static void available_snapshot_is_complete(void)
         .high_rate_budget_us = 17U,
         .high_rate_utilization_permille = 18U,
         .task_present = true,
+        .calibration_state = GYRO_CALIBRATION_READY,
+        .calibration_bias = {2, -3, 1},
+        .corrected_gyroscope = {1, -1, 4},
+        .calibration_sample_count = 500U,
+        .calibration_restart_count = 1U,
+        .calibration_progress_permille = 1000U,
+        .calibration_ready = true,
     };
     char response[1024];
     size_t length;
@@ -60,6 +67,9 @@ static void available_snapshot_is_complete(void)
     assert(strstr(response, "\"age_us\":18446744073709551615") != NULL);
     assert(strstr(response, "\"acceleration_raw\":{\"x\":1,\"y\":-2,\"z\":16384}") != NULL);
     assert(strstr(response, "\"maximum_execution_us\":14") != NULL);
+    assert(strstr(response, "\"state\":\"READY\"") != NULL);
+    assert(strstr(response,
+                  "\"gyroscope_corrected_raw\":{\"x\":1,\"y\":-1,\"z\":4}") != NULL);
 }
 
 static void unavailable_snapshot_uses_nulls(void)

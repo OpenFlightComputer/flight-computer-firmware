@@ -11,6 +11,7 @@ typedef enum {
     BOARD_INIT_CLOCK_CONFIGURATION_ERROR,
     BOARD_INIT_CLOCK_FREQUENCY_ERROR,
     BOARD_INIT_TIMEBASE_CONFIGURATION_ERROR,
+    BOARD_INIT_STATUS_INDICATOR_ERROR,
 } board_init_result_t;
 
 typedef enum {
@@ -70,6 +71,7 @@ typedef enum {
 
 board_init_result_t board_initialize(void);
 _Noreturn void board_halt(void);
+bool board_status_indicator_set_rgb(uint8_t red, uint8_t green, uint8_t blue);
 
 uint32_t board_motor_output_timer_clock_frequency_hz(void);
 board_motor_output_init_result_t board_motor_output_initialize(

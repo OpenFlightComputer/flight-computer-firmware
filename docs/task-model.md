@@ -11,13 +11,19 @@ A `task_definition_t` contains:
 - a unique, non-empty name of at most 31 characters;
 - a nonzero period in integer microseconds;
 - an 8-bit priority;
-- a callback;
+- a callback which returns whether the task should continue or disable itself;
 - an optional caller-owned context pointer passed to the callback.
 
 Definitions are written in C rather than loaded from JSON or YAML. The
 registry copies the definition, but it retains the name and context pointers.
 Their referenced storage must therefore remain valid for the registered
 task's lifetime; string literals and static objects are the intended inputs.
+
+Most periodic callbacks return `TASK_CALLBACK_CONTINUE`. A finite-lifetime
+task may return `TASK_CALLBACK_DISABLE` after completing its final invocation.
+The scheduler records that invocation normally and then clears the task's
+enabled flag, so the task is excluded from every later ready batch. This keeps
+self-disabling independent of the global registry and scheduler instance.
 
 Periods are stored rather than frequencies because the future scheduler will
 compare microsecond timestamps directly. For example, a 1,000 microsecond

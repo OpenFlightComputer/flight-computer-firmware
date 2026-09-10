@@ -9,7 +9,7 @@ explicit events. It does not control motors or infer state from peripherals.
 | State | Meaning |
 | --- | --- |
 | `BOOT` | Software state immediately after state-machine initialization |
-| `INITIALIZING` | Board, task registry, and scheduler initialization is in progress |
+| `INITIALIZING` | Board/scheduler startup or required stationary gyro calibration is in progress; arming is rejected |
 | `DISARMED` | Initialization succeeded; future motor output must be inhibited |
 | `ARMED` | An explicit arm request was accepted; future motor output may be considered |
 | `FAILSAFE` | A failsafe was detected while armed; future actuator policy must inhibit or explicitly handle output |

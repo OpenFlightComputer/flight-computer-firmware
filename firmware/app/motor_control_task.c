@@ -3,12 +3,13 @@
 #include "application_state.h"
 #include "motor_control_internal.h"
 
-static void run_motor_control_task(void *context)
+static task_callback_result_t run_motor_control_task(void *context)
 {
     (void)context;
     firmware_motor_control_sync_last_result =
         (uint32_t)motor_control_synchronize();
     firmware_motor_control_task_executions++;
+    return TASK_CALLBACK_CONTINUE;
 }
 
 const task_definition_t *motor_control_task_definition(void)

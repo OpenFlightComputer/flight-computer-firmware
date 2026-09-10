@@ -36,6 +36,16 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
             .recovery_throttle_maximum =
                 OFC_DEFAULT_FAILSAFE_RECOVERY_THROTTLE_MAXIMUM,
         },
+        .gyro_calibration = {
+            .settling_duration_us =
+                OFC_DEFAULT_GYRO_CALIBRATION_SETTLING_DURATION_US,
+            .sample_duration_us =
+                OFC_DEFAULT_GYRO_CALIBRATION_SAMPLE_DURATION_US,
+            .maximum_rate_dps =
+                OFC_DEFAULT_GYRO_CALIBRATION_MAXIMUM_RATE_DPS,
+            .maximum_standard_deviation_dps =
+                OFC_DEFAULT_GYRO_CALIBRATION_MAXIMUM_STANDARD_DEVIATION_DPS,
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         configuration->motors.direction[motor] = directions[motor];
@@ -52,5 +62,25 @@ bool flight_configuration_is_valid(
            motor_configuration_is_valid(&configuration->motors) &&
            quad_x_mixer_config_is_valid(&configuration->mixer) &&
            receiver_failsafe_config_is_valid(
-               &configuration->receiver_failsafe);
+               &configuration->receiver_failsafe) &&
+           (configuration->receiver_failsafe.stale_after_us <= UINT32_MAX) &&
+           (configuration->receiver_failsafe.loss_detected_after_us <=
+            UINT32_MAX) &&
+           (configuration->receiver_failsafe.hold_last_until_us <=
+            UINT32_MAX) &&
+           (configuration->receiver_failsafe.stage_two_after_us <=
+            UINT32_MAX) &&
+           (configuration->receiver_failsafe.recovery_stable_us <=
+            UINT32_MAX) &&
+           (configuration->gyro_calibration.settling_duration_us <=
+            UINT64_C(10000000)) &&
+           (configuration->gyro_calibration.sample_duration_us > 0U) &&
+           (configuration->gyro_calibration.sample_duration_us <=
+            UINT64_C(10000000)) &&
+           (configuration->gyro_calibration.maximum_rate_dps > 0.0F) &&
+           (configuration->gyro_calibration.maximum_rate_dps <= 2000.0F) &&
+           (configuration->gyro_calibration
+                .maximum_standard_deviation_dps > 0.0F) &&
+           (configuration->gyro_calibration
+                .maximum_standard_deviation_dps <= 2000.0F);
 }

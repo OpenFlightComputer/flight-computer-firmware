@@ -6,7 +6,7 @@
 
 #define USB_SERVICE_TASK_PERIOD_US UINT32_C(2000)
 
-static void run_usb_service_task(void *context)
+static task_callback_result_t run_usb_service_task(void *context)
 {
     (void)context;
     usb_cdc_transport_process();
@@ -19,6 +19,7 @@ static void run_usb_service_task(void *context)
     }
     firmware_logging_drain_last_result = (uint32_t)logging_drain_once();
     firmware_usb_service_task_executions++;
+    return TASK_CALLBACK_CONTINUE;
 }
 
 const task_definition_t *usb_service_task_definition(void)

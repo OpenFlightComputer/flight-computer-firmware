@@ -18,7 +18,12 @@ enum {
     TASK_PRIORITY_BACKGROUND = 255U,
 };
 
-typedef void (*task_callback_t)(void *context);
+typedef enum {
+    TASK_CALLBACK_CONTINUE = 0,
+    TASK_CALLBACK_DISABLE,
+} task_callback_result_t;
+
+typedef task_callback_result_t (*task_callback_t)(void *context);
 
 typedef struct {
     const char *name;

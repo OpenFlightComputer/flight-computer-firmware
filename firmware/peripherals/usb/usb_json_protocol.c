@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define USB_JSON_TOKEN_CAPACITY 64U
+#define USB_JSON_TOKEN_CAPACITY 80U
 #define USB_JSON_THROTTLE_SCALE 1000000U
 
 static bool token_equals(const char *line,
@@ -152,6 +152,63 @@ static bool parse_signed_millionths(const char *line,
     return true;
 }
 
+static bool parse_positive_millionths(const char *line,
+                                      const jsmntok_t *token,
+                                      uint32_t *value)
+{
+    uint32_t whole = 0U;
+    uint32_t fraction = 0U;
+    uint32_t fraction_digits = 0U;
+    int index;
+
+    if ((token == NULL) || (value == NULL) ||
+        (token->type != JSMN_PRIMITIVE) ||
+        (token->start >= token->end) ||
+        (((token->end - token->start) > 1) &&
+         (line[token->start] == '0') &&
+         (line[token->start + 1] != '.'))) {
+        return false;
+    }
+    index = token->start;
+    while ((index < token->end) && (line[index] != '.')) {
+        const char character = line[index];
+        const uint32_t digit = (uint32_t)(character - '0');
+
+        if ((character < '0') || (character > '9') ||
+            (whole > ((UINT32_MAX - digit) / 10U))) {
+            return false;
+        }
+        whole = (whole * 10U) + digit;
+        index++;
+    }
+    if (index < token->end) {
+        index++;
+        if (index == token->end) {
+            return false;
+        }
+        for (; index < token->end; index++) {
+            const char character = line[index];
+
+            if ((character < '0') || (character > '9') ||
+                (fraction_digits >= 6U)) {
+                return false;
+            }
+            fraction = (fraction * 10U) +
+                       (uint32_t)(character - '0');
+            fraction_digits++;
+        }
+    }
+    while (fraction_digits < 6U) {
+        fraction *= 10U;
+        fraction_digits++;
+    }
+    if (whole > ((UINT32_MAX - fraction) / USB_JSON_THROTTLE_SCALE)) {
+        return false;
+    }
+    *value = (whole * USB_JSON_THROTTLE_SCALE) + fraction;
+    return true;
+}
+
 static const jsmntok_t *object_member(const char *line,
                                       const jsmntok_t *tokens,
                                       int token_count,
@@ -238,13 +295,15 @@ static bool parse_configuration(const char *line,
     const jsmntok_t *motors;
     const jsmntok_t *mixer;
     const jsmntok_t *failsafe;
+    const jsmntok_t *imu;
+    const jsmntok_t *gyro_calibration;
     const jsmntok_t *layout;
     const jsmntok_t *directions;
     uint32_t schema_value;
     size_t index;
 
     if ((object == NULL) || (object->type != JSMN_OBJECT) ||
-        (object->size != 8)) {
+        (object->size != 10)) {
         return false;
     }
     schema = object_member(line, tokens, token_count,
@@ -256,12 +315,15 @@ static bool parse_configuration(const char *line,
     failsafe = object_member(line, tokens, token_count,
                              token_index(tokens, object),
                              "receiver_failsafe");
+    imu = object_member(line, tokens, token_count,
+                        token_index(tokens, object), "imu");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 1U) || (motors == NULL) ||
+        (schema_value != 2U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
         (mixer == NULL) || (mixer->type != JSMN_OBJECT) ||
         (mixer->size != 6) || (failsafe == NULL) ||
-        (failsafe->type != JSMN_OBJECT) || (failsafe->size != 20)) {
+        (failsafe->type != JSMN_OBJECT) || (failsafe->size != 20) ||
+        (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 2)) {
         return false;
     }
     *configuration = (usb_json_configuration_t){
@@ -309,6 +371,36 @@ static bool parse_configuration(const char *line,
                                      &configuration->failsafe_control_millionths[index])) {
             return false;
         }
+    }
+    gyro_calibration = object_member(line, tokens, token_count,
+                                     token_index(tokens, imu),
+                                     "gyro_calibration");
+    if ((gyro_calibration == NULL) ||
+        (gyro_calibration->type != JSMN_OBJECT) ||
+        (gyro_calibration->size != 8) ||
+        !parse_uint64(line,
+                      object_member(line, tokens, token_count,
+                                    token_index(tokens, gyro_calibration),
+                                    "settling_duration_us"),
+                      &configuration->gyro_timing_us[0]) ||
+        !parse_uint64(line,
+                      object_member(line, tokens, token_count,
+                                    token_index(tokens, gyro_calibration),
+                                    "sample_duration_us"),
+                      &configuration->gyro_timing_us[1]) ||
+        !parse_positive_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, gyro_calibration),
+                          "maximum_rate_dps"),
+            &configuration->gyro_threshold_millionths[0]) ||
+        !parse_positive_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, gyro_calibration),
+                          "maximum_standard_deviation_dps"),
+            &configuration->gyro_threshold_millionths[1])) {
+        return false;
     }
     return (configuration->failsafe_control_millionths[3] >= 0) &&
            (configuration->failsafe_control_millionths[4] >= 0);
@@ -619,6 +711,7 @@ bool usb_json_build_configuration_response(
 {
     char timing[5][UINT64_DECIMAL_BUFFER_CAPACITY];
     char controls[5][16];
+    char gyro_timing[2][UINT64_DECIMAL_BUFFER_CAPACITY];
     size_t timing_length;
     const char *layout;
     const char *directions[4];
@@ -657,6 +750,15 @@ bool usb_json_build_configuration_response(
             return false;
         }
     }
+    for (index = 0U; index < 2U; index++) {
+        if (!uint64_decimal_format(configuration->gyro_timing_us[index],
+                                   0U,
+                                   gyro_timing[index],
+                                   sizeof(gyro_timing[index]),
+                                   &timing_length)) {
+            return false;
+        }
+    }
 
     written = snprintf(
         destination, capacity,
@@ -673,7 +775,10 @@ bool usb_json_build_configuration_response(
         "\"recovery_stable_us\":%s,\"stage_one_roll\":%s,"
         "\"stage_one_pitch\":%s,\"stage_one_yaw\":%s,"
         "\"stage_one_throttle\":%s,"
-        "\"recovery_throttle_maximum\":%s}}%s%s%s}\n",
+        "\"recovery_throttle_maximum\":%s},\"imu\":{"
+        "\"gyro_calibration\":{\"settling_duration_us\":%s,"
+        "\"sample_duration_us\":%s,\"maximum_rate_dps\":%lu.%06lu,"
+        "\"maximum_standard_deviation_dps\":%lu.%06lu}}}%s%s%s}\n",
         (unsigned long)request_id, usb_json_command_name(command),
         accepted ? "true" : "false", state, configuration_source,
         (unsigned long)configuration->schema_version, layout,
@@ -686,6 +791,15 @@ bool usb_json_build_configuration_response(
         (unsigned long)(configuration->mixer_factor_millionths[2] % 1000000U),
         timing[0], timing[1], timing[2], timing[3], timing[4],
         controls[0], controls[1], controls[2], controls[3], controls[4],
+        gyro_timing[0], gyro_timing[1],
+        (unsigned long)(configuration->gyro_threshold_millionths[0] /
+                        1000000U),
+        (unsigned long)(configuration->gyro_threshold_millionths[0] %
+                        1000000U),
+        (unsigned long)(configuration->gyro_threshold_millionths[1] /
+                        1000000U),
+        (unsigned long)(configuration->gyro_threshold_millionths[1] %
+                        1000000U),
         accepted ? "" : ",\"error\":\"", accepted ? "" : error,
         accepted ? "" : "\"");
 

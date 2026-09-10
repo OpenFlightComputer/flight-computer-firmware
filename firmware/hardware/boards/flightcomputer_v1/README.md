@@ -28,9 +28,9 @@ oldest retained byte. The buffer represents about 12.2 ms of wire time at
 
 `time.c` exposes the generic `time_us()` API without leaking the STM32 backend. Milestone 0.10 adds `usb_device_port.c`, closely adapted from the proven tester, to own PA11/PA12 OTG FS routing, the device-controller/FIFO configuration, static USB class storage, and the OTG FS interrupt handler. The V1 PA9 divider cannot drive valid hardware VBUS detection, so the board-selected assume-present mode leaves PA9 untouched and disables sensing. A corrected board can select sense-input mode through the same hardware contract. All other deferred peripheral pins remain untouched. See `docs/flightcomputer-v1-hardware.md` for the reviewed physical map and unresolved choices.
 
-`rgb_led_safe_state.c` owns only the WS2812's deterministic boot-off behavior.
-It preloads PA1 low before selecting push-pull output mode, sends one valid
-all-zero GRB frame using the tester's physically accepted DWT timing, and
-leaves the pin low. This clears a colour retained across an MCU reset and
-prevents later floating-input noise. It does not make the RGB LED a status
-indicator or provide a general colour-output API.
+`rgb_led.c` owns the WS2812 electrical protocol. It preloads PA1 low before
+selecting push-pull output mode and uses the tester-proven 168 MHz DWT timing,
+GRB byte order, and MSB-first encoding. The application requests yellow while
+startup calibration is in progress, green while disarmed, and off before arm
+preparation. Noncritical colour changes are drained by a 10 Hz background task
+so they cannot delay a disarm stop frame.

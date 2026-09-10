@@ -85,7 +85,7 @@ def test_configuration_read_can_export_portable_json(
 ):
     output = tmp_path / "quad.json"
     configuration = {
-        "schema_version": 1,
+        "schema_version": 2,
         "motors": {
             "propeller_layout": "PROPS_IN",
             "directions": ["NORMAL"] * 4,
@@ -132,7 +132,7 @@ def test_configuration_write_sends_file_as_one_document(
     monkeypatch, tmp_path, capsys
 ):
     source = tmp_path / "quad.json"
-    configuration = {"schema_version": 1, "motors": {"directions": []}}
+    configuration = {"schema_version": 2, "motors": {"directions": []}}
     source.write_text(json.dumps(configuration))
     observed = {}
 

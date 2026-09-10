@@ -3,7 +3,7 @@
 #include "board_definition.h"
 #include "mcu.h"
 #include "mcu_timebase.h"
-#include "rgb_led_safe_state.h"
+#include "rgb_led.h"
 
 board_init_result_t board_initialize(void)
 {
@@ -26,8 +26,10 @@ board_init_result_t board_initialize(void)
         return BOARD_INIT_CLOCK_FREQUENCY_ERROR;
     }
 
-    flightcomputer_v1_rgb_led_force_off(
-        FLIGHTCOMPUTER_V1_SYSTEM_CLOCK_FREQUENCY_HZ);
+    if (!flightcomputer_v1_rgb_led_initialize(
+            FLIGHTCOMPUTER_V1_SYSTEM_CLOCK_FREQUENCY_HZ)) {
+        return BOARD_INIT_STATUS_INDICATOR_ERROR;
+    }
 
     timebase_result = mcu_timebase_initialize(
         FLIGHTCOMPUTER_V1_TIMEBASE_TIMER_CLOCK_FREQUENCY_HZ,
@@ -38,6 +40,11 @@ board_init_result_t board_initialize(void)
     }
 
     return BOARD_INIT_OK;
+}
+
+bool board_status_indicator_set_rgb(uint8_t red, uint8_t green, uint8_t blue)
+{
+    return flightcomputer_v1_rgb_led_set(red, green, blue);
 }
 
 _Noreturn void board_halt(void)

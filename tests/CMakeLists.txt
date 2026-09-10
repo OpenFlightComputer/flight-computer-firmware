@@ -73,6 +73,19 @@ target_compile_options(imu_sample_tests PRIVATE
 
 add_test(NAME imu_sample COMMAND imu_sample_tests)
 
+add_executable(gyro_calibration_tests
+    gyro_calibration_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_calibration.c"
+)
+target_include_directories(gyro_calibration_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+target_link_libraries(gyro_calibration_tests PRIVATE m)
+target_compile_options(gyro_calibration_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME gyro_calibration COMMAND gyro_calibration_tests)
+
 add_executable(imu_service_tests
     imu_service_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/imu_service.c"
@@ -806,6 +819,7 @@ add_executable(usb_imu_response_tests
     usb_imu_response_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_imu_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/imu_sample.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_calibration.c"
 )
 
 target_include_directories(usb_imu_response_tests PRIVATE
@@ -840,6 +854,7 @@ add_executable(usb_command_processor_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/imu_service.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/task.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/imu_sample.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_calibration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_freshness.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"

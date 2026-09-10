@@ -78,7 +78,7 @@ def test_request_parameters_cannot_replace_correlated_envelope():
 
 def test_configuration_write_sends_the_complete_document():
     configuration = {
-        "schema_version": 1,
+        "schema_version": 2,
         "motors": {
             "propeller_layout": "PROPS_IN",
             "directions": ["NORMAL", "NORMAL", "REVERSED", "NORMAL"],
@@ -99,6 +99,14 @@ def test_configuration_write_sends_the_complete_document():
             "stage_one_yaw": 0.0,
             "stage_one_throttle": 0.05,
             "recovery_throttle_maximum": 0.05,
+        },
+        "imu": {
+            "gyro_calibration": {
+                "settling_duration_us": 100000,
+                "sample_duration_us": 500000,
+                "maximum_rate_dps": 5.0,
+                "maximum_standard_deviation_dps": 0.5,
+            }
         },
     }
     connection = FakeConnection(

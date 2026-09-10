@@ -189,6 +189,9 @@ add_executable(flight_firmware
     app/runtime_hooks.c
     app/scheduler.c
     app/system_state.c
+    app/status_indicator.c
+    app/status_indicator_task.c
+    app/startup_task.c
     app/task.c
     app/usb_command_processor.c
     app/usb_health_response.c
@@ -204,6 +207,7 @@ add_executable(flight_firmware
     flight/configuration/flight_configuration.c
     flight/control/quad_x_mixer.c
     flight/sensors/imu_sample.c
+    flight/sensors/gyro_calibration.c
     flight/receiver/receiver_freshness.c
     flight/receiver/receiver_failsafe.c
     flight/receiver/receiver_normalization.c
@@ -224,7 +228,7 @@ add_executable(flight_firmware
     hardware/boards/flightcomputer_v1/board_persistent_storage.c
     hardware/boards/flightcomputer_v1/board_receiver.c
     hardware/boards/flightcomputer_v1/motor_output_map.c
-    hardware/boards/flightcomputer_v1/rgb_led_safe_state.c
+    hardware/boards/flightcomputer_v1/rgb_led.c
     hardware/boards/flightcomputer_v1/time.c
     hardware/boards/flightcomputer_v1/usb_device_port.c
     hardware/mcu/stm32f405/mcu.c

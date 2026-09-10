@@ -159,6 +159,7 @@ scheduler_step_result_t scheduler_run_once(scheduler_t *scheduler)
 {
     size_t selected_index;
     task_t *task;
+    task_callback_result_t callback_result;
     uint64_t start_us;
     uint64_t finish_us;
 
@@ -184,9 +185,12 @@ scheduler_step_result_t scheduler_run_once(scheduler_t *scheduler)
     task = &scheduler->registry->tasks[selected_index];
 
     start_us = scheduler->clock();
-    task->definition.callback(task->definition.context);
+    callback_result = task->definition.callback(task->definition.context);
     finish_us = scheduler->clock();
     record_task_execution(task, start_us, finish_us);
+    if (callback_result == TASK_CALLBACK_DISABLE) {
+        task->enabled = false;
+    }
 
     return SCHEDULER_STEP_TASK_EXECUTED;
 }

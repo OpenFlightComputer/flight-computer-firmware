@@ -57,6 +57,12 @@ class ImuSample:
     freshness: str
     acceleration_raw: tuple[int, int, int] | None
     gyroscope_raw: tuple[int, int, int] | None
+    gyroscope_corrected_raw: tuple[int, int, int] | None
+    calibration_state: str
+    calibration_progress_permille: int
+    calibration_samples: int
+    calibration_restarts: int
+    calibration_bias_raw: tuple[int, int, int] | None
     reads: int
     published: int
     source_errors: int
@@ -78,9 +84,13 @@ class ImuSample:
             raise ProtocolError("IMU response freshness is invalid")
         service = _required_object(response, "service")
         high_rate = _required_object(response, "high_rate")
+        calibration = _required_object(response, "calibration")
+        calibration_state = calibration.get("state")
+        if calibration_state not in {"SETTLING", "COLLECTING", "READY"}:
+            raise ProtocolError("IMU calibration state is invalid")
 
         sequence = age_us = None
-        acceleration = gyroscope = None
+        acceleration = gyroscope = corrected_gyroscope = calibration_bias = None
         task_values: tuple[int | None, ...] = (None,) * 5
         if available:
             sequence = _required_int(
@@ -91,6 +101,10 @@ class ImuSample:
             )
             acceleration = _axis_triplet(response, "acceleration_raw")
             gyroscope = _axis_triplet(response, "gyroscope_raw")
+            if response.get("gyroscope_corrected_raw") is not None:
+                corrected_gyroscope = _axis_triplet(
+                    response, "gyroscope_corrected_raw"
+                )
             task = _required_object(response, "task")
             task_values = tuple(
                 _required_int(task, key, minimum=0, maximum=0xFFFFFFFF)
@@ -104,9 +118,19 @@ class ImuSample:
             )
         elif any(
             response.get(key) is not None
-            for key in ("sequence", "age_us", "acceleration_raw", "gyroscope_raw", "task")
+            for key in (
+                "sequence", "age_us", "acceleration_raw", "gyroscope_raw",
+                "gyroscope_corrected_raw", "task",
+            )
         ):
             raise ProtocolError("unavailable IMU data must use null snapshots")
+        if calibration.get("bias_raw") is not None:
+            calibration_bias = _axis_triplet(calibration, "bias_raw")
+        if calibration_state == "READY":
+            if calibration_bias is None or (available and corrected_gyroscope is None):
+                raise ProtocolError("ready IMU calibration must include bias and corrected gyro")
+        elif calibration_bias is not None or corrected_gyroscope is not None:
+            raise ProtocolError("unfinished IMU calibration must use null corrected values")
 
         return cls(
             available=available,
@@ -115,6 +139,18 @@ class ImuSample:
             freshness=freshness,
             acceleration_raw=acceleration,
             gyroscope_raw=gyroscope,
+            gyroscope_corrected_raw=corrected_gyroscope,
+            calibration_state=calibration_state,
+            calibration_progress_permille=_required_int(
+                calibration, "progress_permille", minimum=0, maximum=1000
+            ),
+            calibration_samples=_required_int(
+                calibration, "samples", minimum=0, maximum=0xFFFFFFFF
+            ),
+            calibration_restarts=_required_int(
+                calibration, "restarts", minimum=0, maximum=0xFFFFFFFF
+            ),
+            calibration_bias_raw=calibration_bias,
             reads=_required_int(service, "reads", minimum=0, maximum=0xFFFFFFFF),
             published=_required_int(
                 service, "published", minimum=0, maximum=0xFFFFFFFF
@@ -148,6 +184,24 @@ class ImuSample:
         return tuple(
             value / GYROSCOPE_COUNTS_PER_DEGREE_PER_SECOND
             for value in self.gyroscope_raw
+        )
+
+    @property
+    def corrected_gyroscope_dps(self) -> tuple[float, float, float] | None:
+        if self.gyroscope_corrected_raw is None:
+            return None
+        return tuple(
+            value / GYROSCOPE_COUNTS_PER_DEGREE_PER_SECOND
+            for value in self.gyroscope_corrected_raw
+        )
+
+    @property
+    def calibration_bias_dps(self) -> tuple[float, float, float] | None:
+        if self.calibration_bias_raw is None:
+            return None
+        return tuple(
+            value / GYROSCOPE_COUNTS_PER_DEGREE_PER_SECOND
+            for value in self.calibration_bias_raw
         )
 
 
@@ -192,6 +246,19 @@ class ImuView:
         )
         table.add_row("Sequence", str(sample.sequence) if sample else "—")
         table.add_row(
+            "Gyro calibration",
+            (f"{sample.calibration_state} "
+             f"({sample.calibration_progress_permille / 10:.1f}%, "
+             f"{sample.calibration_samples} samples, "
+             f"{sample.calibration_restarts} restarts)")
+            if sample else "—",
+        )
+        table.add_row(
+            "Gyro bias X / Y / Z",
+            " / ".join(f"{value:+.3f} °/s" for value in sample.calibration_bias_dps)
+            if sample and sample.calibration_bias_dps else "—",
+        )
+        table.add_row(
             "Reads / published / errors",
             f"{sample.reads} / {sample.published} / {sample.source_errors}"
             if sample
@@ -220,7 +287,10 @@ class ImuView:
     def _measurement_table(self) -> Table:
         sample = self.sample
         acceleration = sample.acceleration_g if sample else None
-        gyroscope = sample.gyroscope_dps if sample else None
+        gyroscope = (
+            sample.corrected_gyroscope_dps or sample.gyroscope_dps
+            if sample else None
+        )
         table = Table(title="X forward · Y right · Z down")
         table.add_column("Axis")
         table.add_column("Acceleration", justify="right")

@@ -274,7 +274,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
                                        &backend,
-                                       &default_motor_configuration) ==
+                                       &default_motor_configuration,
+                                       NULL, NULL) ==
            MOTOR_CONTROL_INIT_INVALID_ARGUMENT);
 
     system_state_machine_initialize(&incomplete_state);
@@ -287,7 +288,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
                                        &backend,
-                                       &default_motor_configuration) ==
+                                       &default_motor_configuration,
+                                       NULL, NULL) ==
            MOTOR_CONTROL_INIT_INVALID_ARGUMENT);
 
     fake->initialize_result = MOTOR_OUTPUT_BACKEND_INIT_ERROR;
@@ -296,7 +298,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
                                        &backend,
-                                       &default_motor_configuration) ==
+                                       &default_motor_configuration,
+                                       NULL, NULL) ==
            MOTOR_CONTROL_INIT_BACKEND_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(
@@ -311,7 +314,8 @@ static void uninitialized_and_failed_initialization_are_fail_closed(
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
                                        &backend,
-                                       &default_motor_configuration) ==
+                                       &default_motor_configuration,
+                                       NULL, NULL) ==
            MOTOR_CONTROL_INIT_INITIAL_STOP_ERROR);
     assert(state_machine->current == SYSTEM_STATE_FAULT);
     assert(fault_system_record_for_id(fault_system,
@@ -337,7 +341,8 @@ static void successful_initialization_is_stopped_and_singleton(
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
                                        &backend,
-                                       &default_motor_configuration) ==
+                                       &default_motor_configuration,
+                                       NULL, NULL) ==
            MOTOR_CONTROL_INIT_OK);
     assert(motor_control_is_initialized());
     assert(motor_control_outputs_stopped());
@@ -347,7 +352,8 @@ static void successful_initialization_is_stopped_and_singleton(
                                        fake_clock,
                                        COMMAND_TIMEOUT_US,
                                        &backend,
-                                       &default_motor_configuration) ==
+                                       &default_motor_configuration,
+                                       NULL, NULL) ==
            MOTOR_CONTROL_INIT_ALREADY_INITIALIZED);
 }
 

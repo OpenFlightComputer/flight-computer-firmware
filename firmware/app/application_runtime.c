@@ -11,6 +11,7 @@
 #include "fault_catalog.h"
 #include "firmware_identity.h"
 #include "imu_service.h"
+#include "gyro_calibration.h"
 #include "logging.h"
 #include "motor_control.h"
 #include "motor_control_internal.h"
@@ -18,6 +19,7 @@
 #include "time.h"
 #include "usb_cdc_transport.h"
 #include "usb_logging_backend.h"
+#include "status_indicator.h"
 
 #include <stddef.h>
 
@@ -78,6 +80,8 @@ static boot_status_t boot_status_for_board_error(board_init_result_t result)
         return BOOT_STATUS_CLOCK_FREQUENCY_ERROR;
     case BOARD_INIT_TIMEBASE_CONFIGURATION_ERROR:
         return BOOT_STATUS_TIMEBASE_CONFIGURATION_ERROR;
+    case BOARD_INIT_STATUS_INDICATOR_ERROR:
+        return BOOT_STATUS_MCU_INITIALIZATION_ERROR;
     case BOARD_INIT_OK:
         break;
     }
@@ -95,6 +99,8 @@ static fault_id_t fault_id_for_board_error(board_init_result_t result)
         return FAULT_ID_CLOCK_FREQUENCY;
     case BOARD_INIT_TIMEBASE_CONFIGURATION_ERROR:
         return FAULT_ID_TIMEBASE_CONFIGURATION;
+    case BOARD_INIT_STATUS_INDICATOR_ERROR:
+        return FAULT_ID_MCU_INITIALIZATION;
     case BOARD_INIT_OK:
         break;
     }
@@ -158,6 +164,7 @@ static void initialize_board(void)
         LOG_ERROR(LOG_MODULE_SYSTEM, "logging clock attachment failed");
     }
     LOG_INFO(LOG_MODULE_BOARD, "Flight Computer V1 initialized");
+    (void)status_indicator_show_state(SYSTEM_STATE_INITIALIZING);
 }
 
 static void initialize_motor_control(void)
@@ -192,7 +199,9 @@ static void initialize_motor_control(void)
         time_us,
         MOTOR_COMMAND_DEFAULT_TIMEOUT_US,
         &motor_output_backend,
-        &firmware_flight_configuration_service.active.motors);
+        &firmware_flight_configuration_service.active.motors,
+        status_indicator_motor_lifecycle_changed,
+        NULL);
     firmware_motor_control_initialization_result = (uint32_t)result;
     if (result != MOTOR_CONTROL_INIT_OK) {
         stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
@@ -411,6 +420,7 @@ static bool initialize_usb(void)
             time_us,
             application_receiver_inspection_provider(),
             &firmware_imu_service,
+            &firmware_gyro_calibration,
             &firmware_task_registry,
             &firmware_flight_configuration_service,
             firmware_version,
@@ -468,20 +478,33 @@ void application_runtime_initialize(void)
     initialize_board();
     imu_available = initialize_imu();
     initialize_motor_control();
+    {
+        const gyro_calibration_configuration_t *configuration =
+            &firmware_flight_configuration_service.active.gyro_calibration;
+        const gyro_calibration_config_t calibration_config = {
+            .settling_duration_us = configuration->settling_duration_us,
+            .sample_duration_us = configuration->sample_duration_us,
+            .minimum_sample_count = 500U,
+            .maximum_rate_dps = configuration->maximum_rate_dps,
+            .maximum_standard_deviation_dps =
+                configuration->maximum_standard_deviation_dps,
+            .counts_per_dps = 16.384F,
+        };
+
+        if (!gyro_calibration_initialize(&firmware_gyro_calibration,
+                                         &calibration_config,
+                                         time_us())) {
+            stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
+                            FAULT_ID_IMU_INITIALIZATION,
+                            false,
+                            0U);
+        }
+    }
     receiver_available = initialize_receiver();
     usb_available = initialize_usb();
     initialize_scheduler(usb_available, receiver_available, imu_available);
 
-    if (!transition_system_state(
-            SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED)) {
-        stop_with_fault(BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR,
-                        FAULT_ID_STATE_MACHINE_TRANSITION,
-                        true,
-                        (uint32_t)SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED);
-    }
-    LOG_INFO(LOG_MODULE_STATE, "INITIALIZING -> DISARMED");
-    firmware_boot_status = BOOT_STATUS_RUNNING;
-    LOG_INFO(LOG_MODULE_SYSTEM, "firmware running");
+    LOG_INFO(LOG_MODULE_SYSTEM, "waiting for startup calibration");
 }
 
 void application_runtime_run(void)

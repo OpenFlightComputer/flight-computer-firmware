@@ -6,6 +6,8 @@
 
 const task_definition_t *motor_control_task_definition(void);
 const task_definition_t *imu_task_definition(void);
+const task_definition_t *startup_task_definition(void);
+const task_definition_t *status_indicator_task_definition(void);
 const task_definition_t *receiver_task_definition(void);
 const task_definition_t *flight_control_task_definition(void);
 const task_definition_t *diagnostic_fast_task_definition(void);

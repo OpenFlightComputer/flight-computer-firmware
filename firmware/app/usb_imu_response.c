@@ -28,7 +28,11 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
     if ((diagnostics == NULL) || (destination == NULL) ||
         (capacity == 0U) || (length == NULL) ||
         ((unsigned int)diagnostics->state.freshness >
-         (unsigned int)IMU_FRESHNESS_LOST)) {
+         (unsigned int)IMU_FRESHNESS_LOST) ||
+        ((unsigned int)diagnostics->calibration_state >
+         (unsigned int)GYRO_CALIBRATION_READY) ||
+        (diagnostics->calibration_ready !=
+         (diagnostics->calibration_state == GYRO_CALIBRATION_READY))) {
         return false;
     }
 
@@ -40,12 +44,19 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
             "\"command\":\"imu\",\"ok\":true,\"available\":false,"
             "\"sequence\":null,\"age_us\":null,\"freshness\":\"%s\","
             "\"acceleration_raw\":null,\"gyroscope_raw\":null,"
+            "\"gyroscope_corrected_raw\":null,"
+            "\"calibration\":{\"state\":\"%s\",\"progress_permille\":%lu,"
+            "\"samples\":%lu,\"restarts\":%lu,\"bias_raw\":null},"
             "\"service\":{\"reads\":%lu,\"published\":%lu,"
             "\"source_errors\":%lu},\"task\":null,"
             "\"high_rate\":{\"budget_us\":%lu,"
             "\"utilization_permille\":%lu}}\n",
             (unsigned long)request_id,
             imu_freshness_name(diagnostics->state.freshness),
+            gyro_calibration_state_name(diagnostics->calibration_state),
+            (unsigned long)diagnostics->calibration_progress_permille,
+            (unsigned long)diagnostics->calibration_sample_count,
+            (unsigned long)diagnostics->calibration_restart_count,
             (unsigned long)diagnostics->service_statistics.read_count,
             (unsigned long)
                 diagnostics->service_statistics.published_sample_count,
@@ -71,41 +82,91 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
         return false;
     }
 
-    written = snprintf(
-        destination,
-        capacity,
-        "{\"type\":\"response\",\"request_id\":%lu,"
-        "\"command\":\"imu\",\"ok\":true,\"available\":true,"
-        "\"sequence\":%s,\"age_us\":%s,\"freshness\":\"%s\","
-        "\"acceleration_raw\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
-        "\"gyroscope_raw\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
-        "\"service\":{\"reads\":%lu,\"published\":%lu,"
-        "\"source_errors\":%lu},"
-        "\"task\":{\"executions\":%lu,\"last_execution_us\":%lu,"
-        "\"maximum_execution_us\":%lu,\"overruns\":%lu,"
-        "\"missed_releases\":%lu},"
-        "\"high_rate\":{\"budget_us\":%lu,"
-        "\"utilization_permille\":%lu}}\n",
-        (unsigned long)request_id,
-        sequence,
-        age,
-        imu_freshness_name(diagnostics->state.freshness),
-        (long)diagnostics->state.snapshot.acceleration_x,
-        (long)diagnostics->state.snapshot.acceleration_y,
-        (long)diagnostics->state.snapshot.acceleration_z,
-        (long)diagnostics->state.snapshot.gyroscope_x,
-        (long)diagnostics->state.snapshot.gyroscope_y,
-        (long)diagnostics->state.snapshot.gyroscope_z,
-        (unsigned long)diagnostics->service_statistics.read_count,
-        (unsigned long)
-            diagnostics->service_statistics.published_sample_count,
-        (unsigned long)diagnostics->service_statistics.source_error_count,
-        (unsigned long)diagnostics->task_execution_count,
-        (unsigned long)diagnostics->task_last_execution_us,
-        (unsigned long)diagnostics->task_maximum_execution_us,
-        (unsigned long)diagnostics->task_overrun_count,
-        (unsigned long)diagnostics->task_missed_release_count,
-        (unsigned long)diagnostics->high_rate_budget_us,
-        (unsigned long)diagnostics->high_rate_utilization_permille);
+    if (diagnostics->calibration_ready) {
+        written = snprintf(
+            destination, capacity,
+            "{\"type\":\"response\",\"request_id\":%lu,"
+            "\"command\":\"imu\",\"ok\":true,\"available\":true,"
+            "\"sequence\":%s,\"age_us\":%s,\"freshness\":\"%s\","
+            "\"acceleration_raw\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
+            "\"gyroscope_raw\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
+            "\"gyroscope_corrected_raw\":{\"x\":%ld,\"y\":%ld,"
+            "\"z\":%ld},\"calibration\":{\"state\":\"%s\","
+            "\"progress_permille\":%lu,\"samples\":%lu,"
+            "\"restarts\":%lu,\"bias_raw\":{\"x\":%ld,\"y\":%ld,"
+            "\"z\":%ld}},\"service\":{\"reads\":%lu,"
+            "\"published\":%lu,\"source_errors\":%lu},"
+            "\"task\":{\"executions\":%lu,\"last_execution_us\":%lu,"
+            "\"maximum_execution_us\":%lu,\"overruns\":%lu,"
+            "\"missed_releases\":%lu},\"high_rate\":{\"budget_us\":%lu,"
+            "\"utilization_permille\":%lu}}\n",
+            (unsigned long)request_id, sequence, age,
+            imu_freshness_name(diagnostics->state.freshness),
+            (long)diagnostics->state.snapshot.acceleration_x,
+            (long)diagnostics->state.snapshot.acceleration_y,
+            (long)diagnostics->state.snapshot.acceleration_z,
+            (long)diagnostics->state.snapshot.gyroscope_x,
+            (long)diagnostics->state.snapshot.gyroscope_y,
+            (long)diagnostics->state.snapshot.gyroscope_z,
+            (long)diagnostics->corrected_gyroscope[0],
+            (long)diagnostics->corrected_gyroscope[1],
+            (long)diagnostics->corrected_gyroscope[2],
+            gyro_calibration_state_name(diagnostics->calibration_state),
+            (unsigned long)diagnostics->calibration_progress_permille,
+            (unsigned long)diagnostics->calibration_sample_count,
+            (unsigned long)diagnostics->calibration_restart_count,
+            (long)diagnostics->calibration_bias[0],
+            (long)diagnostics->calibration_bias[1],
+            (long)diagnostics->calibration_bias[2],
+            (unsigned long)diagnostics->service_statistics.read_count,
+            (unsigned long)diagnostics->service_statistics.published_sample_count,
+            (unsigned long)diagnostics->service_statistics.source_error_count,
+            (unsigned long)diagnostics->task_execution_count,
+            (unsigned long)diagnostics->task_last_execution_us,
+            (unsigned long)diagnostics->task_maximum_execution_us,
+            (unsigned long)diagnostics->task_overrun_count,
+            (unsigned long)diagnostics->task_missed_release_count,
+            (unsigned long)diagnostics->high_rate_budget_us,
+            (unsigned long)diagnostics->high_rate_utilization_permille);
+    } else {
+        written = snprintf(
+            destination, capacity,
+            "{\"type\":\"response\",\"request_id\":%lu,"
+            "\"command\":\"imu\",\"ok\":true,\"available\":true,"
+            "\"sequence\":%s,\"age_us\":%s,\"freshness\":\"%s\","
+            "\"acceleration_raw\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
+            "\"gyroscope_raw\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
+            "\"gyroscope_corrected_raw\":null,\"calibration\":{"
+            "\"state\":\"%s\",\"progress_permille\":%lu,"
+            "\"samples\":%lu,\"restarts\":%lu,\"bias_raw\":null},"
+            "\"service\":{\"reads\":%lu,\"published\":%lu,"
+            "\"source_errors\":%lu},\"task\":{\"executions\":%lu,"
+            "\"last_execution_us\":%lu,\"maximum_execution_us\":%lu,"
+            "\"overruns\":%lu,\"missed_releases\":%lu},"
+            "\"high_rate\":{\"budget_us\":%lu,"
+            "\"utilization_permille\":%lu}}\n",
+            (unsigned long)request_id, sequence, age,
+            imu_freshness_name(diagnostics->state.freshness),
+            (long)diagnostics->state.snapshot.acceleration_x,
+            (long)diagnostics->state.snapshot.acceleration_y,
+            (long)diagnostics->state.snapshot.acceleration_z,
+            (long)diagnostics->state.snapshot.gyroscope_x,
+            (long)diagnostics->state.snapshot.gyroscope_y,
+            (long)diagnostics->state.snapshot.gyroscope_z,
+            gyro_calibration_state_name(diagnostics->calibration_state),
+            (unsigned long)diagnostics->calibration_progress_permille,
+            (unsigned long)diagnostics->calibration_sample_count,
+            (unsigned long)diagnostics->calibration_restart_count,
+            (unsigned long)diagnostics->service_statistics.read_count,
+            (unsigned long)diagnostics->service_statistics.published_sample_count,
+            (unsigned long)diagnostics->service_statistics.source_error_count,
+            (unsigned long)diagnostics->task_execution_count,
+            (unsigned long)diagnostics->task_last_execution_us,
+            (unsigned long)diagnostics->task_maximum_execution_us,
+            (unsigned long)diagnostics->task_overrun_count,
+            (unsigned long)diagnostics->task_missed_release_count,
+            (unsigned long)diagnostics->high_rate_budget_us,
+            (unsigned long)diagnostics->high_rate_utilization_permille);
+    }
     return finish_response(written, capacity, length);
 }

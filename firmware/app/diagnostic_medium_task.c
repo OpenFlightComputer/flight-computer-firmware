@@ -12,7 +12,7 @@
 
 static bool high_rate_budget_warning_logged;
 
-static void run_diagnostic_medium_task(void *context)
+static task_callback_result_t run_diagnostic_medium_task(void *context)
 {
     uint64_t budget_us = 0U;
     size_t index;
@@ -44,6 +44,7 @@ static void run_diagnostic_medium_task(void *context)
         high_rate_budget_warning_logged = true;
     }
     firmware_medium_task_executions++;
+    return TASK_CALLBACK_CONTINUE;
 }
 
 const task_definition_t *diagnostic_medium_task_definition(void)

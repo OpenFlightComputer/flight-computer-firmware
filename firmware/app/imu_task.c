@@ -3,6 +3,8 @@
 #include "application_state.h"
 #include "fault_catalog.h"
 #include "imu_service.h"
+#include "gyro_calibration.h"
+#include "time.h"
 #include "logging.h"
 
 #define IMU_TASK_PERIOD_US UINT32_C(1000)
@@ -72,7 +74,7 @@ static void log_freshness_transition(imu_freshness_t freshness)
     logged_freshness = freshness;
 }
 
-static void run_imu_task(void *context)
+static task_callback_result_t run_imu_task(void *context)
 {
     imu_service_t *service = context;
     imu_service_state_t state;
@@ -83,7 +85,7 @@ static void run_imu_task(void *context)
     firmware_imu_source_error_count = service->statistics.source_error_count;
 
     if (!imu_service_state(service, &state)) {
-        return;
+        return TASK_CALLBACK_CONTINUE;
     }
     firmware_imu_freshness = (uint32_t)state.freshness;
     firmware_imu_sample_age_us = state.age_us;
@@ -95,9 +97,15 @@ static void run_imu_task(void *context)
     firmware_imu_body_gyroscope_y = state.snapshot.gyroscope_y;
     firmware_imu_body_gyroscope_z = state.snapshot.gyroscope_z;
 
+    gyro_calibration_process(&firmware_gyro_calibration,
+                             &state.snapshot,
+                             state.freshness,
+                             time_us());
+
     update_communication_fault(service, state.freshness);
     log_communication_state(service, state.freshness);
     log_freshness_transition(state.freshness);
+    return TASK_CALLBACK_CONTINUE;
 }
 
 const task_definition_t *imu_task_definition(void)

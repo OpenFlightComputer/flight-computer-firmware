@@ -9,6 +9,7 @@
 typedef struct {
     uint32_t identifier;
     uint64_t execution_time_us;
+    task_callback_result_t result;
 } callback_context_t;
 
 static uint64_t fake_time_us;
@@ -20,7 +21,7 @@ static uint64_t fake_clock(void)
     return fake_time_us;
 }
 
-static void recording_callback(void *context)
+static task_callback_result_t recording_callback(void *context)
 {
     const callback_context_t *callback_context = context;
 
@@ -28,6 +29,7 @@ static void recording_callback(void *context)
     execution_log[execution_log_count] = callback_context->identifier;
     execution_log_count++;
     fake_time_us += callback_context->execution_time_us;
+    return callback_context->result;
 }
 
 static task_definition_t definition_for(const char *name,
@@ -178,6 +180,34 @@ static void ignores_disabled_tasks(void)
     assert(registry.tasks[0].execution_count == 0U);
 }
 
+static void callback_can_disable_its_task(void)
+{
+    callback_context_t context = {
+        .identifier = 1U,
+        .result = TASK_CALLBACK_DISABLE,
+    };
+    const task_definition_t definition =
+        definition_for("one-shot", 100U, TASK_PRIORITY_NORMAL, &context);
+    task_registry_t registry;
+    scheduler_t scheduler;
+
+    task_registry_initialize(&registry);
+    assert(task_registry_register(&registry, &definition) ==
+           TASK_REGISTRATION_OK);
+    reset_fake_environment(0U);
+    assert(scheduler_initialize(&scheduler, &registry, fake_clock) ==
+           SCHEDULER_INIT_OK);
+
+    assert(scheduler_run_once(&scheduler) == SCHEDULER_STEP_TASK_EXECUTED);
+    assert(execution_log_count == 1U);
+    assert(registry.tasks[0].execution_count == 1U);
+    assert(!registry.tasks[0].enabled);
+
+    fake_time_us = 100U;
+    assert(scheduler_run_once(&scheduler) == SCHEDULER_STEP_IDLE);
+    assert(execution_log_count == 1U);
+}
+
 static void skips_missed_releases_and_detects_overrun(void)
 {
     callback_context_t context = {
@@ -261,6 +291,7 @@ int main(void)
     executes_immediately_and_records_timing();
     selects_priority_then_release_then_registration_order();
     ignores_disabled_tasks();
+    callback_can_disable_its_task();
     skips_missed_releases_and_detects_overrun();
     ready_batch_prevents_high_priority_starvation();
     return 0;

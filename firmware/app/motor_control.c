@@ -26,6 +26,8 @@ typedef struct {
     bool direction_sequence_active;
     bool outputs_stopped;
     bool initialized;
+    motor_control_lifecycle_notification_t lifecycle_notification;
+    void *lifecycle_notification_context;
 } motor_control_state_t;
 
 static motor_control_state_t control;
@@ -167,6 +169,12 @@ static bool complete_pending_arm(void)
     if ((control.state_machine->current != SYSTEM_STATE_DISARMED) ||
         !motor_fault_state_allows_arm(control.fault_system) ||
         !control.arming_preparation_complete) {
+        if ((control.state_machine->current == SYSTEM_STATE_DISARMED) &&
+            (control.lifecycle_notification != NULL)) {
+            control.lifecycle_notification(
+                control.lifecycle_notification_context,
+                MOTOR_CONTROL_LIFECYCLE_DISARMED);
+        }
         return true;
     }
 
@@ -246,7 +254,9 @@ motor_control_init_result_t motor_control_initialize(
     motor_control_clock_t clock,
     uint64_t command_timeout_us,
     const motor_output_backend_t *backend,
-    const motor_configuration_t *configuration)
+    const motor_configuration_t *configuration,
+    motor_control_lifecycle_notification_t lifecycle_notification,
+    void *lifecycle_notification_context)
 {
     motor_output_init_result_t output_result;
 
@@ -268,6 +278,8 @@ motor_control_init_result_t motor_control_initialize(
         .clock = clock,
         .command_timeout_us = command_timeout_us,
         .configuration = *configuration,
+        .lifecycle_notification = lifecycle_notification,
+        .lifecycle_notification_context = lifecycle_notification_context,
     };
     motor_mapping_initialize(&control.mapping);
     motor_command_initialize(&control.retained_command);
@@ -311,6 +323,11 @@ motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
     }
 
     control.pending_source = source;
+    if (control.lifecycle_notification != NULL) {
+        control.lifecycle_notification(
+            control.lifecycle_notification_context,
+            MOTOR_CONTROL_LIFECYCLE_ARM_PREPARATION_STARTED);
+    }
     motor_command_invalidate(&control.retained_command);
     start_direction_sequence();
     return MOTOR_CONTROL_ARM_PENDING;
@@ -327,6 +344,11 @@ motor_control_disarm_result_t motor_control_disarm(void)
     if ((control.state_machine->current == SYSTEM_STATE_DISARMED) &&
         (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
         control.pending_source = MOTOR_CONTROL_SOURCE_NONE;
+        if (control.lifecycle_notification != NULL) {
+            control.lifecycle_notification(
+                control.lifecycle_notification_context,
+                MOTOR_CONTROL_LIFECYCLE_DISARMED);
+        }
         return MOTOR_CONTROL_DISARM_ACCEPTED;
     }
 
@@ -342,6 +364,11 @@ motor_control_disarm_result_t motor_control_disarm(void)
 
     control.active_source = MOTOR_CONTROL_SOURCE_NONE;
     motor_command_invalidate(&control.retained_command);
+    if (control.lifecycle_notification != NULL) {
+        control.lifecycle_notification(
+            control.lifecycle_notification_context,
+            MOTOR_CONTROL_LIFECYCLE_DISARMED);
+    }
     return MOTOR_CONTROL_DISARM_ACCEPTED;
 }
 

@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_USB_IMU_RESPONSE_H
 
 #include "imu_service.h"
+#include "gyro_calibration.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -18,6 +19,13 @@ typedef struct {
     uint32_t high_rate_budget_us;
     uint32_t high_rate_utilization_permille;
     bool task_present;
+    gyro_calibration_state_t calibration_state;
+    int32_t calibration_bias[3];
+    int32_t corrected_gyroscope[3];
+    uint32_t calibration_sample_count;
+    uint32_t calibration_restart_count;
+    uint32_t calibration_progress_permille;
+    bool calibration_ready;
 } usb_imu_diagnostics_t;
 
 bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,

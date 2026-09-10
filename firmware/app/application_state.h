@@ -5,6 +5,7 @@
 #include "fault.h"
 #include "flight_configuration_service.h"
 #include "imu_service.h"
+#include "gyro_calibration.h"
 #include "receiver_arming.h"
 #include "receiver_failsafe.h"
 #include "receiver_service.h"
@@ -27,6 +28,7 @@ extern receiver_failsafe_t firmware_receiver_failsafe;
 extern receiver_failsafe_decision_t firmware_receiver_failsafe_decision;
 extern flight_configuration_service_t firmware_flight_configuration_service;
 extern imu_service_t firmware_imu_service;
+extern gyro_calibration_t firmware_gyro_calibration;
 
 extern volatile uint32_t firmware_flight_control_task_executions;
 extern volatile uint32_t firmware_flight_control_submit_last_result;

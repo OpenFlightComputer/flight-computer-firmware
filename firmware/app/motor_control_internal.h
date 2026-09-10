@@ -19,12 +19,23 @@ typedef enum {
 } motor_control_init_result_t;
 
 /* Internal application composition API; not a general command-source API. */
+typedef enum {
+    MOTOR_CONTROL_LIFECYCLE_ARM_PREPARATION_STARTED = 0,
+    MOTOR_CONTROL_LIFECYCLE_DISARMED,
+} motor_control_lifecycle_event_t;
+
+typedef void (*motor_control_lifecycle_notification_t)(
+    void *context,
+    motor_control_lifecycle_event_t event);
+
 motor_control_init_result_t motor_control_initialize(
     system_state_machine_t *state_machine,
     fault_system_t *fault_system,
     motor_control_clock_t clock,
     uint64_t command_timeout_us,
     const motor_output_backend_t *backend,
-    const motor_configuration_t *configuration);
+    const motor_configuration_t *configuration,
+    motor_control_lifecycle_notification_t lifecycle_notification,
+    void *lifecycle_notification_context);
 
 #endif

@@ -35,6 +35,7 @@ static receiver_inspection_t receiver_inspection;
 static bool receiver_inspection_read_result;
 static uint32_t receiver_inspection_read_count;
 static imu_service_t imu_service;
+static gyro_calibration_t gyro_calibration;
 static task_registry_t task_registry;
 
 static imu_source_result_t fake_imu_read(void *context,
@@ -45,9 +46,10 @@ static imu_source_result_t fake_imu_read(void *context,
     return IMU_SOURCE_ERROR;
 }
 
-static void fake_task_callback(void *context)
+static task_callback_result_t fake_task_callback(void *context)
 {
     (void)context;
+    return TASK_CALLBACK_CONTINUE;
 }
 
 motor_control_submit_result_t motor_control_submit(
@@ -243,7 +245,7 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 1U,
+            .schema_version = 2U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
@@ -258,6 +260,12 @@ static void reset_fakes(void)
                 .recovery_stable_us = 500000U,
                 .stage_one_throttle = 0.05F,
                 .recovery_throttle_maximum = 0.05F,
+            },
+            .gyro_calibration = {
+                .settling_duration_us = 100000U,
+                .sample_duration_us = 500000U,
+                .maximum_rate_dps = 5.0F,
+                .maximum_standard_deviation_dps = 0.5F,
             },
         },
         .source = FLIGHT_CONFIGURATION_SOURCE_DEFAULT,
@@ -294,6 +302,19 @@ static void reset_fakes(void)
 
         assert(imu_service_initialize(&imu_service, &source, fake_clock,
                                       &mapping, &freshness));
+        {
+            const gyro_calibration_config_t calibration_config = {
+                .settling_duration_us = 100000U,
+                .sample_duration_us = 500000U,
+                .minimum_sample_count = 500U,
+                .maximum_rate_dps = 5.0F,
+                .maximum_standard_deviation_dps = 0.5F,
+                .counts_per_dps = 16.384F,
+            };
+            assert(gyro_calibration_initialize(&gyro_calibration,
+                                               &calibration_config,
+                                               current_time_us));
+        }
         task_registry_initialize(&task_registry);
         assert(task_registry_register(&task_registry, &definition) ==
                TASK_REGISTRATION_OK);
@@ -325,6 +346,7 @@ static void initialize_system(usb_command_processor_t *processor,
                                             fake_clock,
                                             &receiver_provider,
                                             &imu_service,
+                                            &gyro_calibration,
                                             &task_registry,
                                             &configuration_service,
                                             "0.1.0",
@@ -688,7 +710,7 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":1,"
+        "\"config_write\",\"configuration\":{\"schema_version\":2,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
@@ -698,7 +720,10 @@ static void complete_configuration_commands_replace_singular_commands(void)
         "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"
         "\"stage_one_roll\":0.0,\"stage_one_pitch\":0.0,"
         "\"stage_one_yaw\":0.0,\"stage_one_throttle\":0.05,"
-        "\"recovery_throttle_maximum\":0.05}}}");
+        "\"recovery_throttle_maximum\":0.05},\"imu\":{"
+        "\"gyro_calibration\":{\"settling_duration_us\":100000,"
+        "\"sample_duration_us\":500000,\"maximum_rate_dps\":5.0,"
+        "\"maximum_standard_deviation_dps\":0.5}}}}");
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_SENT);
     assert(strstr(captured_response, "\"ok\":true") != NULL);
@@ -804,6 +829,7 @@ static void initialization_and_invalid_state_are_checked(void)
                                             fake_clock,
                                             &receiver_provider,
                                             &imu_service,
+                                            &gyro_calibration,
                                             &task_registry,
                                             &configuration_service,
                                             "0.1.0", "test-build") ==
@@ -813,6 +839,7 @@ static void initialization_and_invalid_state_are_checked(void)
                                             fake_clock,
                                             &receiver_provider,
                                             &imu_service,
+                                            &gyro_calibration,
                                             &task_registry,
                                             &configuration_service,
                                             NULL, "test-build") ==

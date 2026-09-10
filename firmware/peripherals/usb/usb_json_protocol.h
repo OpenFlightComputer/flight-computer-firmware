@@ -24,6 +24,8 @@ typedef enum {
 #define USB_JSON_CONFIGURATION_TIMING_COUNT 5U
 #define USB_JSON_CONFIGURATION_CONTROL_COUNT 5U
 #define USB_JSON_CONFIGURATION_MIXER_COUNT 3U
+#define USB_JSON_CONFIGURATION_GYRO_TIMING_COUNT 2U
+#define USB_JSON_CONFIGURATION_GYRO_THRESHOLD_COUNT 2U
 
 typedef struct {
     uint32_t schema_version;
@@ -33,6 +35,9 @@ typedef struct {
     uint32_t mixer_factor_millionths[USB_JSON_CONFIGURATION_MIXER_COUNT];
     uint8_t directions[USB_JSON_CONFIGURATION_MOTOR_COUNT];
     uint8_t propeller_layout;
+    uint64_t gyro_timing_us[USB_JSON_CONFIGURATION_GYRO_TIMING_COUNT];
+    uint32_t gyro_threshold_millionths[
+        USB_JSON_CONFIGURATION_GYRO_THRESHOLD_COUNT];
 } usb_json_configuration_t;
 
 typedef struct {

@@ -142,7 +142,12 @@ Planned milestones:
 3. IMU validation and calibration:
    - 4.3a request-driven USB inspection and tester-style host visualization —
      implemented in software; physical axis/rate/timing validation remains.
-   - 4.3b stationary gyro calibration.
+   - 4.3b stationary gyro calibration — implemented in software; physical
+     startup-lock, calibration, and lifecycle-indicator validation remains.
+   - Before Phase 4 closes, move startup-only calibration sample consumption
+     out of the permanent IMU task and into a temporary 1 kHz startup task.
+     That task should consume the IMU service's published samples and disable
+     itself after the successful transition to `DISARMED`.
 4. Roll/pitch attitude estimation with bounded basic gyro filtering.
 5. Configurable input curves, deadbands, angle/rate limits, and throttle curve.
 6. Bounded rate PID control with anti-windup and zero-throttle integral reset.

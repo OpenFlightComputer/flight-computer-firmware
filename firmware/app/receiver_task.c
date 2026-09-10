@@ -15,7 +15,7 @@ static receiver_freshness_state_t logged_freshness =
     RECEIVER_FRESHNESS_UNAVAILABLE;
 static bool source_fault_reported;
 
-static void run_receiver_task(void *context)
+static task_callback_result_t run_receiver_task(void *context)
 {
     receiver_service_t *service = context;
     receiver_control_state_t control = {0};
@@ -61,6 +61,7 @@ static void run_receiver_task(void *context)
             logged_freshness = control.freshness;
         }
     }
+    return TASK_CALLBACK_CONTINUE;
 }
 
 static bool read_receiver_inspection(void *context,

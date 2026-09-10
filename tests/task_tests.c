@@ -6,7 +6,7 @@
 
 static uint32_t callback_invocation_count;
 
-static void test_callback(void *context)
+static task_callback_result_t test_callback(void *context)
 {
     uint32_t *value = context;
 
@@ -14,6 +14,7 @@ static void test_callback(void *context)
     if (value != NULL) {
         (*value)++;
     }
+    return TASK_CALLBACK_CONTINUE;
 }
 
 static task_definition_t definition_for(const char *name,

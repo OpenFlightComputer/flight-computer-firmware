@@ -6,7 +6,7 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.3a — request-driven USB IMU inspection and host visualization —
+Milestone 4.3b — stationary startup gyro calibration and lifecycle indication —
 implemented and awaiting owner review and flight-image physical validation.
 
 ## Last completed milestone
@@ -56,15 +56,39 @@ the receiver, mixer, authority gate, and DShot output path.
   the configured BMI270 raw counts to g and degrees per second and renders
   independent acceleration and gyro bars using the tester-proven scales.
   Watch polling is host-driven and bounded to at most 10 requests per second.
-- All 43 native tests and all 66 Python host-tool tests pass; Debug and Release
-  firmware build with warnings as errors. Debug uses 128,204 bytes of Flash
-  and 24,976 bytes of RAM; Release uses 89,544 bytes of Flash and 24,960 bytes
-  of RAM.
-- Stationary gyro calibration, filtering, attitude estimation, and
-  motor-control use remain outside Milestone 4.3a. The existing open-loop motor
-  path is unchanged; the fail-closed IMU control gate belongs to Milestone 4.8.
+- Added a bounded, hardware-independent stationary gyro calibration fed by the
+  existing 1 kHz IMU task. It waits 100 ms, then requires both 500 ms and 500
+  distinct fresh samples; excessive instantaneous rate or end-of-window
+  variance restarts collection.
+- Accumulated signed 64-bit sums and squared sums produce one rounded bias per
+  body axis. Accepted biases remain RAM-only and immutable until reboot; the
+  result is diagnostic-only and does not yet influence motor output.
+- Startup now remains in `INITIALIZING` until calibration succeeds. A separate
+  startup task owns the final transition to `DISARMED`, leaving a clear place
+  for additional future startup requirements.
+- Task callbacks can now explicitly return `TASK_CALLBACK_DISABLE`; the
+  scheduler records the final invocation and then excludes the task from later
+  ready batches. The startup task uses this after its successful transition to
+  `DISARMED`, avoiding a permanent 100 Hz no-op.
+- Extended the unified configuration to schema 2 with gyro settling, sampling,
+  maximum-rate, and maximum-standard-deviation settings. Persistent schema-1
+  documents migrate with their prior fields preserved and new values filled
+  from compiled defaults.
+- Extended the tester-proven PA1 WS2812 implementation to full GRB output:
+  yellow during initialization, green in `DISARMED`, and off before arm
+  preparation. Noncritical updates use a 10 Hz background task so disarming is
+  not delayed by the roughly 2 ms reset-bounded LED transaction.
+- Extended `imu` diagnostics and the host view with calibration state,
+  progress, samples, restarts, raw bias, and bias-corrected gyro values.
+- All 44 native tests and all 66 Python host-tool tests pass, including the
+  address/undefined-behavior sanitizer build. Debug and Release firmware build
+  with warnings as errors. Debug uses 136,520 bytes of Flash and 25,160 bytes
+  of RAM; Release uses 95,220 bytes of Flash and 25,144 bytes of RAM.
+- Filtering, attitude estimation, and motor-control use remain outside
+  Milestone 4.3b. The existing open-loop motor path is unchanged; the
+  fail-closed IMU control gate belongs to Milestone 4.8.
 
-## Milestone 4.3a assumptions and safety boundary
+## Milestone 4.3b assumptions and safety boundary
 
 - The provisional V1 body mapping assumes the PCB top is aircraft forward and
   the component side is up. This is not yet physical evidence.
@@ -79,12 +103,21 @@ the receiver, mixer, authority gate, and DShot output path.
   control values.
 - Physical axis signs, live sample rate, freshness, and scheduler timings still
   require validation on the flashed flight image.
+- A perfectly constant slow rotation is mathematically indistinguishable from
+  a stationary sensor bias. The instantaneous-rate and variance gates reject
+  ordinary movement, but the operator must still keep the vehicle motionless.
+- Configuration changes to startup-calibration settings are persisted while
+  disarmed and take effect on the next reboot; they do not invalidate the
+  already accepted RAM-only bias during the current boot.
+- The verified WS2812 pulse timings are reused from the manufacturing tester,
+  but the complete lifecycle color sequence still requires flight-image
+  validation.
 
 ## Next proposed milestone
 
-Milestone 4.3b — implement bounded stationary gyro calibration without
-connecting the result to motor control yet. Before that implementation, use
-the 4.3a view to validate physical axis signs and flight-image timing.
+Milestone 4.4 — add bounded IMU filtering without connecting the result to
+motor control. First physically validate the 4.3b startup lock, RGB sequence,
+bias stability, axis signs, and scheduler timing on the flight image.
 
 ## Historical milestone record
 

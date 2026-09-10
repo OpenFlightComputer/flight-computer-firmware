@@ -6,13 +6,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#define EXPECTED_PAYLOAD_LENGTH 88U
+#define EXPECTED_PAYLOAD_LENGTH 84U
 
 static board_persistent_storage_read_result_t read_result;
+static board_persistent_storage_read_result_t previous_read_result;
 static board_persistent_storage_read_result_t legacy_read_result;
 static board_persistent_storage_write_result_t write_result;
 static board_persistent_storage_clear_result_t clear_result;
-static uint8_t payload[EXPECTED_PAYLOAD_LENGTH];
+static uint8_t payload[88U];
+static uint8_t previous_payload[88U];
 static uint8_t legacy_payload[8U];
 static size_t read_length;
 static size_t legacy_read_length;
@@ -23,10 +25,17 @@ board_persistent_storage_read_result_t board_persistent_storage_read(
     void *destination, size_t length)
 {
     read_length = length;
-    if (read_result == BOARD_PERSISTENT_STORAGE_READ_OK) {
-        memcpy(destination, payload, length);
+    if (length == EXPECTED_PAYLOAD_LENGTH) {
+        if (read_result == BOARD_PERSISTENT_STORAGE_READ_OK) {
+            memcpy(destination, payload, length);
+        }
+        return read_result;
     }
-    return read_result;
+    if ((length == sizeof(previous_payload)) &&
+        (previous_read_result == BOARD_PERSISTENT_STORAGE_READ_OK)) {
+        memcpy(destination, previous_payload, length);
+    }
+    return previous_read_result;
 }
 
 board_persistent_storage_read_result_t board_persistent_storage_read_legacy(
@@ -63,6 +72,7 @@ int main(void)
     flight_configuration_t loaded;
 
     read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
+    previous_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     write_result = BOARD_PERSISTENT_STORAGE_WRITE_OK;
     clear_result = BOARD_PERSISTENT_STORAGE_CLEAR_OK;
@@ -74,6 +84,7 @@ int main(void)
     original.propeller_layout = PROPELLER_LAYOUT_PROPS_OUT;
     original.motors.direction[2] = MOTOR_DIRECTION_REVERSED;
     original.mixer.yaw_factor = 0.2F;
+    original.gyro_calibration.maximum_rate_dps = 4.0F;
     assert(storage.save(storage.context, &original) ==
            FLIGHT_CONFIGURATION_SAVE_OK);
     assert(write_length == EXPECTED_PAYLOAD_LENGTH);
@@ -85,8 +96,44 @@ int main(void)
     assert(loaded.motors.direction[2] == MOTOR_DIRECTION_REVERSED);
     assert(loaded.mixer.yaw_factor == 0.2F);
     assert(loaded.receiver_failsafe.stage_one_throttle == 0.05F);
+    assert(loaded.gyro_calibration.maximum_rate_dps == 4.0F);
+
+    {
+        typedef struct {
+            uint32_t version;
+            uint32_t schema_version;
+            uint64_t timing_us[5];
+            float mixer_factors[3];
+            float failsafe_controls[5];
+            uint8_t propeller_layout;
+            uint8_t directions[4];
+            uint8_t reserved[3];
+        } previous_payload_t;
+        previous_payload_t previous = {
+            .version = 1U,
+            .schema_version = 1U,
+            .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
+            .mixer_factors = {0.25F, 0.25F, 0.2F},
+            .failsafe_controls = {0.0F, 0.0F, 0.0F, 0.05F, 0.05F},
+            .propeller_layout = (uint8_t)PROPELLER_LAYOUT_PROPS_OUT,
+            .directions = {0U, 1U, 0U, 1U},
+        };
+
+        assert(sizeof(previous) == sizeof(previous_payload));
+        memcpy(previous_payload, &previous, sizeof(previous));
+        read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+        previous_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
+        assert(storage.load(storage.context, &loaded) ==
+               FLIGHT_CONFIGURATION_LOAD_OK);
+        assert(loaded.schema_version == 2U);
+        assert(loaded.propeller_layout == PROPELLER_LAYOUT_PROPS_OUT);
+        assert(loaded.motors.direction[1] == MOTOR_DIRECTION_REVERSED);
+        assert(loaded.mixer.yaw_factor == 0.2F);
+        assert(loaded.gyro_calibration.sample_duration_us == 500000U);
+    }
 
     read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+    previous_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     memset(legacy_payload, 0, sizeof(legacy_payload));
     legacy_payload[0] = 1U;
@@ -104,7 +151,7 @@ int main(void)
 
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
-    payload[0] = 2U;
+    payload[0] = 3U;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_ERROR);
     assert(storage.clear(storage.context) == FLIGHT_CONFIGURATION_CLEAR_OK);

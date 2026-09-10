@@ -4,6 +4,7 @@
 #include "fault.h"
 #include "flight_configuration_service.h"
 #include "imu_service.h"
+#include "gyro_calibration.h"
 #include "receiver_inspection.h"
 #include "system_state.h"
 #include "task.h"
@@ -52,6 +53,7 @@ typedef struct {
     usb_command_clock_t clock;
     receiver_inspection_provider_t receiver_inspection_provider;
     const imu_service_t *imu_service;
+    const gyro_calibration_t *gyro_calibration;
     const task_registry_t *task_registry;
     flight_configuration_service_t *configuration_service;
     const char *firmware_version;
@@ -77,6 +79,7 @@ usb_command_init_result_t usb_command_processor_initialize(
     usb_command_clock_t clock,
     const receiver_inspection_provider_t *receiver_inspection_provider,
     const imu_service_t *imu_service,
+    const gyro_calibration_t *gyro_calibration,
     const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
     const char *firmware_version,
