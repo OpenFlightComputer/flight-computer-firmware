@@ -46,6 +46,9 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(parse("{\"type\":\"command\",\"request_id\":43,"
                  "\"command\":\"receiver\"}").command ==
            USB_JSON_COMMAND_RECEIVER);
+    assert(parse("{\"type\":\"command\",\"request_id\":44,"
+                 "\"command\":\"imu\"}").command ==
+           USB_JSON_COMMAND_IMU);
     request = parse("{\"request_id\":4294967295,\"type\":\"command\","
                     "\"command\":\"arm\"}");
     assert(request.command == USB_JSON_COMMAND_ARM);

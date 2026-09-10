@@ -410,6 +410,8 @@ static bool initialize_usb(void)
             &firmware_fault_system,
             time_us,
             application_receiver_inspection_provider(),
+            &firmware_imu_service,
+            &firmware_task_registry,
             &firmware_flight_configuration_service,
             firmware_version,
             firmware_build_id) != USB_COMMAND_INIT_OK) {

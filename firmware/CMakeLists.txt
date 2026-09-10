@@ -192,6 +192,7 @@ add_executable(flight_firmware
     app/task.c
     app/usb_command_processor.c
     app/usb_health_response.c
+    app/usb_imu_response.c
     app/usb_logging_backend.c
     app/usb_receiver_response.c
     app/usb_service_task.c

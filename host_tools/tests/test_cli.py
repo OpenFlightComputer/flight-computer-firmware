@@ -17,6 +17,8 @@ from openflightcomputer.cli import build_parser
         ["device", "disarm"],
         ["device", "receiver"],
         ["device", "receiver", "--watch", "--interval", "0.2"],
+        ["device", "imu"],
+        ["device", "imu", "--watch", "--interval", "0.2"],
         ["device", "monitor"],
         ["motor", "run", "--motor", "1", "--throttle", "1.0", "--duration", "60"],
         ["config", "read"],
@@ -28,6 +30,13 @@ from openflightcomputer.cli import build_parser
 )
 def test_documented_commands_parse(arguments):
     assert build_parser().parse_args(arguments).command == arguments[0]
+
+
+def test_imu_watch_interval_cannot_exceed_ten_requests_per_second():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            ["device", "imu", "--watch", "--interval", "0.099"]
+        )
 
 
 def test_device_arm_waits_for_pending_direction_preparation(

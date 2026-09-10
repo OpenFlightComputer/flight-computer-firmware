@@ -15,6 +15,7 @@ from rich.live import Live
 
 from openflightcomputer.device import DeviceError, UsbCdcConnection, wait_for_flight_port
 from openflightcomputer.firmware import REPOSITORY_ROOT, FirmwareBuildError, build_firmware
+from openflightcomputer.imu import ImuView
 from openflightcomputer.models import ProgressEvent
 from openflightcomputer.programmer import ProgrammingError
 from openflightcomputer.protocol import JsonProtocolClient, ProtocolError
@@ -43,6 +44,13 @@ def _positive_float(value: str) -> float:
     parsed = float(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def _inspection_interval(value: str) -> float:
+    parsed = _positive_float(value)
+    if parsed < 0.1:
+        raise argparse.ArgumentTypeError("inspection interval must be at least 0.1 seconds")
     return parsed
 
 
@@ -93,6 +101,20 @@ def build_parser() -> argparse.ArgumentParser:
     _add_device_options(receiver)
     receiver.add_argument(
         "--watch", action="store_true", help="continuously refresh the receiver view"
+    )
+    imu = device_commands.add_parser(
+        "imu", help="inspect the latest mapped BMI270 sample"
+    )
+    _add_device_options(imu)
+    imu.add_argument(
+        "--watch", action="store_true", help="continuously refresh the IMU view"
+    )
+    imu.add_argument(
+        "--interval",
+        type=_inspection_interval,
+        default=0.1,
+        metavar="SECONDS",
+        help="watch polling interval, minimum 0.1 (default: 0.1)",
     )
     receiver.add_argument(
         "--interval",
@@ -218,6 +240,25 @@ def _device_receiver(arguments: argparse.Namespace) -> int:
                 time.sleep(arguments.interval)
 
 
+def _device_imu(arguments: argparse.Namespace) -> int:
+    port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
+    view = ImuView()
+    console = Console()
+    with UsbCdcConnection.open(port) as connection:
+        client = JsonProtocolClient(connection)
+        if not arguments.watch:
+            view.update(client.request("imu", timeout_seconds=arguments.timeout))
+            console.print(view.render())
+            return 0
+
+        print(f"Watching IMU on {port.device}; press Ctrl-C to stop.", file=sys.stderr)
+        with Live(view.render(), console=console, refresh_per_second=10) as live:
+            while True:
+                view.update(client.request("imu", timeout_seconds=arguments.timeout))
+                live.update(view.render(), refresh=True)
+                time.sleep(arguments.interval)
+
+
 def _smoke(arguments: argparse.Namespace) -> int:
     progress = (lambda _event: None) if arguments.json else _progress
     result = run_smoke(
@@ -316,6 +357,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _device_monitor(arguments)
             if arguments.device_command == "receiver":
                 return _device_receiver(arguments)
+            if arguments.device_command == "imu":
+                return _device_imu(arguments)
             return _device_request(arguments, arguments.device_command)
         if arguments.command == "motor":
             return _motor_run(arguments)

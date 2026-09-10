@@ -34,6 +34,21 @@ static flight_configuration_service_result_t configuration_reset_result;
 static receiver_inspection_t receiver_inspection;
 static bool receiver_inspection_read_result;
 static uint32_t receiver_inspection_read_count;
+static imu_service_t imu_service;
+static task_registry_t task_registry;
+
+static imu_source_result_t fake_imu_read(void *context,
+                                         imu_raw_sample_t *sample)
+{
+    (void)context;
+    (void)sample;
+    return IMU_SOURCE_ERROR;
+}
+
+static void fake_task_callback(void *context)
+{
+    (void)context;
+}
 
 motor_control_submit_result_t motor_control_submit(
     motor_control_source_t source,
@@ -257,6 +272,32 @@ static void reset_fakes(void)
     };
     receiver_inspection_read_result = true;
     receiver_inspection_read_count = 0U;
+    {
+        const imu_source_t source = {
+            .read = fake_imu_read,
+        };
+        const imu_axis_mapping_t mapping = {
+            .body_x = IMU_AXIS_POSITIVE_X,
+            .body_y = IMU_AXIS_POSITIVE_Y,
+            .body_z = IMU_AXIS_POSITIVE_Z,
+        };
+        const imu_freshness_config_t freshness = {
+            .fresh_through_us = 2000U,
+            .lost_after_us = 10000U,
+        };
+        const task_definition_t definition = {
+            .name = "imu-service",
+            .period_us = 1000U,
+            .priority = TASK_PRIORITY_HIGH,
+            .callback = fake_task_callback,
+        };
+
+        assert(imu_service_initialize(&imu_service, &source, fake_clock,
+                                      &mapping, &freshness));
+        task_registry_initialize(&task_registry);
+        assert(task_registry_register(&task_registry, &definition) ==
+               TASK_REGISTRATION_OK);
+    }
     logging_initialize();
 }
 
@@ -283,6 +324,8 @@ static void initialize_system(usb_command_processor_t *processor,
                                             fault_system,
                                             fake_clock,
                                             &receiver_provider,
+                                            &imu_service,
+                                            &task_registry,
                                             &configuration_service,
                                             "0.1.0",
                                             "test-build") ==
@@ -332,6 +375,62 @@ static void receiver_inspection_is_read_only_when_requested(void)
     assert(receiver_inspection_read_count == 2U);
     assert(strstr(captured_response,
                   "receiver_inspection_unavailable") != NULL);
+}
+
+static void imu_snapshot_is_read_only_and_rejected_while_armed(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    imu_service.latest = (imu_sample_snapshot_t){
+        .acceleration_x = 100,
+        .acceleration_y = -200,
+        .acceleration_z = 16384,
+        .gyroscope_x = 10,
+        .gyroscope_y = -20,
+        .gyroscope_z = 30,
+        .acquired_at_us = current_time_us - 100U,
+        .sequence = 9U,
+        .valid = true,
+    };
+    imu_service.statistics = (imu_service_statistics_t){
+        .read_count = 12U,
+        .published_sample_count = 11U,
+        .source_error_count = 1U,
+    };
+    task_registry.tasks[0].execution_count = 13U;
+    task_registry.tasks[0].last_execution_time_us = 14U;
+    task_registry.tasks[0].maximum_execution_time_us = 15U;
+    initialize_system(&processor, &state_machine, &fault_system);
+
+    queue_input("{\"type\":\"command\",\"request_id\":14,"
+                "\"command\":\"imu\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"available\":true") != NULL);
+    assert(strstr(captured_response, "\"sequence\":9") != NULL);
+    assert(strstr(captured_response, "\"x\":100") != NULL);
+    assert(imu_service.statistics.read_count == 12U);
+
+    imu_service.initialized = false;
+    queue_input("{\"type\":\"command\",\"request_id\":15,"
+                "\"command\":\"imu\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"available\":false") != NULL);
+
+    state_machine.current = SYSTEM_STATE_ARMED;
+    queue_input("{\"type\":\"command\",\"request_id\":16,"
+                "\"command\":\"imu\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strcmp(captured_response,
+                  "{\"type\":\"error\",\"request_id\":16,"
+                  "\"error\":\"state_rejected\"}\n") == 0);
+    assert(processor.statistics.imu_count == 3U);
+    assert(processor.statistics.imu_rejected_count == 1U);
 }
 
 static void enter_disarmed(system_state_machine_t *state_machine)
@@ -704,6 +803,8 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &fault_system,
                                             fake_clock,
                                             &receiver_provider,
+                                            &imu_service,
+                                            &task_registry,
                                             &configuration_service,
                                             "0.1.0", "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
@@ -711,6 +812,8 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &fault_system,
                                             fake_clock,
                                             &receiver_provider,
+                                            &imu_service,
+                                            &task_registry,
                                             &configuration_service,
                                             NULL, "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
@@ -722,6 +825,7 @@ int main(void)
 {
     status_and_health_report_current_summary();
     receiver_inspection_is_read_only_when_requested();
+    imu_snapshot_is_read_only_and_rejected_while_armed();
     arm_and_disarm_use_the_state_machine();
     illegal_transition_is_rejected_without_state_mutation();
     unknown_health_rejects_arm_before_the_state_machine();

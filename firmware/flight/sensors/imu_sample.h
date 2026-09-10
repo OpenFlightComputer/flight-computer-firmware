@@ -62,5 +62,6 @@ imu_freshness_t imu_freshness_evaluate(
     const imu_sample_snapshot_t *snapshot,
     uint64_t now_us,
     uint64_t *age_us);
+const char *imu_freshness_name(imu_freshness_t freshness);
 
 #endif

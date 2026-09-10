@@ -22,6 +22,20 @@ normalized flight controls, freshness/failsafe state, link statistics, and
 UART/parser/DMA diagnostics. Each refresh is an on-demand USB request; it does
 not alter the firmware's independent receiver task or motor state.
 
+Inspect the latest mapped BMI270 sample once or continuously with:
+
+```bash
+./ofc device imu
+./ofc device imu --watch
+./ofc device imu --watch --interval 0.2
+```
+
+The firmware only copies its existing coherent sample on request; it does not
+read the sensor again or add a visualization task. The host converts raw counts
+to g and degrees per second and draws independent bars for the two ranges.
+Inspection is disarmed-only, and watch polling cannot be configured faster than
+10 Hz, so the diagnostic path cannot run during active flight.
+
 The separately explicit propeller-free bench path is:
 
 ```bash

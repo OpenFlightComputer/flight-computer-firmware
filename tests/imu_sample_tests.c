@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 static void validates_signed_permutation_mapping(void)
 {
@@ -81,9 +82,20 @@ static void classifies_freshness_boundaries(void)
     assert(!imu_freshness_config_is_valid(&config));
 }
 
+static void exposes_stable_freshness_names(void)
+{
+    assert(strcmp(imu_freshness_name(IMU_FRESHNESS_UNAVAILABLE),
+                  "UNAVAILABLE") == 0);
+    assert(strcmp(imu_freshness_name(IMU_FRESHNESS_FRESH), "FRESH") == 0);
+    assert(strcmp(imu_freshness_name(IMU_FRESHNESS_STALE), "STALE") == 0);
+    assert(strcmp(imu_freshness_name(IMU_FRESHNESS_LOST), "LOST") == 0);
+    assert(strcmp(imu_freshness_name((imu_freshness_t)99), "INVALID") == 0);
+}
+
 int main(void)
 {
     validates_signed_permutation_mapping();
     classifies_freshness_boundaries();
+    exposes_stable_freshness_names();
     return 0;
 }

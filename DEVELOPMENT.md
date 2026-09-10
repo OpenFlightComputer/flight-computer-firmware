@@ -6,9 +6,8 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.2 — scheduled BMI270 acquisition, timestamped body-axis snapshots,
-freshness, and scheduler-load diagnostics — implemented and awaiting owner
-review and flight-image physical validation.
+Milestone 4.3a — request-driven USB IMU inspection and host visualization —
+implemented and awaiting owner review and flight-image physical validation.
 
 ## Last completed milestone
 
@@ -47,16 +46,25 @@ the receiver, mixer, authority gate, and DShot output path.
   file per scheduled task. Each module now owns its callback, task definition,
   and private transition state; `application_tasks.c` only preserves conditional
   registration and deterministic ordering.
-- Added native mapping/freshness and service/publication tests. All 42 native
-  tests and all 56 Python host-tool tests pass; Debug and Release firmware build
-  with warnings as errors. Debug uses 125,936 bytes of Flash and 24,960 bytes
-  of RAM; Release uses 88,044 bytes of Flash and 24,944 bytes of RAM.
-- USB IMU inspection, stationary gyro calibration, SI-unit conversion,
-  filtering, attitude estimation, and motor-control use remain outside
-  Milestone 4.2. The existing open-loop motor path is unchanged; the fail-closed
-  IMU control gate belongs to Milestone 4.8.
+- Added native mapping/freshness and service/publication tests.
+- Added strict `imu` USB request/response handling. It copies the existing
+  coherent body-axis sample, freshness, acquisition counters, IMU task timing,
+  and combined 1 kHz worst-case budget only when requested. It neither reads
+  SPI nor schedules another task, and requests fail closed while `ARMED` or
+  `FAILSAFE`.
+- Added `./ofc device imu` and `./ofc device imu --watch`. The host converts
+  the configured BMI270 raw counts to g and degrees per second and renders
+  independent acceleration and gyro bars using the tester-proven scales.
+  Watch polling is host-driven and bounded to at most 10 requests per second.
+- All 43 native tests and all 66 Python host-tool tests pass; Debug and Release
+  firmware build with warnings as errors. Debug uses 128,204 bytes of Flash
+  and 24,976 bytes of RAM; Release uses 89,544 bytes of Flash and 24,960 bytes
+  of RAM.
+- Stationary gyro calibration, filtering, attitude estimation, and
+  motor-control use remain outside Milestone 4.3a. The existing open-loop motor
+  path is unchanged; the fail-closed IMU control gate belongs to Milestone 4.8.
 
-## Milestone 4.2 assumptions and safety boundary
+## Milestone 4.3a assumptions and safety boundary
 
 - The provisional V1 body mapping assumes the PCB top is aircraft forward and
   the component side is up. This is not yet physical evidence.
@@ -66,12 +74,17 @@ the receiver, mixer, authority gate, and DShot output path.
   physical axis signs. All remain explicitly pending on-board measurement.
 - IMU data is not yet an input to motor control, so this milestone does not
   alter current flight behavior or pretend to provide stabilization.
+- The displayed engineering units use the configured ±2 g and ±2000
+  degree-per-second ranges. They are diagnostic conversions, not yet calibrated
+  control values.
+- Physical axis signs, live sample rate, freshness, and scheduler timings still
+  require validation on the flashed flight image.
 
 ## Next proposed milestone
 
-Milestone 4.3 — add bounded USB inspection of the latest IMU snapshot, perform
-the physical axis/sign and task-timing checks, and implement stationary gyro
-calibration without connecting the result to motor control yet.
+Milestone 4.3b — implement bounded stationary gyro calibration without
+connecting the result to motor control yet. Before that implementation, use
+the 4.3a view to validate physical axis signs and flight-image timing.
 
 ## Historical milestone record
 

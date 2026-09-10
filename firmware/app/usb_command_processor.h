@@ -3,8 +3,10 @@
 
 #include "fault.h"
 #include "flight_configuration_service.h"
+#include "imu_service.h"
 #include "receiver_inspection.h"
 #include "system_state.h"
+#include "task.h"
 #include "usb_cdc_transport.h"
 
 #include <stdbool.h>
@@ -28,6 +30,8 @@ typedef struct {
     uint32_t status_count;
     uint32_t health_count;
     uint32_t receiver_count;
+    uint32_t imu_count;
+    uint32_t imu_rejected_count;
     uint32_t motor_test_count;
     uint32_t motor_test_accepted_count;
     uint32_t motor_test_rejected_count;
@@ -47,6 +51,8 @@ typedef struct {
     fault_system_t *fault_system;
     usb_command_clock_t clock;
     receiver_inspection_provider_t receiver_inspection_provider;
+    const imu_service_t *imu_service;
+    const task_registry_t *task_registry;
     flight_configuration_service_t *configuration_service;
     const char *firmware_version;
     const char *build_id;
@@ -70,6 +76,8 @@ usb_command_init_result_t usb_command_processor_initialize(
     fault_system_t *fault_system,
     usb_command_clock_t clock,
     const receiver_inspection_provider_t *receiver_inspection_provider,
+    const imu_service_t *imu_service,
+    const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
     const char *firmware_version,
     const char *build_id);

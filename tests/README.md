@@ -103,11 +103,16 @@ The native `usb_health_response_tests` target verifies exact empty health,
 validity-aware active-fault metadata, fixed-capacity response truncation,
 reported/active count distinction, and invalid destination handling.
 
+The native `usb_imu_response_tests` target verifies available and unavailable
+IMU schemas, signed mapped axes, full-width sequence/age formatting, task/load
+diagnostics, bounded output, and invalid arguments.
+
 The native `usb_command_processor_tests` target uses a fake line source and
 transport to verify status/structured-health responses, health-aware arm
 admission, state-machine arm/disarm transitions, malformed/unsupported errors,
 all four manual motor selectors, the full normalized throttle range, and
-pending-response backpressure. The STM32 USB device library, interrupt behavior,
+pending-response backpressure. It also verifies request-only IMU snapshot reads
+and active-flight rejection. The STM32 USB device library, interrupt behavior,
 pins, enumeration, and physical transfer remain firmware-build or board-level
 checks.
 

@@ -79,7 +79,17 @@ firmware link must not be recorded as proof that the flight image works.
 
 ## BMI270 flight-firmware path
 
-- [ ] Flash the Milestone 4.2 image and confirm
+- [ ] While disarmed, run `./ofc device imu --watch`; confirm sequence advances
+  continuously, freshness remains `FRESH`, sample age normally remains at or
+  below 2 ms, and source errors do not increase.
+- [ ] Place the board still in known orientations and rotate it about one body
+  axis at a time. Confirm the view reports +X forward, +Y right, and +Z down,
+  including the sign of all three gyroscope axes.
+- [ ] Confirm the displayed IMU task has no overruns or missed releases and the
+  combined 1 kHz worst-case budget remains comfortably below 1 ms.
+- [ ] Confirm `imu` inspection is rejected while `ARMED` and becomes available
+  again after disarm.
+- [ ] Flash the Milestone 4.3a image and confirm
   `firmware_imu_initialization_result` and
   `firmware_imu_initial_sample_result` are both zero.
 - [ ] Confirm `firmware_imu_task_executions` advances at approximately 1 kHz,

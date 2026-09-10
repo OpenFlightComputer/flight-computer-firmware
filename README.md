@@ -48,9 +48,10 @@ output, CRSF receiver input, source authority, unified persistent configuration,
 and hardware-independent open-loop quad-X mixing. Propeller-free receiver to
 motor operation has been physically exercised on Flight Computer V1.
 
-Phase 4 adds stabilization for the first constrained hover. Milestones 4.1 and
-4.2 pin Bosch's official BMI270 SensorAPI, add the tester-proven V1 SPI3
-transport, and publish timestamped body-axis samples from a 1 kHz service.
+Phase 4 adds stabilization for the first constrained hover. Milestones 4.1,
+4.2, and 4.3a pin Bosch's official BMI270 SensorAPI, add the tester-proven V1
+SPI3 transport, publish timestamped body-axis samples from a 1 kHz service, and
+provide request-driven bench visualization through `./ofc device imu --watch`.
 Physical sign/timing validation, calibration, estimation, and closed-loop
 control intentionally remain later milestones; see `docs/bmi270.md` and
 `DEVELOPMENT.md` for the exact boundary.
@@ -84,6 +85,7 @@ inspection, and repeatable non-arming smoke tests:
 ./ofc firmware flash --profile release
 ./ofc device status
 ./ofc device receiver --watch
+./ofc device imu --watch
 ./ofc device monitor
 ./ofc smoke --profile release
 ./ofc smoke --no-flash

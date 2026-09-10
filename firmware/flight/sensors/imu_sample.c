@@ -113,3 +113,19 @@ imu_freshness_t imu_freshness_evaluate(
     }
     return IMU_FRESHNESS_LOST;
 }
+
+const char *imu_freshness_name(imu_freshness_t freshness)
+{
+    switch (freshness) {
+    case IMU_FRESHNESS_UNAVAILABLE:
+        return "UNAVAILABLE";
+    case IMU_FRESHNESS_FRESH:
+        return "FRESH";
+    case IMU_FRESHNESS_STALE:
+        return "STALE";
+    case IMU_FRESHNESS_LOST:
+        return "LOST";
+    }
+
+    return "INVALID";
+}

@@ -5,11 +5,13 @@
 #include "motor_control.h"
 #include "motor_safety_policy.h"
 #include "usb_health_response.h"
+#include "usb_imu_response.h"
 #include "usb_json_protocol.h"
 #include "usb_receiver_response.h"
 
 #include <limits.h>
 #include <stddef.h>
+#include <string.h>
 
 #define USB_MOTOR_TEST_THROTTLE_SCALE 1000000.0f
 
@@ -138,6 +140,58 @@ static bool build_motor_test_response(
         processor->pending_response,
         sizeof(processor->pending_response),
         &processor->pending_response_length);
+}
+
+static void build_imu_diagnostics(
+    const usb_command_processor_t *processor,
+    usb_imu_diagnostics_t *diagnostics)
+{
+    uint64_t high_rate_budget_us = 0U;
+    size_t index;
+
+    *diagnostics = (usb_imu_diagnostics_t){
+        .service_statistics = processor->imu_service->statistics,
+    };
+    if (!imu_service_state(processor->imu_service, &diagnostics->state)) {
+        diagnostics->state = (imu_service_state_t){
+            .freshness = IMU_FRESHNESS_UNAVAILABLE,
+            .age_us = UINT64_MAX,
+        };
+    }
+
+    for (index = 0U;
+         index < task_registry_count(processor->task_registry);
+         index++) {
+        const task_t *task = task_registry_task_at(processor->task_registry,
+                                                   index);
+
+        if (task == NULL) {
+            continue;
+        }
+        if (task->enabled && (task->definition.period_us == 1000U)) {
+            high_rate_budget_us += task->maximum_execution_time_us;
+        }
+        if ((task->definition.name != NULL) &&
+            (strcmp(task->definition.name, "imu-service") == 0)) {
+            diagnostics->task_execution_count = task->execution_count;
+            diagnostics->task_last_execution_us =
+                task->last_execution_time_us;
+            diagnostics->task_maximum_execution_us =
+                task->maximum_execution_time_us;
+            diagnostics->task_overrun_count = task->overrun_count;
+            diagnostics->task_missed_release_count =
+                task->missed_release_count;
+            diagnostics->task_present = true;
+        }
+    }
+    diagnostics->high_rate_budget_us =
+        high_rate_budget_us > UINT32_MAX ? UINT32_MAX
+                                         : (uint32_t)high_rate_budget_us;
+    diagnostics->high_rate_utilization_permille =
+        high_rate_budget_us > (UINT32_MAX / UINT32_C(1000))
+            ? UINT32_MAX
+            : (uint32_t)((high_rate_budget_us * UINT32_C(1000)) /
+                         UINT32_C(1000));
 }
 
 static void configuration_to_usb(
@@ -347,6 +401,26 @@ static bool build_command_response(usb_command_processor_t *processor,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
     }
+    case USB_JSON_COMMAND_IMU: {
+        usb_imu_diagnostics_t diagnostics;
+
+        saturating_increment(&processor->statistics.imu_count);
+        if ((processor->state_machine->current == SYSTEM_STATE_ARMED) ||
+            (processor->state_machine->current == SYSTEM_STATE_FAILSAFE)) {
+            saturating_increment(&processor->statistics.imu_rejected_count);
+            return build_error(processor,
+                               true,
+                               request->request_id,
+                               "state_rejected");
+        }
+        build_imu_diagnostics(processor, &diagnostics);
+        return usb_imu_response_build(
+            &diagnostics,
+            request->request_id,
+            processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    }
     case USB_JSON_COMMAND_ARM:
     case USB_JSON_COMMAND_DISARM: {
         const system_state_t previous = processor->state_machine->current;
@@ -432,6 +506,8 @@ usb_command_init_result_t usb_command_processor_initialize(
     fault_system_t *fault_system,
     usb_command_clock_t clock,
     const receiver_inspection_provider_t *receiver_inspection_provider,
+    const imu_service_t *imu_service,
+    const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
     const char *firmware_version,
     const char *build_id)
@@ -441,6 +517,8 @@ usb_command_init_result_t usb_command_processor_initialize(
         !fault_system->initialized || (clock == NULL) ||
         (receiver_inspection_provider == NULL) ||
         (receiver_inspection_provider->read == NULL) ||
+        (imu_service == NULL) ||
+        (task_registry == NULL) ||
         (configuration_service == NULL) || !configuration_service->initialized ||
         (firmware_version == NULL) || (build_id == NULL)) {
         return USB_COMMAND_INIT_INVALID_ARGUMENT;
@@ -451,6 +529,8 @@ usb_command_init_result_t usb_command_processor_initialize(
         .fault_system = fault_system,
         .clock = clock,
         .receiver_inspection_provider = *receiver_inspection_provider,
+        .imu_service = imu_service,
+        .task_registry = task_registry,
         .configuration_service = configuration_service,
         .firmware_version = firmware_version,
         .build_id = build_id,
@@ -475,6 +555,8 @@ usb_command_process_result_t usb_command_processor_process_once(
         !processor->fault_system->initialized ||
         (processor->clock == NULL) ||
         (processor->receiver_inspection_provider.read == NULL) ||
+        (processor->imu_service == NULL) ||
+        (processor->task_registry == NULL) ||
         (processor->configuration_service == NULL) ||
         !processor->configuration_service->initialized ||
         (processor->firmware_version == NULL) ||

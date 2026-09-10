@@ -391,27 +391,29 @@ bool usb_json_parse_request(const char *line,
         return false;
     }
 
-            if (token_equals(line, command, "status")) {
-                request->command = USB_JSON_COMMAND_STATUS;
-            } else if (token_equals(line, command, "health")) {
-                request->command = USB_JSON_COMMAND_HEALTH;
-            } else if (token_equals(line, command, "receiver")) {
-                request->command = USB_JSON_COMMAND_RECEIVER;
-            } else if (token_equals(line, command, "arm")) {
-                request->command = USB_JSON_COMMAND_ARM;
-            } else if (token_equals(line, command, "disarm")) {
-                request->command = USB_JSON_COMMAND_DISARM;
-            } else if (token_equals(line, command, "motor_test")) {
-                request->command = USB_JSON_COMMAND_MOTOR_TEST;
-            } else if (token_equals(line, command, "config_read")) {
-                request->command = USB_JSON_COMMAND_CONFIG_READ;
-            } else if (token_equals(line, command, "config_write")) {
-                request->command = USB_JSON_COMMAND_CONFIG_WRITE;
-            } else if (token_equals(line, command, "config_reset")) {
-                request->command = USB_JSON_COMMAND_CONFIG_RESET;
-            } else {
-                request->command = USB_JSON_COMMAND_UNSUPPORTED;
-            }
+    if (token_equals(line, command, "status")) {
+        request->command = USB_JSON_COMMAND_STATUS;
+    } else if (token_equals(line, command, "health")) {
+        request->command = USB_JSON_COMMAND_HEALTH;
+    } else if (token_equals(line, command, "receiver")) {
+        request->command = USB_JSON_COMMAND_RECEIVER;
+    } else if (token_equals(line, command, "imu")) {
+        request->command = USB_JSON_COMMAND_IMU;
+    } else if (token_equals(line, command, "arm")) {
+        request->command = USB_JSON_COMMAND_ARM;
+    } else if (token_equals(line, command, "disarm")) {
+        request->command = USB_JSON_COMMAND_DISARM;
+    } else if (token_equals(line, command, "motor_test")) {
+        request->command = USB_JSON_COMMAND_MOTOR_TEST;
+    } else if (token_equals(line, command, "config_read")) {
+        request->command = USB_JSON_COMMAND_CONFIG_READ;
+    } else if (token_equals(line, command, "config_write")) {
+        request->command = USB_JSON_COMMAND_CONFIG_WRITE;
+    } else if (token_equals(line, command, "config_reset")) {
+        request->command = USB_JSON_COMMAND_CONFIG_RESET;
+    } else {
+        request->command = USB_JSON_COMMAND_UNSUPPORTED;
+    }
 
     if (request->command == USB_JSON_COMMAND_MOTOR_TEST) {
         uint32_t motor_value;
@@ -442,6 +444,8 @@ const char *usb_json_command_name(usb_json_command_t command)
         return "health";
     case USB_JSON_COMMAND_RECEIVER:
         return "receiver";
+    case USB_JSON_COMMAND_IMU:
+        return "imu";
     case USB_JSON_COMMAND_ARM:
         return "arm";
     case USB_JSON_COMMAND_DISARM:

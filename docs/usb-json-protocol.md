@@ -23,6 +23,7 @@ The supported commands are:
 | `status` | Report lifecycle state and monotonic uptime |
 | `health` | Report derived overall health, lifecycle state, severity counts, and bounded active-fault details |
 | `receiver` | Inspect the latest raw and normalized receiver state plus link and transport diagnostics |
+| `imu` | Inspect the latest mapped IMU sample and acquisition/scheduler diagnostics while not flying |
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
 | `motor_test` | Submit a leased single-motor command through the production safety gate |
@@ -80,6 +81,7 @@ Examples, each followed by one newline:
 {"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","control_source":"NONE","uptime_us":123456,"firmware_version":"0.1.0","build_id":"5db525a"}
 {"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
 {"type":"response","request_id":44,"command":"receiver","ok":true,"available":true,"sequence":7,"age_us":1250,"freshness":"FRESH","channels":[174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189],"normalized":{"roll":-0.500000,"pitch":0.250000,"yaw":0.000000,"throttle":1.000000,"arm":true},"failsafe":{"state":"LIVE","action":"LIVE","stage_two_latched":false,"recovery_ready":false},"link_statistics_present":true,"uplink_rssi_dbm":-42,"uplink_link_quality_percent":99,"uplink_snr_db":8,"uart_bytes":135014,"valid_frames":5000,"crc_errors":0,"framing_errors":0,"dma_overruns":0,"dma_bytes_dropped":0}
+{"type":"response","request_id":45,"command":"imu","ok":true,"available":true,"sequence":8100,"age_us":250,"freshness":"FRESH","acceleration_raw":{"x":20,"y":-30,"z":16384},"gyroscope_raw":{"x":2,"y":-3,"z":1},"service":{"reads":8101,"published":8100,"source_errors":1},"task":{"executions":8101,"last_execution_us":37,"maximum_execution_us":45,"overruns":0,"missed_releases":0},"high_rate":{"budget_us":180,"utilization_permille":180}}
 {"type":"response","request_id":44,"command":"arm","ok":true,"pending":true,"state":"DISARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
 {"type":"response","request_id":46,"command":"arm","ok":false,"state":"DISARMED","error":"health_rejected"}
@@ -104,6 +106,14 @@ The command is observational: it cannot change lifecycle state, renew motor
 authority, or submit motor commands. Repeated inspection is host-driven, so
 the 1 kHz receiver task does not continuously construct or publish a separate
 USB-only snapshot.
+
+The IMU response follows the same request-driven rule. It copies the existing
+IMU service snapshot and never initiates SPI traffic or another task release.
+Raw values already use the configured body-axis mapping; unit conversion and
+visualization belong to the host. The command returns `state_rejected` in
+`ARMED` or `FAILSAFE`. If no valid sample exists, the snapshot fields and task
+object are `null`, while service and combined high-rate counters remain
+available.
 
 Milestone 0.12 derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or `CRITICAL`
 from the existing lifecycle and fault authorities. Each serialized active fault
