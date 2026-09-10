@@ -54,5 +54,19 @@ extern volatile int16_t firmware_imu_raw_acceleration_z;
 extern volatile int16_t firmware_imu_raw_gyroscope_x;
 extern volatile int16_t firmware_imu_raw_gyroscope_y;
 extern volatile int16_t firmware_imu_raw_gyroscope_z;
+extern volatile uint32_t firmware_imu_service_last_result;
+extern volatile uint32_t firmware_imu_task_executions;
+extern volatile uint32_t firmware_imu_freshness;
+extern volatile uint64_t firmware_imu_sample_age_us;
+extern volatile uint64_t firmware_imu_sample_sequence;
+extern volatile int32_t firmware_imu_body_acceleration_x;
+extern volatile int32_t firmware_imu_body_acceleration_y;
+extern volatile int32_t firmware_imu_body_acceleration_z;
+extern volatile int32_t firmware_imu_body_gyroscope_x;
+extern volatile int32_t firmware_imu_body_gyroscope_y;
+extern volatile int32_t firmware_imu_body_gyroscope_z;
+extern volatile uint32_t firmware_imu_source_error_count;
+extern volatile uint32_t firmware_high_rate_worst_case_budget_us;
+extern volatile uint32_t firmware_high_rate_worst_case_utilization_permille;
 
 #endif

@@ -167,10 +167,13 @@ static void validates_initialization_and_catalogs(void)
 
     firmware_definitions =
         firmware_fault_catalog(&firmware_definition_count);
-    assert(firmware_definition_count == 19U);
+    assert(firmware_definition_count == 20U);
     assert(firmware_definitions[18].id == FAULT_ID_IMU_INITIALIZATION);
     assert(firmware_definitions[18].severity == FAULT_SEVERITY_FAULT);
     assert(firmware_definitions[18].source == FAULT_SOURCE_SENSOR);
+    assert(firmware_definitions[19].id == FAULT_ID_IMU_COMMUNICATION);
+    assert(firmware_definitions[19].severity == FAULT_SEVERITY_FAULT);
+    assert(firmware_definitions[19].source == FAULT_SOURCE_SENSOR);
     assert(fault_system_initialize(&system,
                                    &state_machine,
                                    firmware_definitions,

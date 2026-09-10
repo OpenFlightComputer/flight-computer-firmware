@@ -6,8 +6,9 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.1 — tester-proven BMI270 transport and raw sensor foundation —
-implemented and awaiting owner review and flight-image physical validation.
+Milestone 4.2 — scheduled BMI270 acquisition, timestamped body-axis snapshots,
+freshness, and scheduler-load diagnostics — implemented and awaiting owner
+review and flight-image physical validation.
 
 ## Last completed milestone
 
@@ -17,34 +18,60 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
-- Added Bosch's official BMI270 SensorAPI as a pinned Git submodule at tag
-  `v2.113.0`, commit `41129fcfe39c583ee5462d79195741945d51c1fe`.
-- Added a hardware-neutral injected SPI-device interface. The BMI270 peripheral
-  driver depends only on this interface and the Bosch API, not on STM32 types,
-  pins, or a specific SPI peripheral.
-- Added the Flight Computer V1 SPI3 implementation using the tester-proven PB3
-  SCK, PB4 MISO, PB5 MOSI, PD2 active-low chip select, mode 0, MSB-first, and
-  42 MHz divided by 64 for a 656.25 kHz bus clock. PD2 is driven high before it
-  becomes an output to avoid an unintended selection pulse.
-- Ported the tester-proven BMI270 settings: accelerometer at 100 Hz, plus/minus
-  2 g, normal average-4 bandwidth and performance filtering; gyroscope at
-  100 Hz, plus/minus 2000 degrees per second, normal bandwidth,
-  power-optimized noise mode and performance filtering.
-- Adapted Bosch SPI reads to set the read bit and discard the first dummy byte.
-  All transfers, temporary buffers, delays, and timeouts are bounded and use no
-  runtime allocation.
-- Added boot initialization and one raw six-axis sample. Initialization and
-  sample results plus all six values are debugger-visible; failure reports the
-  new non-critical sensor fault and IMU log module without claiming the sensor
-  is ready for closed-loop flight.
-- Added native SPI-boundary and BMI270-driver tests. All 40 native tests and all
-  56 Python host-tool tests pass; Debug and Release firmware build with warnings
-  as errors. Debug uses 122,240 bytes of Flash and 24,776 bytes of RAM; Release
-  uses 85,656 bytes of Flash and 24,784 bytes of RAM.
-- Periodic acquisition, BMI270 interrupts, body-axis mapping, unit conversion,
-  timestamped publication, freshness, stationary gyro calibration, attitude
-  estimation, USB inspection, and motor-control use remain explicitly outside
-  Milestone 4.1.
+- Increased both BMI270 output data rates from the Milestone 4.1 boot setting
+  of 100 Hz to 1.6 kHz, then added a high-priority 1 kHz IMU service. Each run
+  performs one bounded six-axis register read; no interrupt or dynamic
+  allocation was introduced.
+- Added a hardware-independent signed-permutation mapping and a complete owned
+  sample snapshot containing mapped raw acceleration and gyro values, a
+  microsecond acquisition-completion timestamp, a saturating 64-bit sequence,
+  and validity. A failed read preserves the last good snapshot.
+- Defined the provisional V1 installation convention as PCB top forward and
+  component side up, mapping body forward/right/down to sensor +Y/+X/-Z. The
+  authoritative PCB confirms the unrotated package but has no explicit front
+  marker, so every sign remains subject to Milestone 4.3 physical validation.
+- Added freshness classification: at most 2 ms is fresh, over 2 ms through
+  10 ms is stale, and over 10 ms or clock rollback is lost. A recoverable IMU
+  communication fault and transition-only logs cover persistent runtime
+  failures; a new valid sample clears the fault. The separate initialization
+  fault still prevents scheduling when boot validation fails.
+- Reduced USB service from 1 kHz to 500 Hz and the placeholder diagnostics from
+  1 kHz/100 Hz/10 Hz to 100 Hz/10 Hz/1 Hz. Motor output, IMU acquisition,
+  receiver service, and the current open-loop flight-control step remain at
+  1 kHz because each owns a distinct deadline.
+- Added a 10 Hz conservative load diagnostic that sums the recorded maximum
+  execution times of every enabled 1 kHz task, exposes the budget and permille
+  utilization to the debugger, and logs once at or above 70% of the 1 ms
+  period. Exact on-board execution times remain a required physical check.
+- Split the former mixed `application_tasks.c` implementation into one source
+  file per scheduled task. Each module now owns its callback, task definition,
+  and private transition state; `application_tasks.c` only preserves conditional
+  registration and deterministic ordering.
+- Added native mapping/freshness and service/publication tests. All 42 native
+  tests and all 56 Python host-tool tests pass; Debug and Release firmware build
+  with warnings as errors. Debug uses 125,936 bytes of Flash and 24,960 bytes
+  of RAM; Release uses 88,044 bytes of Flash and 24,944 bytes of RAM.
+- USB IMU inspection, stationary gyro calibration, SI-unit conversion,
+  filtering, attitude estimation, and motor-control use remain outside
+  Milestone 4.2. The existing open-loop motor path is unchanged; the fail-closed
+  IMU control gate belongs to Milestone 4.8.
+
+## Milestone 4.2 assumptions and safety boundary
+
+- The provisional V1 body mapping assumes the PCB top is aircraft forward and
+  the component side is up. This is not yet physical evidence.
+- Polling the latest 1.6 kHz sensor registers from a 1 kHz task is intentional;
+  the firmware does not claim to consume every sensor update.
+- Software builds cannot prove the 1 kHz deadlines, SPI recovery behavior, or
+  physical axis signs. All remain explicitly pending on-board measurement.
+- IMU data is not yet an input to motor control, so this milestone does not
+  alter current flight behavior or pretend to provide stabilization.
+
+## Next proposed milestone
+
+Milestone 4.3 — add bounded USB inspection of the latest IMU snapshot, perform
+the physical axis/sign and task-timing checks, and implement stationary gyro
+calibration without connecting the result to motor control yet.
 
 ## Historical milestone record
 

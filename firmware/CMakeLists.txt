@@ -165,9 +165,13 @@ add_executable(flight_firmware
     app/application_state.c
     app/application_tasks.c
     app/board_flight_configuration_storage.c
+    app/diagnostic_fast_task.c
+    app/diagnostic_medium_task.c
+    app/diagnostic_slow_task.c
     app/dshot_motor_backend.c
     app/flight_configuration_service.c
     app/flight_control.c
+    app/flight_control_task.c
     app/motor_control.c
     app/motor_safety_policy.c
     app/receiver_arming.c
@@ -175,9 +179,13 @@ add_executable(flight_firmware
     app/fault.c
     app/fault_catalog.c
     app/health.c
+    app/imu_service.c
+    app/imu_task.c
     app/logging.c
     app/logging_config.c
     app/main.c
+    app/motor_control_task.c
+    app/receiver_task.c
     app/runtime_hooks.c
     app/scheduler.c
     app/system_state.c
@@ -186,6 +194,7 @@ add_executable(flight_firmware
     app/usb_health_response.c
     app/usb_logging_backend.c
     app/usb_receiver_response.c
+    app/usb_service_task.c
     "${FIRMWARE_IDENTITY_SOURCE}"
     flight/actuators/motor_command.c
     flight/actuators/motor_configuration.c
@@ -193,6 +202,7 @@ add_executable(flight_firmware
     flight/actuators/motor_output.c
     flight/configuration/flight_configuration.c
     flight/control/quad_x_mixer.c
+    flight/sensors/imu_sample.c
     flight/receiver/receiver_freshness.c
     flight/receiver/receiver_failsafe.c
     flight/receiver/receiver_normalization.c
@@ -234,6 +244,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/configuration"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/control"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/receiver"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/sensors"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"

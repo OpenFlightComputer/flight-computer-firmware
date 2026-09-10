@@ -48,11 +48,12 @@ output, CRSF receiver input, source authority, unified persistent configuration,
 and hardware-independent open-loop quad-X mixing. Propeller-free receiver to
 motor operation has been physically exercised on Flight Computer V1.
 
-Phase 4 adds stabilization for the first constrained hover. Milestone 4.1 pins
-Bosch's official BMI270 SensorAPI and adds the tester-proven V1 SPI3 transport,
-sensor initialization, and one raw six-axis boot sample. Periodic publication,
-calibration, estimation, and closed-loop control intentionally remain later
-milestones; see `docs/bmi270.md` and `DEVELOPMENT.md` for the exact boundary.
+Phase 4 adds stabilization for the first constrained hover. Milestones 4.1 and
+4.2 pin Bosch's official BMI270 SensorAPI, add the tester-proven V1 SPI3
+transport, and publish timestamped body-axis samples from a 1 kHz service.
+Physical sign/timing validation, calibration, estimation, and closed-loop
+control intentionally remain later milestones; see `docs/bmi270.md` and
+`DEVELOPMENT.md` for the exact boundary.
 
 Initialize all pinned dependencies (including the BMI270 SensorAPI) and the
 two STM32CubeF4 nested dependencies:

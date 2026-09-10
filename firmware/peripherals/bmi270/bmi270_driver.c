@@ -111,12 +111,12 @@ bmi270_driver_init_result_t bmi270_driver_initialize(
     }
 
     configuration[0].type = BMI2_ACCEL;
-    configuration[0].cfg.acc.odr = BMI2_ACC_ODR_100HZ;
+    configuration[0].cfg.acc.odr = BMI2_ACC_ODR_1600HZ;
     configuration[0].cfg.acc.range = BMI2_ACC_RANGE_2G;
     configuration[0].cfg.acc.bwp = BMI2_ACC_NORMAL_AVG4;
     configuration[0].cfg.acc.filter_perf = BMI2_PERF_OPT_MODE;
     configuration[1].type = BMI2_GYRO;
-    configuration[1].cfg.gyr.odr = BMI2_GYR_ODR_100HZ;
+    configuration[1].cfg.gyr.odr = BMI2_GYR_ODR_1600HZ;
     configuration[1].cfg.gyr.range = BMI2_GYR_RANGE_2000;
     configuration[1].cfg.gyr.bwp = BMI2_GYR_NORMAL_MODE;
     configuration[1].cfg.gyr.noise_perf = BMI2_POWER_OPT_MODE;

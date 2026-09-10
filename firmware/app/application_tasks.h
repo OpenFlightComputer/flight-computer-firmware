@@ -11,6 +11,7 @@ application_receiver_inspection_provider(void);
 
 task_registration_result_t application_tasks_register(
     bool usb_service_available,
-    bool receiver_service_available);
+    bool receiver_service_available,
+    bool imu_service_available);
 
 #endif

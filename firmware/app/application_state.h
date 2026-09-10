@@ -4,6 +4,7 @@
 #include "boot_status.h"
 #include "fault.h"
 #include "flight_configuration_service.h"
+#include "imu_service.h"
 #include "receiver_arming.h"
 #include "receiver_failsafe.h"
 #include "receiver_service.h"
@@ -25,6 +26,7 @@ extern receiver_arming_t firmware_receiver_arming;
 extern receiver_failsafe_t firmware_receiver_failsafe;
 extern receiver_failsafe_decision_t firmware_receiver_failsafe_decision;
 extern flight_configuration_service_t firmware_flight_configuration_service;
+extern imu_service_t firmware_imu_service;
 
 extern volatile uint32_t firmware_flight_control_task_executions;
 extern volatile uint32_t firmware_flight_control_submit_last_result;
@@ -36,5 +38,7 @@ extern volatile uint64_t firmware_receiver_link_age_us;
 extern volatile uint32_t firmware_receiver_failsafe_transitions;
 extern volatile bool firmware_receiver_stage_two_latched;
 extern volatile bool firmware_receiver_recovery_ready;
+extern volatile uint32_t firmware_high_rate_worst_case_budget_us;
+extern volatile uint32_t firmware_high_rate_worst_case_utilization_permille;
 
 #endif

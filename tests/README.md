@@ -11,6 +11,16 @@ sensor enable order, initialization failure boundaries, raw sample mapping,
 and communication diagnostics. Physical SPI3 routing and BMI270 behavior
 remain board checks.
 
+The native `imu_sample_tests` target verifies signed-permutation body-axis
+mapping, safe handling of the full signed 16-bit range, invalid mapping
+rejection, and the exact fresh/stale/lost boundaries including clock rollback.
+
+The native `imu_service_tests` target uses an injected source and clock to
+verify one-read-per-run boundedness, complete owned publication, timestamps,
+saturating sequence/statistics, last-good-sample retention, startup
+unavailable/lost behavior, recovery after source errors, and invalid
+initialization rejection.
+
 The native `timebase_snapshot_tests` target verifies normal reads, pending
 hardware overflows, interrupt races, and monotonic behavior across a 32-bit
 counter wrap.

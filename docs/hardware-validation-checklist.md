@@ -79,13 +79,22 @@ firmware link must not be recorded as proof that the flight image works.
 
 ## BMI270 flight-firmware path
 
-- [ ] Flash the Milestone 4.1 image and confirm
+- [ ] Flash the Milestone 4.2 image and confirm
   `firmware_imu_initialization_result` and
   `firmware_imu_initial_sample_result` are both zero.
-- [ ] Inspect all six `firmware_imu_raw_*` values while stationary, then reboot
-  in several known orientations and confirm the one-shot raw samples respond
-  without an active `FAULT_ID_IMU_INITIALIZATION` record. Continuous rotation
-  inspection belongs to the scheduled sampling milestone.
+- [ ] Confirm `firmware_imu_task_executions` advances at approximately 1 kHz,
+  `firmware_imu_sample_sequence` advances continuously, freshness remains
+  `FRESH`, and sample age normally remains at or below 2 ms.
+- [ ] Inspect all six `firmware_imu_body_*` values in known orientations and
+  rotations. Confirm body +X is forward, +Y is right, and +Z is down before
+  any control code consumes these samples.
+- [ ] Interrupt or fault the IMU transport and confirm last-good retention,
+  `STALE` after 2 ms, `LOST` after 10 ms, a recoverable
+  `FAULT_ID_IMU_COMMUNICATION`, and clearing after valid samples resume.
+- [ ] Inspect every enabled 1 kHz task's latest/maximum execution time plus
+  `firmware_high_rate_worst_case_budget_us` and
+  `firmware_high_rate_worst_case_utilization_permille`. Confirm the measured
+  combined budget remains comfortably below the 1 ms deadline.
 - [ ] Confirm SPI3 mode 0, the 656.25 kHz clock, PB3/PB4/PB5 AF6 routing, and
   active-low PD2 chip select on the flight image. Tester evidence does not
   replace this flight-image validation.

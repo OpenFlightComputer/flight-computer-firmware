@@ -10,6 +10,7 @@
 #include "dshot_motor_backend.h"
 #include "fault_catalog.h"
 #include "firmware_identity.h"
+#include "imu_service.h"
 #include "logging.h"
 #include "motor_control.h"
 #include "motor_control_internal.h"
@@ -21,6 +22,8 @@
 #include <stddef.h>
 
 #define USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT UINT32_C(100)
+#define IMU_FRESH_THROUGH_US UINT32_C(2000)
+#define IMU_LOST_AFTER_US UINT32_C(10000)
 
 static dshot_motor_backend_t firmware_dshot_motor_backend;
 static bmi270_driver_t firmware_bmi270_driver;
@@ -200,10 +203,51 @@ static void initialize_motor_control(void)
     LOG_INFO(LOG_MODULE_SYSTEM, "four-channel DShot300 output initialized");
 }
 
-static void initialize_imu(void)
+static imu_source_result_t read_bmi270(void *context,
+                                      imu_raw_sample_t *sample)
+{
+    bmi270_raw_sample_t bmi270_sample;
+    bmi270_driver_t *driver = context;
+
+    if ((driver == NULL) || (sample == NULL) ||
+        (bmi270_driver_read_raw(driver, &bmi270_sample) !=
+         BMI270_DRIVER_SAMPLE_OK)) {
+        return IMU_SOURCE_ERROR;
+    }
+    *sample = (imu_raw_sample_t){
+        .acceleration_x = bmi270_sample.acceleration_x,
+        .acceleration_y = bmi270_sample.acceleration_y,
+        .acceleration_z = bmi270_sample.acceleration_z,
+        .gyroscope_x = bmi270_sample.gyroscope_x,
+        .gyroscope_y = bmi270_sample.gyroscope_y,
+        .gyroscope_z = bmi270_sample.gyroscope_z,
+    };
+    return IMU_SOURCE_SAMPLE_AVAILABLE;
+}
+
+static bool initialize_imu(void)
 {
     bmi270_raw_sample_t sample;
     bmi270_driver_init_result_t initialize_result;
+    const imu_source_t source = {
+        .read = read_bmi270,
+        .context = &firmware_bmi270_driver,
+    };
+    /*
+     * V1 installation convention: PCB top is aircraft forward and the
+     * component side faces up. The package is unrotated in the authoritative
+     * PCB, giving body forward=+sensor Y, right=+sensor X, down=-sensor Z.
+     * Milestone 4.3 must verify all signs physically before control use.
+     */
+    const imu_axis_mapping_t axis_mapping = {
+        .body_x = IMU_AXIS_POSITIVE_Y,
+        .body_y = IMU_AXIS_POSITIVE_X,
+        .body_z = IMU_AXIS_NEGATIVE_Z,
+    };
+    const imu_freshness_config_t freshness_config = {
+        .fresh_through_us = IMU_FRESH_THROUGH_US,
+        .lost_after_us = IMU_LOST_AFTER_US,
+    };
 
     firmware_imu_initial_sample_result =
         (uint32_t)BMI270_DRIVER_SAMPLE_NOT_INITIALIZED;
@@ -223,7 +267,7 @@ static void initialize_imu(void)
                   "BMI270 initialization failed result=%u sensor=%d",
                   (unsigned int)initialize_result,
                   (int)firmware_bmi270_driver.last_sensor_result);
-        return;
+        return false;
     }
 
     firmware_imu_initial_sample_result =
@@ -242,7 +286,7 @@ static void initialize_imu(void)
                   "BMI270 initial sample failed result=%lu sensor=%d",
                   (unsigned long)firmware_imu_initial_sample_result,
                   (int)firmware_bmi270_driver.last_sensor_result);
-        return;
+        return false;
     }
 
     firmware_imu_raw_acceleration_x = sample.acceleration_x;
@@ -259,6 +303,20 @@ static void initialize_imu(void)
              (int)sample.gyroscope_x,
              (int)sample.gyroscope_y,
              (int)sample.gyroscope_z);
+    if (!imu_service_initialize(&firmware_imu_service,
+                                &source,
+                                time_us,
+                                &axis_mapping,
+                                &freshness_config)) {
+        firmware_fault_last_result =
+            (uint32_t)fault_system_report(&firmware_fault_system,
+                                          FAULT_ID_IMU_INITIALIZATION,
+                                          true,
+                                          UINT32_C(0x020000));
+        LOG_ERROR(LOG_MODULE_IMU, "IMU service initialization failed");
+        return false;
+    }
+    return true;
 }
 
 static bool initialize_receiver(void)
@@ -367,10 +425,14 @@ static bool initialize_usb(void)
     return true;
 }
 
-static void initialize_scheduler(bool usb_available, bool receiver_available)
+static void initialize_scheduler(bool usb_available,
+                                 bool receiver_available,
+                                 bool imu_available)
 {
     const task_registration_result_t task_result =
-        application_tasks_register(usb_available, receiver_available);
+        application_tasks_register(usb_available,
+                                   receiver_available,
+                                   imu_available);
     scheduler_init_result_t scheduler_result;
 
     if (task_result != TASK_REGISTRATION_OK) {
@@ -398,14 +460,15 @@ void application_runtime_initialize(void)
 {
     bool receiver_available;
     bool usb_available;
+    bool imu_available;
 
     initialize_core();
     initialize_board();
-    initialize_imu();
+    imu_available = initialize_imu();
     initialize_motor_control();
     receiver_available = initialize_receiver();
     usb_available = initialize_usb();
-    initialize_scheduler(usb_available, receiver_available);
+    initialize_scheduler(usb_available, receiver_available, imu_available);
 
     if (!transition_system_state(
             SYSTEM_STATE_EVENT_INITIALIZATION_COMPLETED)) {

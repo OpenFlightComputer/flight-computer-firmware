@@ -98,6 +98,11 @@ static const fault_definition_t definitions[] = {
         .severity = FAULT_SEVERITY_FAULT,
         .source = FAULT_SOURCE_SENSOR,
     },
+    {
+        .id = FAULT_ID_IMU_COMMUNICATION,
+        .severity = FAULT_SEVERITY_FAULT,
+        .source = FAULT_SOURCE_SENSOR,
+    },
 };
 
 const fault_definition_t *firmware_fault_catalog(size_t *definition_count)

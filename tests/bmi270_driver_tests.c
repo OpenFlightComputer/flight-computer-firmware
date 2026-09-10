@@ -125,12 +125,12 @@ int8_t bmi2_set_sensor_config(struct bmi2_sens_config *configuration,
     assert(device != NULL);
     assert(sensor_count == 2U);
     assert(configuration[0].type == BMI2_ACCEL);
-    assert(configuration[0].cfg.acc.odr == BMI2_ACC_ODR_100HZ);
+    assert(configuration[0].cfg.acc.odr == BMI2_ACC_ODR_1600HZ);
     assert(configuration[0].cfg.acc.range == BMI2_ACC_RANGE_2G);
     assert(configuration[0].cfg.acc.bwp == BMI2_ACC_NORMAL_AVG4);
     assert(configuration[0].cfg.acc.filter_perf == BMI2_PERF_OPT_MODE);
     assert(configuration[1].type == BMI2_GYRO);
-    assert(configuration[1].cfg.gyr.odr == BMI2_GYR_ODR_100HZ);
+    assert(configuration[1].cfg.gyr.odr == BMI2_GYR_ODR_1600HZ);
     assert(configuration[1].cfg.gyr.range == BMI2_GYR_RANGE_2000);
     assert(configuration[1].cfg.gyr.bwp == BMI2_GYR_NORMAL_MODE);
     assert(configuration[1].cfg.gyr.noise_perf == BMI2_POWER_OPT_MODE);

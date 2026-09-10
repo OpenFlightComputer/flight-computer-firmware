@@ -55,6 +55,44 @@ target_compile_options(bmi270_driver_tests PRIVATE
 
 add_test(NAME bmi270_driver COMMAND bmi270_driver_tests)
 
+add_executable(imu_sample_tests
+    imu_sample_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/imu_sample.c"
+)
+
+target_include_directories(imu_sample_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+
+target_compile_options(imu_sample_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME imu_sample COMMAND imu_sample_tests)
+
+add_executable(imu_service_tests
+    imu_service_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/imu_service.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/imu_sample.c"
+)
+
+target_include_directories(imu_service_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+
+target_compile_options(imu_service_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME imu_service COMMAND imu_service_tests)
+
 add_executable(task_tests
     task_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/task.c"

@@ -137,7 +137,8 @@ Planned milestones:
    initialization, and one raw boot sample — implemented in software; physical
    flight-image validation remains.
 2. Scheduled raw acquisition with owned timestamps, freshness, and body-axis
-   mapping.
+   mapping — implemented in software; physical rate, timing, and sign
+   validation remains.
 3. USB inspection and stationary gyro calibration.
 4. Roll/pitch attitude estimation with bounded basic gyro filtering.
 5. Configurable input curves, deadbands, angle/rate limits, and throttle curve.
