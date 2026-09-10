@@ -16,6 +16,45 @@ target_compile_options(timebase_snapshot_tests PRIVATE
 
 add_test(NAME timebase_snapshot COMMAND timebase_snapshot_tests)
 
+add_executable(spi_device_tests
+    spi_device_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/spi_device.c"
+)
+
+target_include_directories(spi_device_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/hardware"
+)
+
+target_compile_options(spi_device_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME spi_device COMMAND spi_device_tests)
+
+add_executable(bmi270_driver_tests
+    bmi270_driver_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/bmi270/bmi270_driver.c"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware/spi_device.c"
+)
+
+target_include_directories(bmi270_driver_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/hardware"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/bmi270"
+    "${PROJECT_SOURCE_DIR}/firmware/third_party/BMI270_SensorAPI"
+)
+
+target_compile_options(bmi270_driver_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+add_test(NAME bmi270_driver COMMAND bmi270_driver_tests)
+
 add_executable(task_tests
     task_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/task.c"

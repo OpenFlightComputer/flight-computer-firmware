@@ -14,3 +14,8 @@ is DShot300 only; it builds an interleaved four-lane buffer without configuring
 or starting timer/DMA hardware. It does not own normalized throttle conversion,
 actuator authorization, physical routing, DMA-buffer lifetime, or ESC command
 policy.
+
+The `bmi270/` implementation owns the BMI270 register protocol and Bosch
+SensorAPI integration. It receives a generic retained SPI device from the
+application and has no knowledge of the selected SPI peripheral, routed pins,
+or STM32 HAL types.

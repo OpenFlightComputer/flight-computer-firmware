@@ -46,6 +46,8 @@ const char *logging_module_name(log_module_t module)
         return "USB";
     case LOG_MODULE_RECEIVER:
         return "RECEIVER";
+    case LOG_MODULE_IMU:
+        return "IMU";
     case LOG_MODULE_COUNT:
         break;
     }

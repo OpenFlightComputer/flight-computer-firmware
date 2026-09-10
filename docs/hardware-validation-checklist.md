@@ -77,6 +77,19 @@ firmware link must not be recorded as proof that the flight image works.
   enters `FAULT`, and reports `CRITICAL` rather than continuing normally with
   incomplete diagnostics.
 
+## BMI270 flight-firmware path
+
+- [ ] Flash the Milestone 4.1 image and confirm
+  `firmware_imu_initialization_result` and
+  `firmware_imu_initial_sample_result` are both zero.
+- [ ] Inspect all six `firmware_imu_raw_*` values while stationary, then reboot
+  in several known orientations and confirm the one-shot raw samples respond
+  without an active `FAULT_ID_IMU_INITIALIZATION` record. Continuous rotation
+  inspection belongs to the scheduled sampling milestone.
+- [ ] Confirm SPI3 mode 0, the 656.25 kHz clock, PB3/PB4/PB5 AF6 routing, and
+  active-low PD2 chip select on the flight image. Tester evidence does not
+  replace this flight-image validation.
+
 ## Manufacturing evidence to preserve
 
 - [x] D4/D5 discrete LEDs were confirmed inoperable on V1. They must not carry

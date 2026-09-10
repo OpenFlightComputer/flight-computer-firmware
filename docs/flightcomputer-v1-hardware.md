@@ -72,9 +72,9 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 | PA13 | `SWDIO` | Bidirectional | SWD data | JTMS/SWDIO AF0 | Fixed debug function |
 | PA14 | `SWCLK` | Input | SWD clock | JTCK/SWCLK AF0 | Fixed debug function |
 | PB0 | `CURR_ADC` | Analog input | ESC current sense | ADC1_IN8 | Routed; conversion policy deferred |
-| PB3 | `IMU_SPI_SCK` | Output | BMI270 SPI clock | SPI3_SCK AF6 | Selected and implemented by tester |
-| PB4 | `IMU_SPI_MISO` | Input | BMI270 data to MCU | SPI3_MISO AF6 | Selected and implemented by tester |
-| PB5 | `IMU_SPI_MOSI` | Output | BMI270 data from MCU | SPI3_MOSI AF6 | Selected and implemented by tester |
+| PB3 | `IMU_SPI_SCK` | Output | BMI270 SPI clock | SPI3_SCK AF6 | Implemented in flight firmware Milestone 4.1 |
+| PB4 | `IMU_SPI_MISO` | Input | BMI270 data to MCU | SPI3_MISO AF6 | Implemented in flight firmware Milestone 4.1 |
+| PB5 | `IMU_SPI_MOSI` | Output | BMI270 data from MCU | SPI3_MOSI AF6 | Implemented in flight firmware Milestone 4.1 |
 | PB6 | `IMU_INT2` | Input | BMI270 interrupt 2 | GPIO/EXTI | EXTI configuration deferred |
 | PB9 | `GPS_PPS` | Input | GPS pulse-per-second | GPIO/EXTI or timer capture | Selection unresolved |
 | PB10 | `I2C_SCL` | Bidirectional open-drain | BMP388 clock | I2C2_SCL AF4 | Implemented by tester; not initialized here |
@@ -90,7 +90,7 @@ Directions are from the MCU perspective. A selected peripheral indicates either 
 | PC10 | `RP1_RX` | Output | MCU-to-receiver/telemetry serial | UART4_TX AF8 | Selected and initialized for CRSF |
 | PC11 | `RP1_TX` | Input | Receiver/telemetry serial to MCU | UART4_RX AF8 | Selected with DMA1 Stream 2/Channel 4 |
 | PC12 | `IMU_INT1` | Input | BMI270 interrupt 1 | GPIO/EXTI | EXTI configuration deferred |
-| PD2 | `IMU_CS` | Output | BMI270 chip select | GPIO | Implemented by tester; not initialized here |
+| PD2 | `IMU_CS` | Output | BMI270 chip select | GPIO | Implemented in flight firmware Milestone 4.1 |
 | PH0 | `HSE_IN` | Input | External high-speed clock | OSC_IN | Active in Milestone 0.2/0.3 clock setup |
 | PH1 | `HSE_OUT` | Output | External high-speed clock | OSC_OUT | Active in Milestone 0.2/0.3 clock setup |
 | NRST | `NRST` | Input/open-drain | Reset and SWD recovery | Reset function | Fixed function |
@@ -123,7 +123,8 @@ Most selections below are established by routing plus the manufacturing-test imp
   together using TIM8 update on DMA2 Stream 1/Channel 7. Timer/DMA register
   activation and the complete route still require physical validation.
 - PB9 may use a normal EXTI input or timer capture for GPS PPS. Phase 6 will choose based on timing requirements.
-- BMI270 interrupt routing and EXTI selection belong to the sensor timing milestone.
+- BMI270 SPI3 mode-0 transport is initialized at 656.25 kHz; interrupt routing
+  and EXTI selection belong to the later sensor timing milestone.
 - ADC sample timing and scaling for PA4/PB0 are not yet specified.
 
 ## Confirmed V1 limitations and retained validation
@@ -147,5 +148,6 @@ LED. Milestone 0.10 then initializes OTG FS CDC logging on PA11 and PA12. The
 V1 board definition selects assume-present VBUS behavior, so PA9 is not
 configured and OTG hardware VBUS sensing is disabled. A future corrected board
 can select sense-input behavior without changing the transport or application.
-Each remaining external interface will be activated only in its approved
-milestone through the appropriate board and MCU capability boundary.
+Milestone 4.1 separately initializes the BMI270 SPI3 transport and reads one raw
+boot sample. Each remaining external interface will be activated only in its
+approved milestone through the appropriate board and MCU capability boundary.

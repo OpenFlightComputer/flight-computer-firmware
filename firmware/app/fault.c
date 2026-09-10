@@ -39,6 +39,7 @@ static bool source_is_valid(fault_source_t source)
     case FAULT_SOURCE_STATE_MACHINE:
     case FAULT_SOURCE_USB:
     case FAULT_SOURCE_RECEIVER:
+    case FAULT_SOURCE_SENSOR:
         return true;
     case FAULT_SOURCE_COUNT:
         break;
@@ -372,6 +373,8 @@ const char *fault_source_name(fault_source_t source)
         return "USB";
     case FAULT_SOURCE_RECEIVER:
         return "RECEIVER";
+    case FAULT_SOURCE_SENSOR:
+        return "SENSOR";
     case FAULT_SOURCE_COUNT:
         break;
     }

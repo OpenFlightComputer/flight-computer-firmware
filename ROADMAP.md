@@ -105,11 +105,63 @@ the Stage 1 fallback with a validated level/stabilized recovery behavior.
    implemented for review.
 6. Receiver-loss policy authority and explicit Stage 2 recovery — implemented
    for review; propeller-free physical validation remains.
-7. End-to-end control/authority USB inspection.
+7. End-to-end control/authority USB inspection — deferred until after first
+   flight. A combined debugger view should correlate receiver input, failsafe
+   decisions, normalized controls, mixed motor values, command ownership, and
+   motor-command age; the existing receiver, status, configuration, and log
+   views are sufficient for the initial physical validation.
 8. Propeller-free receiver-to-motor and loss/recovery validation.
 
 Phase 3 does not provide attitude stabilization or flight readiness. Those
 require IMU-based estimation and closed-loop control in Phase 4.
+
+## Phase 4 — Stabilization and first hover
+
+The minimum first-flight control mode is self-leveling angle control for roll
+and pitch, gyroscope rate control for roll, pitch, and yaw, configurable maximum
+angles and rotation rates, roll/pitch/yaw expo, a dedicated throttle curve and
+maximum-throttle limit, and small stick deadbands. Controller correctness also
+requires bounded PID corrections, integral anti-windup, basic gyro filtering,
+and fail-closed IMU timestamp/freshness handling.
+
+Implement this in small independently validated steps: port the tester-proven
+BMI270 SPI3 transport, publish timestamped body-axis samples, add physical IMU
+inspection and stationary gyro calibration, estimate roll/pitch attitude,
+implement the angle and rate controllers, replace the open-loop receiver path,
+then complete propeller-free correction/failure tests before a constrained
+first-hover attempt.
+
+Planned milestones:
+
+1. BMI270 dependency, generic SPI boundary, V1 SPI3 transport, sensor
+   initialization, and one raw boot sample — implemented in software; physical
+   flight-image validation remains.
+2. Scheduled raw acquisition with owned timestamps, freshness, and body-axis
+   mapping.
+3. USB inspection and stationary gyro calibration.
+4. Roll/pitch attitude estimation with bounded basic gyro filtering.
+5. Configurable input curves, deadbands, angle/rate limits, and throttle curve.
+6. Bounded rate PID control with anti-windup and zero-throttle integral reset.
+7. Self-leveling roll/pitch outer loop feeding the three-axis rate controller.
+8. Replace open-loop receiver mixing with the stabilized control path and a
+   fail-closed IMU gate.
+9. Propeller-free sign, correction, saturation, loss, and recovery validation.
+10. Constrained first-hover preparation and test.
+
+Explicitly defer setpoint slew limiting until physical control tests show that
+expo plus angle/rate limits are insufficient. Also defer acrobatic/rate-only
+flight modes and their supporting airmode/armed-idle behavior. The initial
+zero-throttle policy remains an actual motor stop with the rate-controller
+integral reset to zero; it does not add free-fall-specific leveling limits on
+throttle recovery, acceleration-magnitude gating of accelerometer correction,
+or a dedicated gyro-only free-fall estimator mode. Revisit these together when
+an aggressive flight mode is designed.
+
+Altitude hold, BMP388 control authority, advanced or dynamic filters,
+automatic PID tuning, multiple rate profiles, automatic takeoff and landing,
+and position control also remain deferred until after first-flight capability.
+The combined receiver/control/motor debugger view remains deferred as recorded
+in Phase 3.
 
 ## Later phases
 

@@ -10,6 +10,9 @@ set(STM32_DEVICE_ROOT "${STM32_CMSIS_ROOT}/Device/ST/STM32F4xx")
 set(STM32_USB_DEVICE_ROOT
     "${STM32CUBE_F4_ROOT}/Middlewares/ST/STM32_USB_Device_Library"
 )
+set(BMI270_SENSOR_API_ROOT
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/BMI270_SensorAPI"
+)
 
 set(OPENFLIGHTCOMPUTER_USB_VID "0xCAFE" CACHE STRING
     "Development-only USB vendor ID; replace before distributing hardware"
@@ -52,6 +55,9 @@ set(STM32_REQUIRED_FILES
     "${STM32_DEVICE_ROOT}/Source/Templates/gcc/startup_stm32f405xx.s"
     "${STM32_USB_DEVICE_ROOT}/Core/Inc/usbd_core.h"
     "${STM32_USB_DEVICE_ROOT}/Class/CDC/Inc/usbd_cdc.h"
+    "${BMI270_SENSOR_API_ROOT}/bmi2.c"
+    "${BMI270_SENSOR_API_ROOT}/bmi270.c"
+    "${BMI270_SENSOR_API_ROOT}/bmi270.h"
 )
 
 foreach(required_file IN LISTS STM32_REQUIRED_FILES)
@@ -130,6 +136,7 @@ add_library(stm32cube_f4 STATIC
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_pwr_ex.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_rcc.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_rcc_ex.c"
+    "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_spi.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_hal_uart.c"
     "${STM32_HAL_ROOT}/Src/stm32f4xx_ll_usb.c"
     "${STM32_USB_DEVICE_ROOT}/Core/Src/usbd_core.c"
@@ -190,6 +197,7 @@ add_executable(flight_firmware
     flight/receiver/receiver_failsafe.c
     flight/receiver/receiver_normalization.c
     flight/receiver/receiver_source.h
+    peripherals/bmi270/bmi270_driver.c
     peripherals/dshot/dshot_encoder.c
     peripherals/dshot/dshot_timing.c
     peripherals/crsf/crsf_decoder.c
@@ -200,6 +208,7 @@ add_executable(flight_firmware
     peripherals/usb/usb_descriptors.c
     peripherals/usb/usb_json_protocol.c
     hardware/boards/flightcomputer_v1/board.c
+    hardware/boards/flightcomputer_v1/board_imu.c
     hardware/boards/flightcomputer_v1/board_motor_output.c
     hardware/boards/flightcomputer_v1/board_persistent_storage.c
     hardware/boards/flightcomputer_v1/board_receiver.c
@@ -212,6 +221,9 @@ add_executable(flight_firmware
     hardware/mcu/stm32f405/stm32f4xx_it.c
     hardware/mcu/stm32f405/system_clock.c
     hardware/mcu/stm32f405/timebase_snapshot.c
+    hardware/spi_device.c
+    "${BMI270_SENSOR_API_ROOT}/bmi2.c"
+    "${BMI270_SENSOR_API_ROOT}/bmi270.c"
     "${STM32_DEVICE_ROOT}/Source/Templates/gcc/startup_stm32f405xx.s"
 )
 add_dependencies(flight_firmware generate_firmware_identity)
@@ -226,10 +238,12 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
     "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/dshot"
+    "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/bmi270"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/crsf"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/usb"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
     "${CMAKE_BINARY_DIR}/generated"
+    "${BMI270_SENSOR_API_ROOT}"
 )
 
 target_link_libraries(flight_firmware PRIVATE firmware_common stm32cube_f4)

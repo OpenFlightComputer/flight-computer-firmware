@@ -1,3 +1,6 @@
 [submodule "firmware/third_party/STM32CubeF4"]
 	path = firmware/third_party/STM32CubeF4
 	url = https://github.com/STMicroelectronics/STM32CubeF4.git
+[submodule "firmware/third_party/BMI270_SensorAPI"]
+	path = firmware/third_party/BMI270_SensorAPI
+	url = https://github.com/boschsensortec/BMI270_SensorAPI.git

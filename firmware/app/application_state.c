@@ -38,6 +38,14 @@ volatile uint64_t firmware_receiver_link_age_us;
 volatile uint32_t firmware_receiver_failsafe_transitions;
 volatile bool firmware_receiver_stage_two_latched;
 volatile bool firmware_receiver_recovery_ready;
+volatile uint32_t firmware_imu_initialization_result = UINT32_MAX;
+volatile uint32_t firmware_imu_initial_sample_result = UINT32_MAX;
+volatile int16_t firmware_imu_raw_acceleration_x;
+volatile int16_t firmware_imu_raw_acceleration_y;
+volatile int16_t firmware_imu_raw_acceleration_z;
+volatile int16_t firmware_imu_raw_gyroscope_x;
+volatile int16_t firmware_imu_raw_gyroscope_y;
+volatile int16_t firmware_imu_raw_gyroscope_z;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;

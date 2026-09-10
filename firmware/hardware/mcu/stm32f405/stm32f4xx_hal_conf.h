@@ -9,6 +9,7 @@
 #define HAL_PCD_MODULE_ENABLED
 #define HAL_PWR_MODULE_ENABLED
 #define HAL_RCC_MODULE_ENABLED
+#define HAL_SPI_MODULE_ENABLED
 #define HAL_UART_MODULE_ENABLED
 
 #define HSE_VALUE 16000000U
@@ -33,6 +34,7 @@
 #include "stm32f4xx_hal_pcd.h"
 #include "stm32f4xx_hal_pwr.h"
 #include "stm32f4xx_hal_rcc.h"
+#include "stm32f4xx_hal_spi.h"
 #include "stm32f4xx_hal_uart.h"
 
 #define assert_param(expression) ((void)0U)

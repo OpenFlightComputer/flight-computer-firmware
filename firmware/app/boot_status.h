@@ -46,5 +46,13 @@ extern volatile uint32_t firmware_receiver_uart_bytes;
 extern volatile uint32_t firmware_receiver_valid_frames;
 extern volatile uint32_t firmware_receiver_crc_errors;
 extern volatile uint32_t firmware_receiver_framing_errors;
+extern volatile uint32_t firmware_imu_initialization_result;
+extern volatile uint32_t firmware_imu_initial_sample_result;
+extern volatile int16_t firmware_imu_raw_acceleration_x;
+extern volatile int16_t firmware_imu_raw_acceleration_y;
+extern volatile int16_t firmware_imu_raw_acceleration_z;
+extern volatile int16_t firmware_imu_raw_gyroscope_x;
+extern volatile int16_t firmware_imu_raw_gyroscope_y;
+extern volatile int16_t firmware_imu_raw_gyroscope_z;
 
 #endif

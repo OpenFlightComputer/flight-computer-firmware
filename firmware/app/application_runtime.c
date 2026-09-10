@@ -2,8 +2,10 @@
 
 #include "application_state.h"
 #include "application_tasks.h"
+#include "bmi270_driver.h"
 #include "board.h"
 #include "board_flight_configuration_storage.h"
+#include "board_imu.h"
 #include "board_receiver.h"
 #include "dshot_motor_backend.h"
 #include "fault_catalog.h"
@@ -21,6 +23,7 @@
 #define USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT UINT32_C(100)
 
 static dshot_motor_backend_t firmware_dshot_motor_backend;
+static bmi270_driver_t firmware_bmi270_driver;
 
 static void stop_with_fault(boot_status_t status,
                             fault_id_t fault_id,
@@ -197,6 +200,67 @@ static void initialize_motor_control(void)
     LOG_INFO(LOG_MODULE_SYSTEM, "four-channel DShot300 output initialized");
 }
 
+static void initialize_imu(void)
+{
+    bmi270_raw_sample_t sample;
+    bmi270_driver_init_result_t initialize_result;
+
+    firmware_imu_initial_sample_result =
+        (uint32_t)BMI270_DRIVER_SAMPLE_NOT_INITIALIZED;
+    initialize_result = bmi270_driver_initialize(&firmware_bmi270_driver,
+                                                 board_imu_spi_device());
+
+    firmware_imu_initialization_result = (uint32_t)initialize_result;
+    if (initialize_result != BMI270_DRIVER_INIT_OK) {
+        firmware_fault_last_result =
+            (uint32_t)fault_system_report(
+                &firmware_fault_system,
+                FAULT_ID_IMU_INITIALIZATION,
+                true,
+                ((uint32_t)initialize_result << 8U) |
+                    (uint8_t)firmware_bmi270_driver.last_sensor_result);
+        LOG_ERROR(LOG_MODULE_IMU,
+                  "BMI270 initialization failed result=%u sensor=%d",
+                  (unsigned int)initialize_result,
+                  (int)firmware_bmi270_driver.last_sensor_result);
+        return;
+    }
+
+    firmware_imu_initial_sample_result =
+        (uint32_t)bmi270_driver_read_raw(&firmware_bmi270_driver, &sample);
+    if (firmware_imu_initial_sample_result !=
+        (uint32_t)BMI270_DRIVER_SAMPLE_OK) {
+        firmware_fault_last_result =
+            (uint32_t)fault_system_report(
+                &firmware_fault_system,
+                FAULT_ID_IMU_INITIALIZATION,
+                true,
+                (UINT32_C(1) << 16U) |
+                    (firmware_imu_initial_sample_result << 8U) |
+                    (uint8_t)firmware_bmi270_driver.last_sensor_result);
+        LOG_ERROR(LOG_MODULE_IMU,
+                  "BMI270 initial sample failed result=%lu sensor=%d",
+                  (unsigned long)firmware_imu_initial_sample_result,
+                  (int)firmware_bmi270_driver.last_sensor_result);
+        return;
+    }
+
+    firmware_imu_raw_acceleration_x = sample.acceleration_x;
+    firmware_imu_raw_acceleration_y = sample.acceleration_y;
+    firmware_imu_raw_acceleration_z = sample.acceleration_z;
+    firmware_imu_raw_gyroscope_x = sample.gyroscope_x;
+    firmware_imu_raw_gyroscope_y = sample.gyroscope_y;
+    firmware_imu_raw_gyroscope_z = sample.gyroscope_z;
+    LOG_INFO(LOG_MODULE_IMU,
+             "BMI270 initialized raw accel=%d,%d,%d gyro=%d,%d,%d",
+             (int)sample.acceleration_x,
+             (int)sample.acceleration_y,
+             (int)sample.acceleration_z,
+             (int)sample.gyroscope_x,
+             (int)sample.gyroscope_y,
+             (int)sample.gyroscope_z);
+}
+
 static bool initialize_receiver(void)
 {
     receiver_source_t receiver_source;
@@ -337,6 +401,7 @@ void application_runtime_initialize(void)
 
     initialize_core();
     initialize_board();
+    initialize_imu();
     initialize_motor_control();
     receiver_available = initialize_receiver();
     usb_available = initialize_usb();

@@ -2,60 +2,49 @@
 
 ## Current phase
 
-Phase 3 — open-loop receiver-to-motor integration.
+Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestones 3.4 through 3.6 — unified configuration, open-loop quad-X mixing,
-dedicated receiver-control execution, and receiver-loss authority — implemented
-and awaiting owner review and propeller-free validation.
+Milestone 4.1 — tester-proven BMI270 transport and raw sensor foundation —
+implemented and awaiting owner review and flight-image physical validation.
 
 ## Last completed milestone
 
-Milestone 3.2 — safe receiver arming and disarming. Fresh/live input,
-startup-low qualification, a low-to-high switch edge, and low throttle are
-required; a fresh low switch disarms only receiver-owned control.
+Phase 3 open-loop receiver-to-motor integration. The owner physically confirmed
+that the controller can arm and drive the secured, propeller-free motors through
+the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
-- Added `config/default-flight-configuration.json` as the single production
-  source for schema version, propeller layout, four absolute ESC directions,
-  mixer factors, and receiver-failsafe values. CMake validates the basic shape
-  and generates the compiled fallback constants.
-- Replaced the individual motor-direction USB/CLI mutations with whole-document
-  `config_read`, `config_write`, and `config_reset` operations. Read output is
-  directly reusable as a portable write input; write/reset require `DISARMED`
-  with no pending arm and always return the complete effective configuration.
-- Expanded the append-only board payload from the old eight-byte motor record
-  to an 88-byte full configuration. The loader migrates a valid legacy record
-  by preserving its directions and filling new fields from the JSON defaults;
-  corrupt or unknown nonempty storage still fails startup closed.
-- Added a pure hardware-independent quad-X mixer in logical front-left,
-  rear-left, front-right, rear-right order. Exact zero throttle returns four
-  zeros before roll/pitch/yaw work; nonzero controls use configurable factors,
-  the selected props-in/out yaw convention, and per-output `0..1` clamping.
-- Split the old 1 kHz receiver callback into a receiver-service task that only
-  ingests/publishes input and a same-rate flight-control task that owns
-  failsafe evaluation, receiver arming, mixing, and motor-command production.
-  The highest-priority motor-control task remains the only DShot submitter.
-- Reduced `app/main.c` to the firmware entry point and separated application
-  boot orchestration, task callbacks/registration, and debugger-visible runtime
-  state into `application_runtime`, `application_tasks`, and
-  `application_state`. This is an ownership-only refactor; task periods,
-  priorities, startup ordering, fault behavior, and exported diagnostic symbol
-  names are unchanged.
-- Connected Stage 2 receiver loss directly to the central motor failsafe entry.
-  It releases receiver ownership synchronously and causes stop frames on the
-  next motor-task release instead of waiting for the 100 ms command lease.
-- Added native coverage for JSON-derived defaults, full storage and legacy
-  migration, configuration service safety/application, mixer behavior,
-  producer authority, and explicit failsafe entry. Configuration responses are
-  parsed as JSON in both accepted and rejected cases.
-- All 38 native tests and 56 host-tool tests pass. Debug and Release firmware
-  build with warnings as errors. Debug uses 101,980 bytes of application Flash
-  and 24,528 bytes of RAM; Release uses 69,208 bytes of application Flash and
-  24,528 bytes of RAM. The Release image ends near `0x08010E60`, leaving the
-  separately reserved configuration sector at `0x080E0000` untouched.
+- Added Bosch's official BMI270 SensorAPI as a pinned Git submodule at tag
+  `v2.113.0`, commit `41129fcfe39c583ee5462d79195741945d51c1fe`.
+- Added a hardware-neutral injected SPI-device interface. The BMI270 peripheral
+  driver depends only on this interface and the Bosch API, not on STM32 types,
+  pins, or a specific SPI peripheral.
+- Added the Flight Computer V1 SPI3 implementation using the tester-proven PB3
+  SCK, PB4 MISO, PB5 MOSI, PD2 active-low chip select, mode 0, MSB-first, and
+  42 MHz divided by 64 for a 656.25 kHz bus clock. PD2 is driven high before it
+  becomes an output to avoid an unintended selection pulse.
+- Ported the tester-proven BMI270 settings: accelerometer at 100 Hz, plus/minus
+  2 g, normal average-4 bandwidth and performance filtering; gyroscope at
+  100 Hz, plus/minus 2000 degrees per second, normal bandwidth,
+  power-optimized noise mode and performance filtering.
+- Adapted Bosch SPI reads to set the read bit and discard the first dummy byte.
+  All transfers, temporary buffers, delays, and timeouts are bounded and use no
+  runtime allocation.
+- Added boot initialization and one raw six-axis sample. Initialization and
+  sample results plus all six values are debugger-visible; failure reports the
+  new non-critical sensor fault and IMU log module without claiming the sensor
+  is ready for closed-loop flight.
+- Added native SPI-boundary and BMI270-driver tests. All 40 native tests and all
+  56 Python host-tool tests pass; Debug and Release firmware build with warnings
+  as errors. Debug uses 122,240 bytes of Flash and 24,776 bytes of RAM; Release
+  uses 85,656 bytes of Flash and 24,784 bytes of RAM.
+- Periodic acquisition, BMI270 interrupts, body-axis mapping, unit conversion,
+  timestamped publication, freshness, stationary gyro calibration, attitude
+  estimation, USB inspection, and motor-control use remain explicitly outside
+  Milestone 4.1.
 
 ## Historical milestone record
 

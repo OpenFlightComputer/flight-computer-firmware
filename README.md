@@ -43,43 +43,23 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 ## Current status
 
-Phase 1, Milestones 1.8 and 1.9 add the complete four-channel DShot300 backend.
-The private motor safety owner is the only raw-submission caller; its adapter
-creates an `M1`-through-`M4` 18-by-4 table. The V1 board alone reorders it into
-its owned DMA buffer, and one DMA2 Stream 1 update burst feeds TIM8 CCR1
-through CCR4 synchronously. A highest-priority 1 kHz task continuously sends
-valid stop frames while disarmed and observes state, health, freshness, and
-asynchronous DMA errors. GPIO-low is reserved for initialization, terminal
-faults, and emergency hardware stops. Milestone 1.10 adds a single-motor USB
-producer for propeller-free testing. It accepts motors 1 through 4 and the full
-normalized throttle range under a 100 ms renewable firmware lease. The
-reusable `./ofc motor run` workflow accepts any positive finite duration,
-prepares the ESC with five seconds of zero frames, and performs explicit
-stop/disarm cleanup. There is still no receiver or flight-control command
-producer.
+Phases 0 through 3 provide the firmware foundation, four-channel DShot300 motor
+output, CRSF receiver input, source authority, unified persistent configuration,
+and hardware-independent open-loop quad-X mixing. Propeller-free receiver to
+motor operation has been physically exercised on Flight Computer V1.
 
-Milestone 1.11 physically validated DShot300 against the initial SpeedyBee BLS
-60A ESC. Commands are retained under the producer lease while the
-highest-priority motor task independently submits one DShot frame every
-millisecond. All four outputs spun their expected frame-position motors, and a
-four-motor synchronized test also succeeded. Temporary DMA/frame snapshot
-instrumentation used during bring-up has been removed; compact backend failure
-reasons remain integrated with the fault system.
+Phase 4 adds stabilization for the first constrained hover. Milestone 4.1 pins
+Bosch's official BMI270 SensorAPI and adds the tester-proven V1 SPI3 transport,
+sensor initialization, and one raw six-axis boot sample. Periodic publication,
+calibration, estimation, and closed-loop control intentionally remain later
+milestones; see `docs/bmi270.md` and `DEVELOPMENT.md` for the exact boundary.
 
-Milestone 1.3 completed its planned implementation and initial physical V1
-bring-up evidence. VBUS behavior is an explicit board capability: V1 assumes
-VBUS is present and leaves its
-defective PA9 divider unused, while corrected hardware can select sensing. A
-shared bounded decimal converter also removes project-owned `%llu` dependencies
-from uptime, health, and logging output. Firmware now embeds separate semantic
-version and dirty-aware Git build identity fields, and `./ofc` provides reusable
-build, flash, inspection, and smoke automation. Remaining physical
-boundary/stress checks stay tracked as prerequisites before flight.
-
-Initialize the pinned STM32CubeF4 dependency and its two required nested dependencies:
+Initialize all pinned dependencies (including the BMI270 SensorAPI) and the
+two STM32CubeF4 nested dependencies:
 
 ```bash
-git submodule update --init firmware/third_party/STM32CubeF4
+git submodule update --init firmware/third_party/BMI270_SensorAPI \
+  firmware/third_party/STM32CubeF4
 git -C firmware/third_party/STM32CubeF4 submodule update --init \
   Drivers/CMSIS/Device/ST/STM32F4xx \
   Drivers/STM32F4xx_HAL_Driver

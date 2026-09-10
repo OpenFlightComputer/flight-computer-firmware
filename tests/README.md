@@ -1,5 +1,16 @@
 # Tests
 
+The native `spi_device_tests` target verifies the generic injected transport's
+operation validation, forwarding, context preservation, and safe optional
+deselect/delay behavior.
+
+The native `bmi270_driver_tests` target replaces the Bosch entry points and
+physical SPI backend with fakes. It verifies read/write framing and the SPI
+dummy byte, the exact tester-proven accelerometer/gyroscope configuration,
+sensor enable order, initialization failure boundaries, raw sample mapping,
+and communication diagnostics. Physical SPI3 routing and BMI270 behavior
+remain board checks.
+
 The native `timebase_snapshot_tests` target verifies normal reads, pending
 hardware overflows, interrupt races, and monotonic behavior across a 32-bit
 counter wrap.
@@ -175,7 +186,7 @@ The native `uint64_decimal_tests` target verifies zero, decimal boundaries,
 `UINT64_MAX`, bounded zero padding, invalid arguments, and exact-capacity
 rejection without any formatted long-long I/O.
 
-Future hardware-independent tests will cover receiver parsing, mixing, and
-control algorithms as their milestones are approved.
+Future hardware-independent tests will cover sampling publication, calibration,
+attitude estimation, and closed-loop control as their milestones are approved.
 
 Hardware tests remain separate and must not be represented as passing host tests.
