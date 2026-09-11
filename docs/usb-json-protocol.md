@@ -59,7 +59,7 @@ accepted command is a 100 ms lease: without a fresh accepted request, the
 1 kHz motor-control task transmits stop frames and enters failsafe.
 
 Configuration uses complete documents rather than per-field mutations. The
-write envelope contains the complete schema-4 object from
+write envelope contains the complete schema-5 object from
 `config/default-flight-configuration.json`; this shell command shows the exact
 wire representation without duplicating that large document here:
 
@@ -74,6 +74,8 @@ Only uppercase `PROPS_IN`/`PROPS_OUT`, `NORMAL`/`REVERSED`,
 limits, and curve points use at most six fractional digits. Each curve accepts
 two through eight monotonic points and every complete command/response remains
 bounded by the 4,096-byte transport line capacity.
+The `control.rate_controller` object selects `PID`, defines its maximum IMU
+sample gap, and carries five bounded decimal parameters for each axis.
 
 Write and reset are rejected with `state_rejected` unless the lifecycle is
 `DISARMED` with no arm pending. A storage failure returns
@@ -95,14 +97,14 @@ Examples, each followed by one newline:
 {"type":"response","request_id":47,"command":"arm","ok":false,"state":"DISARMED","error":"motor_not_ready"}
 {"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":2,"throttle":0.100000}
 {"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":0,"throttle":0.020000,"error":"motor_not_allowed"}
-{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":4,"motors":{},"mixer":{},"control":{},"receiver_failsafe":{},"imu":{}}}
+{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":5,"motors":{},"mixer":{},"control":{},"receiver_failsafe":{},"imu":{}}}
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":50,"error":"unsupported_command"}
 ```
 
 The compact `config_read` line above abbreviates the five complete nested
 configuration objects for readability. Actual firmware responses include
-every required schema-4 field and can be written back unchanged.
+every required schema-5 field and can be written back unchanged.
 
 The receiver response is produced only when the USB command is dispatched. It
 copies the receiver service's already-published raw and normalized snapshots;

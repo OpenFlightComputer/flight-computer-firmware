@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define USB_JSON_TOKEN_CAPACITY 256U
+#define USB_JSON_TOKEN_CAPACITY 320U
 #define USB_JSON_THROTTLE_SCALE 1000000U
 
 static bool token_equals(const char *line,
@@ -357,7 +357,7 @@ static bool parse_control_configuration(
     size_t axis;
 
     if ((control == NULL) || (control->type != JSMN_OBJECT) ||
-        (control->size != 8)) {
+        (control->size != 10)) {
         return false;
     }
     for (axis = 0U; axis < 3U; axis++) {
@@ -397,7 +397,14 @@ static bool parse_control_configuration(
             line, tokens, token_count, token_index(tokens, control),
             "throttle");
 
-        return (throttle != NULL) && (throttle->type == JSMN_OBJECT) &&
+        const jsmntok_t *rate_controller = object_member(
+            line, tokens, token_count, token_index(tokens, control),
+            "rate_controller");
+        static const char *const parameter_names[5] = {
+            "kp", "ki", "kd", "integral_limit", "output_limit",
+        };
+        bool valid = (throttle != NULL) &&
+               (throttle->type == JSMN_OBJECT) &&
                (throttle->size == 6) &&
                parse_normalized_millionths(
                    line,
@@ -414,7 +421,50 @@ static bool parse_control_configuration(
                    line, tokens, token_count,
                    object_member(line, tokens, token_count,
                                  token_index(tokens, throttle), "curve"),
-                   3U, configuration);
+                   3U, configuration) &&
+               (rate_controller != NULL) &&
+               (rate_controller->type == JSMN_OBJECT) &&
+               (rate_controller->size == 10) &&
+               token_equals(
+                   line,
+                   object_member(line, tokens, token_count,
+                                 token_index(tokens, rate_controller),
+                                 "type"),
+                   "PID") &&
+               parse_uint32(
+                   line,
+                   object_member(line, tokens, token_count,
+                                 token_index(tokens, rate_controller),
+                                 "maximum_gap_us"),
+                   &configuration->rate_controller_maximum_gap_us);
+        if (!valid) {
+            return false;
+        }
+        configuration->rate_controller_type = 0U;
+        for (axis = 0U; axis < 3U; axis++) {
+            const jsmntok_t *axis_object = object_member(
+                line, tokens, token_count,
+                token_index(tokens, rate_controller), axis_names[axis]);
+            size_t parameter;
+
+            if ((axis_object == NULL) ||
+                (axis_object->type != JSMN_OBJECT) ||
+                (axis_object->size != 10)) {
+                return false;
+            }
+            for (parameter = 0U; parameter < 5U; parameter++) {
+                if (!parse_positive_millionths(
+                        line,
+                        object_member(line, tokens, token_count,
+                                      token_index(tokens, axis_object),
+                                      parameter_names[parameter]),
+                        &configuration
+                             ->rate_pid_millionths[axis][parameter])) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }
 
@@ -467,7 +517,7 @@ static bool parse_configuration(const char *line,
     control = object_member(line, tokens, token_count,
                             token_index(tokens, object), "control");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 4U) || (motors == NULL) ||
+        (schema_value != 5U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
         (mixer == NULL) || (mixer->type != JSMN_OBJECT) ||
         (mixer->size != 6) || (failsafe == NULL) ||
@@ -965,7 +1015,8 @@ bool usb_json_build_configuration_response(
         (length == NULL) || (!accepted && (error == NULL)) ||
         (configuration->propeller_layout > 1U) ||
         (configuration->gyro_filter_type != 0U) ||
-        (configuration->attitude_estimator_type != 0U)) {
+        (configuration->attitude_estimator_type != 0U) ||
+        (configuration->rate_controller_type != 0U)) {
         return false;
     }
     for (index = 0U; index < USB_JSON_CONFIGURATION_CURVE_COUNT; index++) {
@@ -1027,7 +1078,18 @@ bool usb_json_build_configuration_response(
         "\"maximum_angle_degrees\":%lu.%06lu,"
         "\"maximum_rate_dps\":%lu.%06lu,\"curve\":%s},"
         "\"throttle\":{\"zero_deadband\":%lu.%06lu,"
-        "\"maximum\":%lu.%06lu,\"curve\":%s}},"
+        "\"maximum\":%lu.%06lu,\"curve\":%s},"
+        "\"rate_controller\":{\"type\":\"PID\","
+        "\"maximum_gap_us\":%lu,"
+        "\"roll\":{\"kp\":%lu.%06lu,\"ki\":%lu.%06lu,"
+        "\"kd\":%lu.%06lu,\"integral_limit\":%lu.%06lu,"
+        "\"output_limit\":%lu.%06lu},"
+        "\"pitch\":{\"kp\":%lu.%06lu,\"ki\":%lu.%06lu,"
+        "\"kd\":%lu.%06lu,\"integral_limit\":%lu.%06lu,"
+        "\"output_limit\":%lu.%06lu},"
+        "\"yaw\":{\"kp\":%lu.%06lu,\"ki\":%lu.%06lu,"
+        "\"kd\":%lu.%06lu,\"integral_limit\":%lu.%06lu,"
+        "\"output_limit\":%lu.%06lu}}},"
         "\"receiver_failsafe\":{"
         "\"stale_after_us\":%s,\"loss_detected_after_us\":%s,"
         "\"hold_last_until_us\":%s,\"stage_two_after_us\":%s,"
@@ -1094,6 +1156,37 @@ bool usb_json_build_configuration_response(
         (unsigned long)(configuration->throttle_millionths[1] / 1000000U),
         (unsigned long)(configuration->throttle_millionths[1] % 1000000U),
         curves[3],
+        (unsigned long)configuration->rate_controller_maximum_gap_us,
+        (unsigned long)(configuration->rate_pid_millionths[0][0] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][0] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][1] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][1] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][2] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][2] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][3] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][3] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][4] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[0][4] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][0] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][0] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][1] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][1] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][2] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][2] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][3] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][3] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][4] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[1][4] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][0] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][0] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][1] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][1] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][2] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][2] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][3] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][3] % 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][4] / 1000000U),
+        (unsigned long)(configuration->rate_pid_millionths[2][4] % 1000000U),
         timing[0], timing[1], timing[2], timing[3], timing[4],
         controls[0], controls[1], controls[2], controls[3], controls[4],
         gyro_timing[0], gyro_timing[1],

@@ -9,6 +9,15 @@
 #include <stdint.h>
 #include <string.h>
 
+#define RATE_CONTROLLER_JSON \
+    "\"rate_controller\":{\"type\":\"PID\",\"maximum_gap_us\":10000," \
+    "\"roll\":{\"kp\":0.002,\"ki\":0.001,\"kd\":0.00001," \
+    "\"integral_limit\":0.15,\"output_limit\":0.30}," \
+    "\"pitch\":{\"kp\":0.002,\"ki\":0.001,\"kd\":0.00001," \
+    "\"integral_limit\":0.15,\"output_limit\":0.30}," \
+    "\"yaw\":{\"kp\":0.0015,\"ki\":0.0008,\"kd\":0.0," \
+    "\"integral_limit\":0.10,\"output_limit\":0.20}}"
+
 #define INPUT_CAPACITY 4U
 
 static const char *input_lines[INPUT_CAPACITY];
@@ -246,7 +255,7 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 4U,
+            .schema_version = 5U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
@@ -295,6 +304,18 @@ static void reset_fakes(void)
                         .point_count = 2U,
                         .points = {{0.0F, 0.0F}, {1.0F, 1.0F}},
                     },
+                },
+            },
+            .rate_controller = {
+                .type = RATE_CONTROLLER_TYPE_PID,
+                .maximum_gap_us = 10000U,
+                .axis = {
+                    {.kp = 0.002F, .ki = 0.001F, .kd = 0.00001F,
+                     .integral_limit = 0.15F, .output_limit = 0.30F},
+                    {.kp = 0.002F, .ki = 0.001F, .kd = 0.00001F,
+                     .integral_limit = 0.15F, .output_limit = 0.30F},
+                    {.kp = 0.0015F, .ki = 0.0008F, .kd = 0.0F,
+                     .integral_limit = 0.10F, .output_limit = 0.20F},
                 },
             },
             .receiver_failsafe = {
@@ -768,7 +789,7 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":4,"
+        "\"config_write\",\"configuration\":{\"schema_version\":5,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
@@ -785,7 +806,8 @@ static void complete_configuration_commands_replace_singular_commands(void)
         "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
         "\"throttle\":{\"zero_deadband\":0.02,\"maximum\":1.0,"
         "\"curve\":{\"type\":\"CONTROL_POINTS\","
-        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}}},"
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
+        RATE_CONTROLLER_JSON "},"
         "\"receiver_failsafe\":{\"stale_after_us\":25000,"
         "\"loss_detected_after_us\":100000,\"hold_last_until_us\":400000,"
         "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"

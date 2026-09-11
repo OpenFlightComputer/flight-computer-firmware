@@ -85,6 +85,33 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
                 },
             },
         },
+        .rate_controller = {
+            .type = OFC_DEFAULT_RATE_CONTROLLER_TYPE,
+            .maximum_gap_us = OFC_DEFAULT_RATE_CONTROLLER_MAXIMUM_GAP_US,
+            .axis = {
+                {
+                    .kp = OFC_DEFAULT_RATE_PID_ROLL_KP,
+                    .ki = OFC_DEFAULT_RATE_PID_ROLL_KI,
+                    .kd = OFC_DEFAULT_RATE_PID_ROLL_KD,
+                    .integral_limit = OFC_DEFAULT_RATE_PID_ROLL_INTEGRAL_LIMIT,
+                    .output_limit = OFC_DEFAULT_RATE_PID_ROLL_OUTPUT_LIMIT,
+                },
+                {
+                    .kp = OFC_DEFAULT_RATE_PID_PITCH_KP,
+                    .ki = OFC_DEFAULT_RATE_PID_PITCH_KI,
+                    .kd = OFC_DEFAULT_RATE_PID_PITCH_KD,
+                    .integral_limit = OFC_DEFAULT_RATE_PID_PITCH_INTEGRAL_LIMIT,
+                    .output_limit = OFC_DEFAULT_RATE_PID_PITCH_OUTPUT_LIMIT,
+                },
+                {
+                    .kp = OFC_DEFAULT_RATE_PID_YAW_KP,
+                    .ki = OFC_DEFAULT_RATE_PID_YAW_KI,
+                    .kd = OFC_DEFAULT_RATE_PID_YAW_KD,
+                    .integral_limit = OFC_DEFAULT_RATE_PID_YAW_INTEGRAL_LIMIT,
+                    .output_limit = OFC_DEFAULT_RATE_PID_YAW_OUTPUT_LIMIT,
+                },
+            },
+        },
         .receiver_failsafe = {
             .stale_after_us = OFC_DEFAULT_FAILSAFE_STALE_AFTER_US,
             .loss_detected_after_us =
@@ -145,6 +172,7 @@ bool flight_configuration_is_valid(
            motor_configuration_is_valid(&configuration->motors) &&
            quad_x_mixer_config_is_valid(&configuration->mixer) &&
            control_input_shaping_config_is_valid(&configuration->control) &&
+           rate_controller_config_is_valid(&configuration->rate_controller) &&
            receiver_failsafe_config_is_valid(
                &configuration->receiver_failsafe) &&
            (configuration->receiver_failsafe.stale_after_us <= UINT32_MAX) &&

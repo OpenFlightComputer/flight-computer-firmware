@@ -4,6 +4,7 @@
 #include "motor_configuration.h"
 #include "control_input_shaping.h"
 #include "quad_x_mixer.h"
+#include "rate_controller.h"
 #include "receiver_failsafe.h"
 
 #include <stdbool.h>
@@ -43,6 +44,7 @@ typedef struct {
     motor_configuration_t motors;
     quad_x_mixer_config_t mixer;
     control_input_shaping_config_t control;
+    rate_controller_config_t rate_controller;
     receiver_failsafe_config_t receiver_failsafe;
     gyro_calibration_configuration_t gyro_calibration;
     gyro_filter_configuration_t gyro_filter;

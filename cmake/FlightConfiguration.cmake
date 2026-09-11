@@ -25,8 +25,8 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 4)
-    message(FATAL_ERROR "Default configuration schema_version must be 4")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 5)
+    message(FATAL_ERROR "Default configuration schema_version must be 5")
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -72,6 +72,22 @@ foreach(axis IN ITEMS roll pitch yaw)
             control ${axis} curve points ${point} 0)
         ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_POINT_${point}_OUTPUT
             control ${axis} curve points ${point} 1)
+    endforeach()
+endforeach()
+ofc_json_get(rate_controller_type control rate_controller type)
+if(rate_controller_type STREQUAL "PID")
+    set(OFC_CONFIG_RATE_CONTROLLER_TYPE "RATE_CONTROLLER_TYPE_PID")
+else()
+    message(FATAL_ERROR "Invalid rate controller type: ${rate_controller_type}")
+endif()
+ofc_json_get(OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP
+    control rate_controller maximum_gap_us)
+foreach(axis IN ITEMS roll pitch yaw)
+    string(TOUPPER "${axis}" axis_upper)
+    foreach(parameter IN ITEMS kp ki kd integral_limit output_limit)
+        string(TOUPPER "${parameter}" parameter_upper)
+        ofc_json_get(OFC_CONFIG_RATE_PID_${axis_upper}_${parameter_upper}
+            control rate_controller ${axis} ${parameter})
     endforeach()
 endforeach()
 ofc_json_get(OFC_CONFIG_CONTROL_THROTTLE_ZERO_DEADBAND
@@ -157,6 +173,25 @@ if(OFC_CONFIG_CONTROL_ROLL_MAXIMUM_ANGLE LESS_EQUAL 0 OR
    OFC_CONFIG_CONTROL_THROTTLE_MAXIMUM GREATER 1)
     message(FATAL_ERROR "Default control limits are invalid")
 endif()
+if(OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP LESS_EQUAL 0 OR
+   OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP GREATER 1000000)
+    message(FATAL_ERROR "Default rate controller timing is invalid")
+endif()
+foreach(axis IN ITEMS ROLL PITCH YAW)
+    foreach(gain IN ITEMS KP KI KD)
+        if(OFC_CONFIG_RATE_PID_${axis}_${gain} LESS 0 OR
+           OFC_CONFIG_RATE_PID_${axis}_${gain} GREATER 10)
+            message(FATAL_ERROR "Default rate PID gain is invalid")
+        endif()
+    endforeach()
+    if(OFC_CONFIG_RATE_PID_${axis}_INTEGRAL_LIMIT LESS 0 OR
+       OFC_CONFIG_RATE_PID_${axis}_OUTPUT_LIMIT LESS_EQUAL 0 OR
+       OFC_CONFIG_RATE_PID_${axis}_OUTPUT_LIMIT GREATER 1 OR
+       OFC_CONFIG_RATE_PID_${axis}_INTEGRAL_LIMIT GREATER
+       OFC_CONFIG_RATE_PID_${axis}_OUTPUT_LIMIT)
+        message(FATAL_ERROR "Default rate PID limit is invalid")
+    endif()
+endforeach()
 if(NOT OFC_CONFIG_FAILSAFE_STALE LESS OFC_CONFIG_FAILSAFE_LOSS OR
    NOT OFC_CONFIG_FAILSAFE_LOSS LESS OFC_CONFIG_FAILSAFE_HOLD OR
    NOT OFC_CONFIG_FAILSAFE_HOLD LESS OFC_CONFIG_FAILSAFE_STAGE_TWO OR

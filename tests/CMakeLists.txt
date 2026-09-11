@@ -472,6 +472,8 @@ add_executable(board_flight_configuration_storage_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
@@ -508,6 +510,8 @@ add_executable(flight_configuration_service_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
@@ -561,6 +565,33 @@ target_compile_options(control_input_shaping_tests PRIVATE
     -Wall -Wextra -Wpedantic -Werror
 )
 add_test(NAME control_input_shaping COMMAND control_input_shaping_tests)
+
+add_executable(rate_pid_tests
+    rate_pid_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+)
+target_include_directories(rate_pid_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+)
+target_link_libraries(rate_pid_tests PRIVATE m)
+target_compile_options(rate_pid_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME rate_pid COMMAND rate_pid_tests)
+
+add_executable(rate_controller_tests
+    rate_controller_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
+)
+target_include_directories(rate_controller_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+)
+target_link_libraries(rate_controller_tests PRIVATE m)
+target_compile_options(rate_controller_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME rate_controller COMMAND rate_controller_tests)
 
 add_executable(flight_control_tests
     flight_control_tests.c

@@ -12,10 +12,11 @@ compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
 therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, the
 initial mixer factors, and the reviewed receiver-failsafe values in that file.
-Schema 4 also carries the startup gyro-calibration policy, the selected gyro
+Schema 5 also carries the startup gyro-calibration policy, the selected gyro
 filter and cutoff, and the selected attitude estimator, correction time
 constant, and maximum accepted sample gap. It adds control-input deadbands,
-angle/rate limits, maximum throttle, and four bounded control-point curves.
+angle/rate limits, maximum throttle, four bounded control-point curves, and
+the selected three-axis rate-controller parameters.
 
 The motor array always uses logical aircraft order:
 
@@ -64,16 +65,17 @@ Flight Computer V1 reserves STM32F405 sector 11 at `0x080E0000` through
 `0x080FFFFF`. The application linker region ends before it, so normal flashing
 does not overwrite settings. A programmer mass erase still clears the sector.
 
-The board layer stores a 412-byte versioned payload inside fixed 536-byte
+The board layer stores a 480-byte versioned payload inside fixed 536-byte
 append-only records. Each record has a format version, sequence, payload
 length, CRC32, and a commit word programmed last. The sector holds 244 full
 configuration records before an explicit reset is needed.
 
-The loader can migrate the prior 96-byte schema-3 document, the 84-byte
-schema-2 document, the earlier 88-byte schema-1 document, and the eight-byte
-motor-direction payload. The storage layer still recognizes the previous
-120-byte record format. During migration it preserves all fields that existed
-in the old payload and fills new fields from the canonical JSON defaults.
+The loader can migrate the prior 412-byte schema-4 document, the 96-byte
+schema-3 document, the 84-byte schema-2 document, the earlier 88-byte schema-1
+document, and the eight-byte motor-direction payload. The storage layer still
+recognizes the previous 120-byte record format. During migration it preserves
+all fields that existed in the old payload and fills new fields from the
+canonical JSON defaults.
 Corrupt or unknown nonempty storage still fails startup closed.
 
 ## Control input configuration
@@ -144,6 +146,29 @@ mixer. It also computes the desired roll/pitch angles and yaw rate for the
 later controllers. The roll/pitch maximum-rate settings become active when the
 self-leveling outer loop is added; this milestone does not claim stabilized
 motor output.
+
+## Rate-controller configuration
+
+Schema 5 adds one selected rate-controller type, a maximum accepted IMU sample
+gap, and independent roll, pitch, and yaw PID settings. Each axis stores `kp`,
+`ki`, `kd`, `integral_limit`, and `output_limit`. Limits are normalized mixer
+corrections in the range zero through one. The compiled gains are deliberately
+conservative starting values and have not yet been tuned or physically
+validated on the aircraft.
+
+The hardware-independent controller derives `dt` from consecutive IMU
+acquisition timestamps. Its derivative acts on measured gyro rate, so a
+setpoint step does not create a derivative kick. Conditional integration and
+an explicit integral clamp prevent windup while still allowing an opposing
+error to unwind a saturated controller. Duplicate, reversed, invalid, or too
+widely separated samples produce no correction and reset continuity where
+required. Disabling control resets all accumulated state.
+
+Milestone 4.6 intentionally does not connect these corrections to motor output
+and introduces no additional scheduled task. Milestone 4.7 will call the
+controller from the existing 1 kHz flight-control task after producing desired
+axis rates; Milestone 4.8 will replace the current open-loop mixer path only
+after the complete stabilized path and fail-closed IMU gate exist.
 
 The mixer returns four exact zeros immediately when normalized throttle is
 exactly zero. Otherwise it scales roll, pitch, and yaw by the configured

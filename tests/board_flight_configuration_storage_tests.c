@@ -6,15 +6,17 @@
 #include <stdint.h>
 #include <string.h>
 
-#define EXPECTED_PAYLOAD_LENGTH 412U
-#define PREVIOUS_PAYLOAD_LENGTH 96U
-#define OLDER_PAYLOAD_LENGTH 84U
-#define OLDEST_PAYLOAD_LENGTH 88U
+#define EXPECTED_PAYLOAD_LENGTH 480U
+#define PREVIOUS_PAYLOAD_LENGTH 412U
+#define OLDER_PAYLOAD_LENGTH 96U
+#define OLDEST_PAYLOAD_LENGTH 84U
+#define EARLIEST_PAYLOAD_LENGTH 88U
 
 static board_persistent_storage_read_result_t read_result;
 static board_persistent_storage_read_result_t previous_read_result;
 static board_persistent_storage_read_result_t older_read_result;
 static board_persistent_storage_read_result_t oldest_read_result;
+static board_persistent_storage_read_result_t earliest_read_result;
 static board_persistent_storage_read_result_t legacy_read_result;
 static board_persistent_storage_write_result_t write_result;
 static board_persistent_storage_clear_result_t clear_result;
@@ -22,6 +24,7 @@ static uint8_t payload[EXPECTED_PAYLOAD_LENGTH];
 static uint8_t previous_payload[PREVIOUS_PAYLOAD_LENGTH];
 static uint8_t older_payload[OLDER_PAYLOAD_LENGTH];
 static uint8_t oldest_payload[OLDEST_PAYLOAD_LENGTH];
+static uint8_t earliest_payload[EARLIEST_PAYLOAD_LENGTH];
 static uint8_t legacy_payload[8U];
 static size_t read_length;
 static size_t legacy_read_length;
@@ -53,11 +56,19 @@ board_persistent_storage_read_result_t board_persistent_storage_read(
         memcpy(destination, oldest_payload, length);
         return oldest_read_result;
     }
+    if ((length == sizeof(earliest_payload)) &&
+        (earliest_read_result == BOARD_PERSISTENT_STORAGE_READ_OK)) {
+        memcpy(destination, earliest_payload, length);
+        return earliest_read_result;
+    }
     if (length == sizeof(previous_payload)) {
         return previous_read_result;
     }
-    return length == sizeof(older_payload) ? older_read_result
-                                           : oldest_read_result;
+    if (length == sizeof(older_payload)) {
+        return older_read_result;
+    }
+    return length == sizeof(oldest_payload) ? oldest_read_result
+                                            : earliest_read_result;
 }
 
 board_persistent_storage_read_result_t board_persistent_storage_read_legacy(
@@ -97,6 +108,7 @@ int main(void)
     previous_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     older_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
+    earliest_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     write_result = BOARD_PERSISTENT_STORAGE_WRITE_OK;
     clear_result = BOARD_PERSISTENT_STORAGE_CLEAR_OK;
@@ -127,6 +139,25 @@ int main(void)
     assert(loaded.control.roll.curve.point_count == 3U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.control.throttle.curve.point_count == 2U);
+    assert(loaded.rate_controller.axis[0].kp == 0.002F);
+
+    /* Schema 4 occupied the unchanged 412-byte prefix of schema 5. */
+    memcpy(previous_payload, payload, sizeof(previous_payload));
+    {
+        const uint32_t previous_version = 4U;
+        const uint32_t previous_schema = 4U;
+
+        memcpy(previous_payload, &previous_version, sizeof(previous_version));
+        memcpy(previous_payload + sizeof(previous_version), &previous_schema,
+               sizeof(previous_schema));
+    }
+    read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+    previous_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
+    assert(storage.load(storage.context, &loaded) ==
+           FLIGHT_CONFIGURATION_LOAD_OK);
+    assert(loaded.schema_version == 5U);
+    assert(loaded.control.roll.curve.points[1].output == 0.35F);
+    assert(loaded.rate_controller.axis[0].kp == 0.002F);
 
     {
         typedef struct {
@@ -159,13 +190,14 @@ int main(void)
             .directions = {0U, 1U, 0U, 1U},
         };
 
-        assert(sizeof(previous) == sizeof(previous_payload));
-        memcpy(previous_payload, &previous, sizeof(previous));
+        assert(sizeof(previous) == sizeof(older_payload));
+        memcpy(older_payload, &previous, sizeof(previous));
         read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
-        previous_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
+        previous_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+        older_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 4U);
+        assert(loaded.schema_version == 5U);
         assert(loaded.gyro_filter.cutoff_hz == 90.0F);
         assert(loaded.control.throttle.maximum == 1.0F);
     }
@@ -195,14 +227,15 @@ int main(void)
             .directions = {0U, 1U, 0U, 1U},
         };
 
-        assert(sizeof(older) == sizeof(older_payload));
-        memcpy(older_payload, &older, sizeof(older));
+        assert(sizeof(older) == sizeof(oldest_payload));
+        memcpy(oldest_payload, &older, sizeof(older));
         read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
         previous_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
-        older_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
+        older_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+        oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 4U);
+        assert(loaded.schema_version == 5U);
         assert(loaded.propeller_layout == PROPELLER_LAYOUT_PROPS_OUT);
         assert(loaded.motors.direction[1] == MOTOR_DIRECTION_REVERSED);
         assert(loaded.mixer.yaw_factor == 0.2F);
@@ -231,15 +264,16 @@ int main(void)
             .directions = {0U, 1U, 0U, 1U},
         };
 
-        assert(sizeof(oldest) == sizeof(oldest_payload));
-        memcpy(oldest_payload, &oldest, sizeof(oldest));
+        assert(sizeof(oldest) == sizeof(earliest_payload));
+        memcpy(earliest_payload, &oldest, sizeof(oldest));
         read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
         previous_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
         older_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
-        oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
+        oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+        earliest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 4U);
+        assert(loaded.schema_version == 5U);
         assert(loaded.gyro_filter.cutoff_hz == 80.0F);
     }
 
@@ -247,6 +281,7 @@ int main(void)
     previous_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     older_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
+    earliest_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     memset(legacy_payload, 0, sizeof(legacy_payload));
     legacy_payload[0] = 1U;
@@ -264,7 +299,7 @@ int main(void)
 
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
-    payload[0] = 5U;
+    payload[0] = 6U;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_ERROR);
     assert(storage.clear(storage.context) == FLIGHT_CONFIGURATION_CLEAR_OK);

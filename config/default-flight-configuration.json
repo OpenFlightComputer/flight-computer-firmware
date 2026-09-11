@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "motors": {
     "propeller_layout": "PROPS_IN",
     "directions": [
@@ -52,6 +52,31 @@
         "type": "CONTROL_POINTS",
         "interpolation": "LINEAR",
         "points": [[0.0, 0.0], [1.0, 1.0]]
+      }
+    },
+    "rate_controller": {
+      "type": "PID",
+      "maximum_gap_us": 10000,
+      "roll": {
+        "kp": 0.002,
+        "ki": 0.001,
+        "kd": 0.00001,
+        "integral_limit": 0.15,
+        "output_limit": 0.30
+      },
+      "pitch": {
+        "kp": 0.002,
+        "ki": 0.001,
+        "kd": 0.00001,
+        "integral_limit": 0.15,
+        "output_limit": 0.30
+      },
+      "yaw": {
+        "kp": 0.0015,
+        "ki": 0.0008,
+        "kd": 0.0,
+        "integral_limit": 0.10,
+        "output_limit": 0.20
       }
     }
   },

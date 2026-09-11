@@ -151,7 +151,10 @@ Planned milestones:
    motion validation remains.
 5. Configurable input curves, deadbands, angle/rate limits, and throttle curve
    — implemented in software; physical stick-response validation remains.
-6. Bounded rate PID control with anti-windup and zero-throttle integral reset.
+6. Bounded rate PID control with derivative-on-measurement, anti-windup,
+   timestamp continuity handling, and an explicit disabled-state reset —
+   implemented in software; gains remain unvalidated and motor integration is
+   intentionally deferred to 4.8.
 7. Self-leveling roll/pitch outer loop feeding the three-axis rate controller.
 8. Replace open-loop receiver mixing with the stabilized control path and a
    fail-closed IMU gate.

@@ -2,12 +2,15 @@
 
 #include "board.h"
 
+#include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
-#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(4)
-#define PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(3)
-#define OLDER_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(2)
-#define OLDEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(1)
+#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(5)
+#define PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(4)
+#define OLDER_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(3)
+#define OLDEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(2)
+#define EARLIEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(1)
 #define LEGACY_MOTOR_CONFIGURATION_PAYLOAD_VERSION UINT32_C(1)
 
 typedef struct {
@@ -36,6 +39,10 @@ typedef struct {
     float control_axis_parameters[3][3];
     float throttle_parameters[2];
     control_curve_payload_t control_curves[4];
+    uint32_t rate_controller_maximum_gap_us;
+    uint8_t rate_controller_type;
+    uint8_t rate_controller_reserved[3];
+    float rate_pid_parameters[RATE_CONTROLLER_AXIS_COUNT][5];
 } flight_configuration_payload_t;
 
 typedef struct {
@@ -53,7 +60,27 @@ typedef struct {
     uint8_t gyro_filter_type;
     uint8_t attitude_estimator_type;
     uint8_t reserved[1];
+    float control_axis_parameters[3][3];
+    float throttle_parameters[2];
+    control_curve_payload_t control_curves[4];
 } previous_flight_configuration_payload_t;
+
+typedef struct {
+    uint32_t version;
+    uint32_t schema_version;
+    uint32_t timing_us[5];
+    float mixer_factors[3];
+    float failsafe_controls[5];
+    uint32_t gyro_timing_us[2];
+    float gyro_thresholds_dps[2];
+    float processing_parameters[2];
+    uint32_t attitude_maximum_gap_us;
+    uint8_t propeller_layout;
+    uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
+    uint8_t gyro_filter_type;
+    uint8_t attitude_estimator_type;
+    uint8_t reserved[1];
+} older_flight_configuration_payload_t;
 
 typedef struct {
     uint32_t version;
@@ -66,7 +93,7 @@ typedef struct {
     uint8_t propeller_layout;
     uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
     uint8_t reserved[3];
-} older_flight_configuration_payload_t;
+} oldest_flight_configuration_payload_t;
 
 typedef struct {
     uint32_t version;
@@ -77,21 +104,26 @@ typedef struct {
     uint8_t propeller_layout;
     uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
     uint8_t reserved[3];
-} oldest_flight_configuration_payload_t;
+} earliest_flight_configuration_payload_t;
 
 typedef struct {
     uint32_t version;
     uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
 } legacy_motor_configuration_payload_t;
 
-_Static_assert(sizeof(flight_configuration_payload_t) == 412U,
+_Static_assert(sizeof(flight_configuration_payload_t) == 480U,
                "Flight configuration payload format changed");
-_Static_assert(sizeof(previous_flight_configuration_payload_t) == 96U,
+_Static_assert(sizeof(previous_flight_configuration_payload_t) == 412U,
                "Previous flight configuration payload format changed");
-_Static_assert(sizeof(older_flight_configuration_payload_t) == 84U,
+_Static_assert(offsetof(flight_configuration_payload_t,
+                        rate_controller_maximum_gap_us) == 412U,
+               "Schema 4 payload is no longer a schema 5 prefix");
+_Static_assert(sizeof(older_flight_configuration_payload_t) == 96U,
                "Older flight configuration payload format changed");
-_Static_assert(sizeof(oldest_flight_configuration_payload_t) == 88U,
+_Static_assert(sizeof(oldest_flight_configuration_payload_t) == 84U,
                "Oldest flight configuration payload format changed");
+_Static_assert(sizeof(earliest_flight_configuration_payload_t) == 88U,
+               "Earliest flight configuration payload format changed");
 
 static void encode(const flight_configuration_t *configuration,
                    flight_configuration_payload_t *payload)
@@ -162,6 +194,10 @@ static void encode(const flight_configuration_t *configuration,
             configuration->control.throttle.zero_deadband,
             configuration->control.throttle.maximum,
         },
+        .rate_controller_maximum_gap_us =
+            configuration->rate_controller.maximum_gap_us,
+        .rate_controller_type =
+            (uint8_t)configuration->rate_controller.type,
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         payload->directions[motor] =
@@ -178,6 +214,18 @@ static void encode(const flight_configuration_t *configuration,
             payload->control_curves[curve].points[point][1] =
                 curves[curve]->points[point].output;
         }
+    }
+    for (curve = 0U; curve < RATE_CONTROLLER_AXIS_COUNT; curve++) {
+        payload->rate_pid_parameters[curve][0] =
+            configuration->rate_controller.axis[curve].kp;
+        payload->rate_pid_parameters[curve][1] =
+            configuration->rate_controller.axis[curve].ki;
+        payload->rate_pid_parameters[curve][2] =
+            configuration->rate_controller.axis[curve].kd;
+        payload->rate_pid_parameters[curve][3] =
+            configuration->rate_controller.axis[curve].integral_limit;
+        payload->rate_pid_parameters[curve][4] =
+            configuration->rate_controller.axis[curve].output_limit;
     }
 }
 
@@ -254,6 +302,10 @@ static bool decode(const flight_configuration_payload_t *payload,
                 .maximum = payload->throttle_parameters[1],
             },
         },
+        .rate_controller = {
+            .type = (rate_controller_type_t)payload->rate_controller_type,
+            .maximum_gap_us = payload->rate_controller_maximum_gap_us,
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         configuration->motors.direction[motor] =
@@ -280,6 +332,15 @@ static bool decode(const flight_configuration_payload_t *payload,
             };
         }
     }
+    for (curve = 0U; curve < RATE_CONTROLLER_AXIS_COUNT; curve++) {
+        configuration->rate_controller.axis[curve] = (rate_pid_config_t){
+            .kp = payload->rate_pid_parameters[curve][0],
+            .ki = payload->rate_pid_parameters[curve][1],
+            .kd = payload->rate_pid_parameters[curve][2],
+            .integral_limit = payload->rate_pid_parameters[curve][3],
+            .output_limit = payload->rate_pid_parameters[curve][4],
+        };
+    }
     return flight_configuration_is_valid(configuration);
 }
 
@@ -287,9 +348,44 @@ static bool decode_previous(
     const previous_flight_configuration_payload_t *payload,
     flight_configuration_t *configuration)
 {
-    size_t motor;
+    flight_configuration_payload_t upgraded;
+    flight_configuration_t defaults;
+    size_t axis;
 
     if ((payload->version != PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+        (payload->schema_version != 4U)) {
+        return false;
+    }
+    flight_configuration_defaults(&defaults);
+    upgraded = (flight_configuration_payload_t){0};
+    (void)memcpy(&upgraded, payload, sizeof(*payload));
+    upgraded.version = FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
+    upgraded.schema_version = defaults.schema_version;
+    upgraded.rate_controller_maximum_gap_us =
+        defaults.rate_controller.maximum_gap_us;
+    upgraded.rate_controller_type = (uint8_t)defaults.rate_controller.type;
+    for (axis = 0U; axis < RATE_CONTROLLER_AXIS_COUNT; axis++) {
+        upgraded.rate_pid_parameters[axis][0] =
+            defaults.rate_controller.axis[axis].kp;
+        upgraded.rate_pid_parameters[axis][1] =
+            defaults.rate_controller.axis[axis].ki;
+        upgraded.rate_pid_parameters[axis][2] =
+            defaults.rate_controller.axis[axis].kd;
+        upgraded.rate_pid_parameters[axis][3] =
+            defaults.rate_controller.axis[axis].integral_limit;
+        upgraded.rate_pid_parameters[axis][4] =
+            defaults.rate_controller.axis[axis].output_limit;
+    }
+    return decode(&upgraded, configuration);
+}
+
+static bool decode_older(
+    const older_flight_configuration_payload_t *payload,
+    flight_configuration_t *configuration)
+{
+    size_t motor;
+
+    if ((payload->version != OLDER_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
         (payload->schema_version != 3U)) {
         return false;
     }
@@ -338,13 +434,13 @@ static bool decode_previous(
     return flight_configuration_is_valid(configuration);
 }
 
-static bool decode_older(
-    const older_flight_configuration_payload_t *payload,
+static bool decode_oldest(
+    const oldest_flight_configuration_payload_t *payload,
     flight_configuration_t *configuration)
 {
     size_t motor;
 
-    if ((payload->version != OLDER_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+    if ((payload->version != OLDEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
         (payload->schema_version != 2U)) {
         return false;
     }
@@ -381,13 +477,13 @@ static bool decode_older(
     return flight_configuration_is_valid(configuration);
 }
 
-static bool decode_oldest(
-    const oldest_flight_configuration_payload_t *payload,
+static bool decode_earliest(
+    const earliest_flight_configuration_payload_t *payload,
     flight_configuration_t *configuration)
 {
     size_t motor;
 
-    if ((payload->version != OLDEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+    if ((payload->version != EARLIEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
         (payload->schema_version != 1U)) {
         return false;
     }
@@ -462,6 +558,15 @@ static flight_configuration_load_result_t load_configuration(
         if ((board_persistent_storage_read(&oldest, sizeof(oldest)) ==
              BOARD_PERSISTENT_STORAGE_READ_OK) &&
             decode_oldest(&oldest, configuration)) {
+            return FLIGHT_CONFIGURATION_LOAD_OK;
+        }
+    }
+    {
+        earliest_flight_configuration_payload_t earliest;
+
+        if ((board_persistent_storage_read(&earliest, sizeof(earliest)) ==
+             BOARD_PERSISTENT_STORAGE_READ_OK) &&
+            decode_earliest(&earliest, configuration)) {
             return FLIGHT_CONFIGURATION_LOAD_OK;
         }
     }

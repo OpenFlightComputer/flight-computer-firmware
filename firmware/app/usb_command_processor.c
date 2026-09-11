@@ -321,10 +321,31 @@ static void configuration_to_usb(
             (uint32_t)(configuration->control.throttle.maximum * 1000000.0F +
                        0.5F),
         },
+        .rate_controller_maximum_gap_us =
+            configuration->rate_controller.maximum_gap_us,
+        .rate_controller_type =
+            (uint8_t)configuration->rate_controller.type,
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         usb->directions[motor] =
             (uint8_t)configuration->motors.direction[motor];
+    }
+    for (curve = 0U; curve < RATE_CONTROLLER_AXIS_COUNT; curve++) {
+        usb->rate_pid_millionths[curve][0] =
+            (uint32_t)(configuration->rate_controller.axis[curve].kp *
+                       1000000.0F + 0.5F);
+        usb->rate_pid_millionths[curve][1] =
+            (uint32_t)(configuration->rate_controller.axis[curve].ki *
+                       1000000.0F + 0.5F);
+        usb->rate_pid_millionths[curve][2] =
+            (uint32_t)(configuration->rate_controller.axis[curve].kd *
+                       1000000.0F + 0.5F);
+        usb->rate_pid_millionths[curve][3] =
+            (uint32_t)(configuration->rate_controller.axis[curve]
+                           .integral_limit * 1000000.0F + 0.5F);
+        usb->rate_pid_millionths[curve][4] =
+            (uint32_t)(configuration->rate_controller.axis[curve]
+                           .output_limit * 1000000.0F + 0.5F);
     }
     for (curve = 0U; curve < 4U; curve++) {
         usb->curve_type[curve] = (uint8_t)curves[curve]->type;
@@ -430,10 +451,25 @@ static void configuration_from_usb(
                     (float)usb->throttle_millionths[1] / 1000000.0F,
             },
         },
+        .rate_controller = {
+            .type = (rate_controller_type_t)usb->rate_controller_type,
+            .maximum_gap_us = usb->rate_controller_maximum_gap_us,
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         configuration->motors.direction[motor] =
             (motor_direction_t)usb->directions[motor];
+    }
+    for (curve = 0U; curve < RATE_CONTROLLER_AXIS_COUNT; curve++) {
+        configuration->rate_controller.axis[curve] = (rate_pid_config_t){
+            .kp = (float)usb->rate_pid_millionths[curve][0] / 1000000.0F,
+            .ki = (float)usb->rate_pid_millionths[curve][1] / 1000000.0F,
+            .kd = (float)usb->rate_pid_millionths[curve][2] / 1000000.0F,
+            .integral_limit =
+                (float)usb->rate_pid_millionths[curve][3] / 1000000.0F,
+            .output_limit =
+                (float)usb->rate_pid_millionths[curve][4] / 1000000.0F,
+        };
     }
     curves[0] = &configuration->control.roll.curve;
     curves[1] = &configuration->control.pitch.curve;

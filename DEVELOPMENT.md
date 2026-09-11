@@ -6,8 +6,8 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.5 — configurable input shaping and prepared control configuration —
-implemented in software and awaiting owner review and physical validation.
+Milestone 4.6 — bounded three-axis rate PID control — implemented in software
+and awaiting owner review. It is deliberately not connected to motor output.
 
 ## Last completed milestone
 
@@ -58,6 +58,20 @@ the receiver, mixer, authority gate, and DShot output path.
 - Expanded the request-driven whole-document JSON protocol and persistent
   payload for schema 4. Schema 1-3 and legacy motor records migrate by retaining
   their known fields and filling new control settings from compiled defaults.
+- Added reusable single-axis PID and three-axis rate-controller modules. The
+  derivative acts on measured gyro rate, integration is conditionally blocked
+  at output saturation and independently clamped, and controller output is
+  bounded per axis.
+- Derived PID `dt` from consecutive acquisition timestamps. Duplicate,
+  reversed, invalid, and over-gap IMU samples cannot update a correction;
+  disabling the controller clears integrals and measurement history.
+- Extended the unified configuration and USB protocol to schema 5 with
+  independent roll/pitch/yaw PID gains and limits plus a maximum sample gap.
+  The persistent payload is 480 bytes while the fixed record remains 536
+  bytes; schemas 1-4 migrate with new PID fields supplied by defaults.
+- Kept Milestone 4.6 isolated from production motor authority. It adds no task
+  and performs no runtime shadow calculation; the existing open-loop path is
+  unchanged until the outer loop and stabilized integration milestones.
 - Extended the existing request-driven `imu` response and host visualization
   with filtered gyro, estimated roll/pitch, and bounded processing counters.
   No extra sensor read, snapshot producer, or scheduled diagnostics task was
@@ -126,10 +140,10 @@ the receiver, mixer, authority gate, and DShot output path.
   not delayed by the roughly 2 ms reset-bounded LED transaction.
 - Extended `imu` diagnostics and the host view with calibration state,
   progress, samples, restarts, raw bias, and bias-corrected gyro values.
-- All 46 native tests and all 67 Python host-tool tests pass, including the
+- All 48 native tests and all 67 Python host-tool tests pass, including the
   address/undefined-behavior sanitizer build. Debug and Release firmware build
-  with warnings as errors. Debug uses 162,208 bytes of Flash and 47,944 bytes
-  of RAM; Release uses 112,404 bytes of Flash and 47,928 bytes of RAM. The RAM
+  with warnings as errors. Debug uses 167,244 bytes of Flash and 48,008 bytes
+  of RAM; Release uses 116,084 bytes of Flash and 47,992 bytes of RAM. The RAM
   increase is primarily the bounded 4,096-byte configuration lines and USB
   queues required by maximum-size curve documents.
 - IMU estimates remain outside motor control in Milestone 4.5. Receiver stick
