@@ -45,17 +45,18 @@ These are dependency boundaries, not a requirement that every operation pass thr
 
 Phases 0 through 3 provide the firmware foundation, four-channel DShot300 motor
 output, CRSF receiver input, source authority, unified persistent configuration,
-and hardware-independent open-loop quad-X mixing. Propeller-free receiver to
+and hardware-independent quad-X mixing. Propeller-free receiver to
 motor operation has been physically exercised on Flight Computer V1.
 
 Phase 4 adds stabilization for the first constrained hover. Milestones 4.1
-through 4.7 pin Bosch's official BMI270 SensorAPI, add the tester-proven V1
+through 4.8 pin Bosch's official BMI270 SensorAPI, add the tester-proven V1
 SPI3 transport, publish timestamped body-axis samples from a 1 kHz service, and
 provide stationary gyro calibration, bounded filtering, roll/pitch attitude
 estimation, request-driven bench visualization through
-`./ofc device imu --watch`, and evaluate angle/rate control in shadow mode.
-Physical sign/timing/estimate validation and controller motor authority remain
-later work; see `docs/bmi270.md` and
+`./ofc device imu --watch`, and connect angle/rate control to the receiver motor
+path through a fail-closed IMU gate and saturation-preserving mixer. Physical
+sign, timing, estimate, correction, and gain validation remain; see
+`docs/bmi270.md` and
 `DEVELOPMENT.md` for the exact boundary.
 
 Initialize all pinned dependencies (including the BMI270 SensorAPI) and the

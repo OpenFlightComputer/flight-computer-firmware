@@ -90,7 +90,9 @@ static task_callback_result_t run_flight_control_task(void *context)
     receiver_failsafe_decision_t decision;
     const receiver_control_snapshot_t *control_snapshot = NULL;
     attitude_snapshot_t attitude = {0};
-    flight_control_shadow_stabilization_t stabilization;
+    imu_service_state_t imu_state = {0};
+    flight_control_stabilization_t stabilization;
+    bool attitude_is_current;
     const uint64_t now_us = time_us();
 
     firmware_flight_control_task_executions++;
@@ -133,19 +135,26 @@ static task_callback_result_t run_flight_control_task(void *context)
         }
         return TASK_CALLBACK_CONTINUE;
     }
+    (void)imu_service_state(&firmware_imu_service, &imu_state);
     (void)imu_processing_pipeline_latest(
         &firmware_imu_processing_pipeline, &attitude);
-    stabilization = (flight_control_shadow_stabilization_t){
+    attitude_is_current = attitude.valid && imu_state.snapshot.valid &&
+                          (attitude.source_sequence ==
+                           imu_state.snapshot.sequence) &&
+                          (attitude.acquired_at_us ==
+                           imu_state.snapshot.acquired_at_us);
+    stabilization = (flight_control_stabilization_t){
         .roll_controller = &firmware_flight_configuration_service.active
                                 .roll_attitude_controller,
         .pitch_controller = &firmware_flight_configuration_service.active
                                  .pitch_attitude_controller,
         .rate_controller =
             &firmware_flight_configuration_service.rate_controller,
-        .attitude = attitude.valid ? &attitude : NULL,
-        .desired_rates = &firmware_flight_control_shadow_desired_rates,
-        .rate_output = &firmware_rate_controller_shadow_output,
-        .rate_result = &firmware_rate_controller_shadow_result,
+        .attitude = attitude_is_current ? &attitude : NULL,
+        .imu_freshness = imu_state.freshness,
+        .desired_rates = &firmware_flight_control_desired_rates,
+        .rate_output = &firmware_rate_controller_output,
+        .rate_result = &firmware_rate_controller_result,
     };
     firmware_flight_control_submit_last_result =
         (uint32_t)flight_control_process_receiver(

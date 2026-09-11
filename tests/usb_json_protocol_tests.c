@@ -89,10 +89,9 @@ static void valid_commands_and_key_order_are_accepted(void)
     request = parse(
         "{\"type\":\"command\",\"request_id\":8,"
         "\"command\":\"config_write\",\"configuration\":{"
-        "\"schema_version\":6,\"motors\":{\"propeller_layout\":"
+        "\"schema_version\":7,\"motors\":{\"propeller_layout\":"
         "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
-        "\"NORMAL\",\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
-        "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
+        "\"NORMAL\",\"REVERSED\"]},"
         "\"control\":{"
         "\"roll\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
         "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
@@ -123,7 +122,6 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(request.command == USB_JSON_COMMAND_CONFIG_WRITE);
     assert(request.configuration.propeller_layout == 1U);
     assert(request.configuration.directions[0] == 1U);
-    assert(request.configuration.mixer_factor_millionths[0] == 250000U);
     assert(request.configuration.failsafe_control_millionths[0] == -100000);
     assert(request.configuration.gyro_timing_us[1] == 500000U);
     assert(request.configuration.gyro_threshold_millionths[0] == 5000000U);
@@ -231,10 +229,9 @@ static void response_builders_are_exact_and_bounded(void)
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
     const usb_json_configuration_t configuration = {
-        .schema_version = 6U,
+        .schema_version = 7U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {-100000, 0, 0, 50000, 50000},
-        .mixer_factor_millionths = {250000U, 250000U, 150000U},
         .directions = {0U, 0U, 1U, 0U},
         .propeller_layout = 0U,
         .gyro_timing_us = {100000U, 500000U},
@@ -362,10 +359,9 @@ static void response_builders_are_exact_and_bounded(void)
 static void maximum_curve_response_fits_transport_capacity(void)
 {
     usb_json_configuration_t configuration = {
-        .schema_version = 6U,
+        .schema_version = 7U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {0, 0, 0, 50000, 50000},
-        .mixer_factor_millionths = {250000U, 250000U, 150000U},
         .gyro_timing_us = {100000U, 500000U},
         .gyro_threshold_millionths = {5000000U, 500000U},
         .gyro_filter_cutoff_millionths = 80000000U,

@@ -256,14 +256,6 @@ static void configuration_to_usb(
             (int32_t)((configuration->receiver_failsafe
                            .recovery_throttle_maximum * 1000000.0F) + 0.5F),
         },
-        .mixer_factor_millionths = {
-            (uint32_t)((configuration->mixer.roll_factor * 1000000.0F) +
-                       0.5F),
-            (uint32_t)((configuration->mixer.pitch_factor * 1000000.0F) +
-                       0.5F),
-            (uint32_t)((configuration->mixer.yaw_factor * 1000000.0F) +
-                       0.5F),
-        },
         .propeller_layout = (uint8_t)configuration->propeller_layout,
         .gyro_timing_us = {
             configuration->gyro_calibration.settling_duration_us,
@@ -383,11 +375,6 @@ static void configuration_from_usb(
     *configuration = (flight_configuration_t){
         .schema_version = usb->schema_version,
         .propeller_layout = (propeller_layout_t)usb->propeller_layout,
-        .mixer = {
-            .roll_factor = (float)usb->mixer_factor_millionths[0] / 1000000.0F,
-            .pitch_factor = (float)usb->mixer_factor_millionths[1] / 1000000.0F,
-            .yaw_factor = (float)usb->mixer_factor_millionths[2] / 1000000.0F,
-        },
         .receiver_failsafe = {
             .stale_after_us = usb->timing_us[0],
             .loss_detected_after_us = usb->timing_us[1],

@@ -158,7 +158,6 @@ int main(void)
     configuration = service.active;
     configuration.propeller_layout = PROPELLER_LAYOUT_PROPS_OUT;
     configuration.motors.direction[2] = MOTOR_DIRECTION_REVERSED;
-    configuration.mixer.yaw_factor = 0.2F;
     configuration.receiver_failsafe.stale_after_us = 30000U;
     configuration.gyro_filter.cutoff_hz = 60.0F;
     configuration.attitude_estimator
@@ -183,7 +182,7 @@ int main(void)
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_PERSISTENT);
     assert(service.prepared_control.roll.curve.segments[0].coefficient[1] ==
            0.5F);
-    assert(service.prepared_mixer.coefficient[0][2] == -0.2F);
+    assert(service.prepared_mixer.coefficient[0][2] == -1.0F);
     assert(service.active.roll_attitude_controller.gain_per_s == 5.0F);
 
     state_machine.current = SYSTEM_STATE_ARMED;
@@ -219,10 +218,10 @@ int main(void)
 
     storage.save_result = FLIGHT_CONFIGURATION_SAVE_ERROR;
     configuration = service.active;
-    configuration.mixer.roll_factor = 0.3F;
+    configuration.control.roll.maximum_angle_degrees = 31.0F;
     assert(flight_configuration_service_write(&service, &configuration) ==
            FLIGHT_CONFIGURATION_SERVICE_STORAGE_ERROR);
-    assert(service.active.mixer.roll_factor == 0.25F);
+    assert(service.active.control.roll.maximum_angle_degrees == 30.0F);
 
     storage.load_result = FLIGHT_CONFIGURATION_LOAD_ERROR;
     assert(flight_configuration_service_initialize(

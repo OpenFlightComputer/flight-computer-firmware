@@ -25,8 +25,8 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 6)
-    message(FATAL_ERROR "Default configuration schema_version must be 6")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 7)
+    message(FATAL_ERROR "Default configuration schema_version must be 7")
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -45,9 +45,6 @@ ofc_direction_constant(OFC_CONFIG_MOTOR_0 0)
 ofc_direction_constant(OFC_CONFIG_MOTOR_1 1)
 ofc_direction_constant(OFC_CONFIG_MOTOR_2 2)
 ofc_direction_constant(OFC_CONFIG_MOTOR_3 3)
-ofc_json_get(OFC_CONFIG_MIXER_ROLL mixer roll_factor)
-ofc_json_get(OFC_CONFIG_MIXER_PITCH mixer pitch_factor)
-ofc_json_get(OFC_CONFIG_MIXER_YAW mixer yaw_factor)
 foreach(axis IN ITEMS roll pitch yaw)
     string(TOUPPER "${axis}" axis_upper)
     ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_DEADBAND
@@ -152,12 +149,6 @@ ofc_json_get(OFC_CONFIG_ACCELEROMETER_CORRECTION_TIME_CONSTANT
 ofc_json_get(OFC_CONFIG_ATTITUDE_MAXIMUM_GAP
     imu attitude_estimator maximum_gap_us)
 
-foreach(factor IN ITEMS OFC_CONFIG_MIXER_ROLL OFC_CONFIG_MIXER_PITCH
-                        OFC_CONFIG_MIXER_YAW)
-    if(${factor} LESS 0 OR ${factor} GREATER 1)
-        message(FATAL_ERROR "Default mixer factor ${factor} must be within 0..1")
-    endif()
-endforeach()
 foreach(deadband IN ITEMS OFC_CONFIG_CONTROL_ROLL_DEADBAND
                           OFC_CONFIG_CONTROL_PITCH_DEADBAND
                           OFC_CONFIG_CONTROL_YAW_DEADBAND

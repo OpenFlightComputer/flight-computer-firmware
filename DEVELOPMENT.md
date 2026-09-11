@@ -6,9 +6,9 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.7 — self-leveling attitude-to-rate control — implemented in
-software and awaiting owner review. It is deliberately shadow-only and is not
-connected to motor output.
+Milestone 4.8 — stabilized receiver mixing and fail-closed IMU authority —
+implemented in software and awaiting owner review. It is connected to motor
+output but has not yet been physically validated.
 
 ## Last completed milestone
 
@@ -155,15 +155,31 @@ the receiver, mixer, authority gate, and DShot output path.
   progress, samples, restarts, raw bias, and bias-corrected gyro values.
 - All 49 native tests and all 67 Python host-tool tests pass, including the
   address/undefined-behavior sanitizer build. Debug and Release firmware build
-  with warnings as errors. Debug uses 172,496 bytes of Flash and 48,304 bytes
-  of RAM; Release uses 119,872 bytes of Flash and 48,288 bytes of RAM. The RAM
+  with warnings as errors. Debug uses 172,684 bytes of Flash and 48,296 bytes
+  of RAM; Release uses 119,740 bytes of Flash and 48,280 bytes of RAM. The RAM
   increase is primarily the bounded 4,096-byte configuration lines and USB
   queues required by maximum-size curve documents.
-- IMU estimates now feed the Milestone 4.7 shadow controllers. Receiver stick
-  shaping still independently feeds the existing open-loop mixer; controller
-  outputs and the fail-closed IMU motor gate belong to Milestone 4.8.
+- Replaced the open-loop receiver mixer input with the complete stabilized
+  chain: shaped angle/rate setpoints, roll/pitch/yaw attitude stages, the
+  three-axis rate PID, and a pure-sign props-in/props-out quad-X matrix.
+- Added proportional correction-span scaling and a common collective shift so
+  saturated outputs remain within `0.0..1.0` without independently clipping
+  away their relative corrections. Exact zero throttle still exits first,
+  resets controller history, and submits four exact zeros.
+- Added the IMU authority gate. Fresh new estimates may update motor output;
+  duplicate or 2-10 ms stale data submits nothing and lets the motor layer hold
+  its last complete accepted command; lost, future, invalid, or incoherent IMU
+  data enters the central failsafe. The first PID sample after a reset seeds
+  continuity and deliberately submits one exact-zero command.
+- Routed the receiver Stage 1 fallback through the same stabilization path.
+  Its configured normalized axes bypass pilot curves but now describe level
+  angle/rate requests rather than open-loop motor corrections.
+- Advanced the whole-document configuration to schema 7 and removed the
+  obsolete open-loop mixer factors. The persistent binary format remains 488
+  bytes with those old slots reserved, allowing schema-6 records to migrate
+  while PID output limits become the single correction-authority bound.
 
-## Milestone 4.5 assumptions and safety boundary
+## Phase 4 assumptions and safety boundary
 
 - The provisional V1 body mapping assumes the PCB top is aircraft forward and
   the component side is up. This is not yet physical evidence.
@@ -190,9 +206,9 @@ the receiver, mixer, authority gate, and DShot output path.
 - The accelerometer correction is intentionally not gated by acceleration
   magnitude in this initial forgiving angle-mode design. More advanced
   free-fall/aggressive-mode behavior remains explicitly deferred.
-- The estimate is diagnostic-only. It has no motor authority until the later
-  controller and fail-closed freshness gate are implemented and physically
-  validated.
+- The estimate and controllers now have receiver-path motor authority. They
+  remain software-verified only and require the full Milestone 4.9
+  propeller-free validation before any hover attempt.
 - The initial throttle curve is intentionally linear after a 2% zero deadband.
   A lift-off plateau must be based on physical vehicle measurements rather than
   guessed before the first controlled tests.
@@ -200,17 +216,24 @@ the receiver, mixer, authority gate, and DShot output path.
   150-degree-per-second yaw defaults are starting values, not flight-proven
   tuning.
 - The `4.0 s^-1` roll/pitch angle gain and all PID gains remain conservative
-  software defaults. The added 1 kHz shadow work and resulting desired rates
-  require on-board timing and motion validation before controller output may
-  affect motors.
+  software defaults. Controller output now affects receiver-owned motors and
+  must not be flown before the Milestone 4.9 propeller-free sign, timing,
+  correction, saturation, and failure checks pass.
 - Curve configuration affects live and held receiver input only. It cannot
   reshape USB bench commands or the explicitly configured receiver failsafe.
+- A brief stale IMU interval deliberately retains the last complete motor
+  command through the existing 100 ms motor lease. IMU loss after 10 ms enters
+  the central failsafe; this threshold and the retained-command behavior need
+  physical timing validation before flight.
+- An IMU-triggered failsafe is intentionally fail-closed and requires an
+  explicit disarm/recovery path before rearming. It does not silently resume
+  motor authority when samples return.
 
 ## Next proposed milestone
 
-Milestone 4.8 — add the fail-closed stabilized mixer path, making fresh valid
-IMU data and successful controller results prerequisites before PID corrections
-receive motor authority.
+Milestone 4.9 — add the request-driven control diagnostics needed for physical
+IMU, setpoint, PID, mixer-saturation, motor-command, and failure validation,
+then perform the complete propeller-free validation sequence.
 
 ## Historical milestone record
 

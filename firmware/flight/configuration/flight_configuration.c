@@ -28,11 +28,6 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
     *configuration = (flight_configuration_t){
         .schema_version = OFC_DEFAULT_CONFIGURATION_SCHEMA_VERSION,
         .propeller_layout = OFC_DEFAULT_PROPELLER_LAYOUT,
-        .mixer = {
-            .roll_factor = OFC_DEFAULT_MIXER_ROLL_FACTOR,
-            .pitch_factor = OFC_DEFAULT_MIXER_PITCH_FACTOR,
-            .yaw_factor = OFC_DEFAULT_MIXER_YAW_FACTOR,
-        },
         .control = {
             .roll = {
                 .deadband = OFC_DEFAULT_CONTROL_ROLL_DEADBAND,
@@ -176,7 +171,6 @@ bool flight_configuration_is_valid(
             OFC_DEFAULT_CONFIGURATION_SCHEMA_VERSION) &&
            (configuration->propeller_layout < PROPELLER_LAYOUT_COUNT) &&
            motor_configuration_is_valid(&configuration->motors) &&
-           quad_x_mixer_config_is_valid(&configuration->mixer) &&
            control_input_shaping_config_is_valid(&configuration->control) &&
            roll_attitude_controller_config_is_valid(
                &configuration->roll_attitude_controller) &&

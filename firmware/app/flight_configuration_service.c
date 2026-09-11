@@ -62,8 +62,7 @@ static bool apply_runtime(flight_configuration_service_t *service,
 
     if (!control_input_shaping_prepare(&configuration->control,
                                        &prepared_control) ||
-        !quad_x_mixer_prepare(&configuration->mixer,
-                              configuration->propeller_layout,
+        !quad_x_mixer_prepare(configuration->propeller_layout,
                               &prepared_mixer) ||
         !rate_controller_initialize(
             &rate_controller, &configuration->rate_controller) ||
@@ -129,8 +128,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     }
     if (!control_input_shaping_prepare(&service->active.control,
                                        &service->prepared_control) ||
-        !quad_x_mixer_prepare(&service->active.mixer,
-                              service->active.propeller_layout,
+        !quad_x_mixer_prepare(service->active.propeller_layout,
                               &service->prepared_mixer) ||
         !rate_controller_initialize(
             &service->rate_controller,

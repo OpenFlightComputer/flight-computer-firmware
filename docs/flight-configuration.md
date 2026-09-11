@@ -10,13 +10,14 @@ validate, and write one complete snapshot.
 `config/default-flight-configuration.json` is the only production source for
 compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
-therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, the
-initial mixer factors, and the reviewed receiver-failsafe values in that file.
-Schema 6 also carries the startup gyro-calibration policy, the selected gyro
+therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, and the
+reviewed receiver-failsafe values in that file. Schema 7 also carries the startup gyro-calibration policy, the selected gyro
 filter and cutoff, and the selected attitude estimator, correction time
 constant, and maximum accepted sample gap. It adds control-input deadbands,
 angle/rate limits, maximum throttle, four bounded control-point curves,
-roll/pitch attitude gains, and the three-axis rate-controller parameters.
+roll/pitch attitude gains, and the three-axis rate-controller parameters. It
+removes the former open-loop mixer factors; PID output limits now bound the
+correction authority.
 
 The motor array always uses logical aircraft order:
 
@@ -48,7 +49,7 @@ erases the persistent override and reapplies the compiled JSON defaults.
 Write and reset require lifecycle `DISARMED` with no pending arm. A successful
 write is persisted before the active snapshot is replaced. Runtime application
 updates all four motor directions, receiver freshness thresholds, receiver
-failsafe policy, prepared input shaping and mixer data, and the IMU processing
+failsafe policy, prepared input shaping and mixer signs, and the IMU processing
 pipeline as one operation. Replacing
 the filter or estimator configuration clears its history so the next fresh IMU
 sample seeds a new estimate instead of mixing two configurations. Direction
@@ -70,7 +71,8 @@ append-only records. Each record has a format version, sequence, payload
 length, CRC32, and a commit word programmed last. The sector holds 244 full
 configuration records before an explicit reset is needed.
 
-The loader can migrate the prior 480-byte schema-5 document, the 412-byte
+The loader migrates the same-size schema-6 payload by ignoring its retired
+mixer-factor slots. It can also migrate the prior 480-byte schema-5 document, the 412-byte
 schema-4 document, the 96-byte
 schema-3 document, the 84-byte schema-2 document, the earlier 88-byte schema-1
 document, and the eight-byte motor-direction payload. The storage layer still
@@ -142,15 +144,15 @@ setpoint before roll, pitch, or yaw shaping is evaluated. USB motor tests and
 the Stage 1 receiver failsafe are physical output requests rather than pilot
 stick inputs, so they deliberately bypass pilot curves and deadbands.
 
-The shaped normalized axes still drive the existing open-loop mixer. In
-parallel, the flight-control task now converts desired roll/pitch angles into
-desired rates and passes yaw through as a desired rate, then evaluates the rate
-PID as a shadow calculation. Neither controller output has motor authority in
-Milestone 4.7.
+The shaped controls now drive the stabilized path. The flight-control task
+converts desired roll/pitch angles into desired rates, passes yaw through as a
+desired rate, evaluates the rate PID, and sends the three PID corrections to
+the quad-X mixer. The configured receiver Stage 1 fallback bypasses pilot
+curves but uses the same stabilization path.
 
 ## Attitude-controller configuration
 
-Schema 6 adds independent roll and pitch angle-controller gains, both `4.0
+Schema 7 includes independent roll and pitch angle-controller gains, both `4.0
 s^-1` by default. A roll error of 10 degrees consequently requests 40 degrees
 per second, bounded by the existing per-axis `maximum_rate_dps` setting. The
 flight-control task calls the roll, pitch, and yaw modules directly. Roll and
@@ -176,19 +178,21 @@ error to unwind a saturated controller. Duplicate, reversed, invalid, or too
 widely separated samples produce no correction and reset continuity where
 required. Disabling control resets all accumulated state.
 
-Milestone 4.7 calls the three outer-axis modules and the inner rate controller
-from the existing 1 kHz flight-control task. It resets PID history at zero
-throttle, failsafe, lost authority, or an invalid IMU estimate. The calculation
-is deliberately shadow-only: Milestone 4.8 will replace the current open-loop
-mixer path only after the complete stabilized path and fail-closed IMU gate
-exist.
+The existing 1 kHz flight-control task calls the three outer-axis modules and
+the inner rate controller. It resets PID history at zero throttle, failsafe,
+lost authority, or lost/invalid IMU data. Fresh duplicate or briefly stale IMU
+data does not create another command; the motor layer retains the last complete
+accepted command. Lost or incoherent IMU data enters the central failsafe.
 
 The mixer returns four exact zeros immediately when normalized throttle is
-exactly zero. Otherwise it scales roll, pitch, and yaw by the configured
-factors, applies the selected propeller-layout yaw sign, calculates all four
-logical motor values, and clamps each output to `0.0..1.0`. The result still
-passes through the central motor lifecycle, source, health, freshness, mapping,
-and backend gates.
+exactly zero. Otherwise it applies a prepared pure-sign quad-X matrix to the
+three PID corrections. When their span is too large, it scales all corrections
+equally; it then shifts collective throttle just enough to fit `0.0..1.0`.
+This preserves correction ratios and avoids independently flattening motors at
+the limits. Schema 7 removes the obsolete open-loop mixer factors because the
+PID output limits already bound correction authority. The result still passes
+through the central motor lifecycle, source, health, freshness, mapping, and
+backend gates.
 
 Stage 2 receiver loss now enters the central `FAILSAFE` state immediately from
 the flight-control task. The motor task emits stop frames on its next release;
@@ -203,7 +207,7 @@ A new low-to-high arm-switch edge is still required to arm again.
 Native tests cover JSON-derived defaults, curve preparation and interpolation,
 deadbands, exact-zero early return, maximum-curve serialization, legacy
 migration, disarmed-only replacement/reset, runtime application including
-prepared shaping/mixer and processing-pipeline replacement, mixer equations,
-exact-zero handling, clamping, source ownership, and immediate Stage 2
-failsafe entry. Debug and Release cross-builds verify the generated header and
-flash integration.
+prepared shaping/mixer and processing-pipeline replacement, stabilized mixer
+equations, proportional saturation handling, exact-zero behavior, IMU gates,
+source ownership, and immediate Stage 2 failsafe entry. Debug and Release
+cross-builds verify the generated header and flash integration.

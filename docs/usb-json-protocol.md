@@ -59,7 +59,7 @@ accepted command is a 100 ms lease: without a fresh accepted request, the
 1 kHz motor-control task transmits stop frames and enters failsafe.
 
 Configuration uses complete documents rather than per-field mutations. The
-write envelope contains the complete schema-6 object from
+write envelope contains the complete schema-7 object from
 `config/default-flight-configuration.json`; this shell command shows the exact
 wire representation without duplicating that large document here:
 
@@ -100,14 +100,14 @@ Examples, each followed by one newline:
 {"type":"response","request_id":47,"command":"arm","ok":false,"state":"DISARMED","error":"motor_not_ready"}
 {"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":2,"throttle":0.100000}
 {"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":0,"throttle":0.020000,"error":"motor_not_allowed"}
-{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":6,"motors":{},"mixer":{},"control":{},"receiver_failsafe":{},"imu":{}}}
+{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":7,"motors":{},"control":{},"receiver_failsafe":{},"imu":{}}}
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":50,"error":"unsupported_command"}
 ```
 
 The compact `config_read` line above abbreviates the five complete nested
 configuration objects for readability. Actual firmware responses include
-every required schema-6 field and can be written back unchanged.
+every required schema-7 field and can be written back unchanged.
 
 The receiver response is produced only when the USB command is dispatched. It
 copies the receiver service's already-published raw and normalized snapshots;

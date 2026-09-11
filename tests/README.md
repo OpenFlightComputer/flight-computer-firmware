@@ -152,8 +152,9 @@ behavior, corrupt or incompatible data rejection, and board-storage error
 propagation. `flight_configuration_service_tests` covers source selection,
 disarmed-only whole-document replacement/reset, persistence ordering, and
 runtime application. `quad_x_mixer_tests` and `flight_control_tests` cover the
-mix equations, zero-throttle fast path, clamping, authority, submission, and
-explicit receiver-loss failsafe entry.
+stabilized mix equations, zero-throttle fast path, proportional saturation,
+collective shifting, IMU freshness gates, authority, submission, and explicit
+receiver-loss failsafe entry.
 
 The native `motor_mapping_tests` target verifies identity defaults, exhaustively
 classifies all 256 in-range assignments, rejects configuration unless the
@@ -206,7 +207,8 @@ first-order gyro filtering, accelerometer angle calculation, timestamp-derived
 complementary estimation, duplicate/stale/gap handling, and invalid
 configuration. The controller targets additionally cover bounded angle-to-rate
 conversion, yaw-rate passthrough, PID continuity, zero-throttle reset, and the
-shadow flight-control integration. Controller outputs do not yet have motor
-authority.
+stabilized flight-control integration, including the seed-stop cycle and lost
+IMU failsafe. Controller outputs now have receiver-path motor authority and
+still require physical validation.
 
 Hardware tests remain separate and must not be represented as passing host tests.

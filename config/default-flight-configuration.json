@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "motors": {
     "propeller_layout": "PROPS_IN",
     "directions": [
@@ -8,11 +8,6 @@
       "NORMAL",
       "NORMAL"
     ]
-  },
-  "mixer": {
-    "roll_factor": 0.25,
-    "pitch_factor": 0.25,
-    "yaw_factor": 0.15
   },
   "control": {
     "roll": {

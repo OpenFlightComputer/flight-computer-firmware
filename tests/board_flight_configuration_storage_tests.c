@@ -131,7 +131,7 @@ int main(void)
     flight_configuration_defaults(&original);
     original.propeller_layout = PROPELLER_LAYOUT_PROPS_OUT;
     original.motors.direction[2] = MOTOR_DIRECTION_REVERSED;
-    original.mixer.yaw_factor = 0.2F;
+    original.control.yaw.maximum_rate_dps = 140.0F;
     original.gyro_calibration.maximum_rate_dps = 4.0F;
     original.gyro_filter.cutoff_hz = 90.0F;
     assert(storage.save(storage.context, &original) ==
@@ -143,7 +143,7 @@ int main(void)
            FLIGHT_CONFIGURATION_LOAD_OK);
     assert(loaded.propeller_layout == PROPELLER_LAYOUT_PROPS_OUT);
     assert(loaded.motors.direction[2] == MOTOR_DIRECTION_REVERSED);
-    assert(loaded.mixer.yaw_factor == 0.2F);
+    assert(loaded.control.yaw.maximum_rate_dps == 140.0F);
     assert(loaded.receiver_failsafe.stage_one_throttle == 0.05F);
     assert(loaded.gyro_calibration.maximum_rate_dps == 4.0F);
     assert(loaded.gyro_filter.cutoff_hz == 90.0F);
@@ -152,6 +152,17 @@ int main(void)
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.control.throttle.curve.point_count == 2U);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
+
+    /* Schema 6 used the same binary payload but exposed obsolete factors. */
+    {
+        const uint32_t schema_six = 6U;
+
+        memcpy(payload + sizeof(uint32_t), &schema_six, sizeof(schema_six));
+        assert(storage.load(storage.context, &loaded) ==
+               FLIGHT_CONFIGURATION_LOAD_OK);
+        assert(loaded.schema_version == 7U);
+        assert(loaded.control.yaw.maximum_rate_dps == 140.0F);
+    }
 
     /* Schema 5 occupied the unchanged 480-byte prefix of schema 6. */
     memcpy(previous_payload, payload, sizeof(previous_payload));
@@ -167,7 +178,7 @@ int main(void)
     previous_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_OK);
-    assert(loaded.schema_version == 6U);
+    assert(loaded.schema_version == 7U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
     assert(loaded.roll_attitude_controller.gain_per_s == 4.0F);
@@ -188,7 +199,7 @@ int main(void)
     schema_four_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_OK);
-    assert(loaded.schema_version == 6U);
+    assert(loaded.schema_version == 7U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
     assert(loaded.roll_attitude_controller.gain_per_s == 4.0F);
@@ -232,7 +243,7 @@ int main(void)
         older_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 6U);
+        assert(loaded.schema_version == 7U);
         assert(loaded.gyro_filter.cutoff_hz == 90.0F);
         assert(loaded.control.throttle.maximum == 1.0F);
     }
@@ -271,10 +282,9 @@ int main(void)
         oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 6U);
+        assert(loaded.schema_version == 7U);
         assert(loaded.propeller_layout == PROPELLER_LAYOUT_PROPS_OUT);
         assert(loaded.motors.direction[1] == MOTOR_DIRECTION_REVERSED);
-        assert(loaded.mixer.yaw_factor == 0.2F);
         assert(loaded.gyro_calibration.sample_duration_us == 600000U);
         assert(loaded.gyro_filter.cutoff_hz == 80.0F);
     }
@@ -310,7 +320,7 @@ int main(void)
         earliest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 6U);
+        assert(loaded.schema_version == 7U);
         assert(loaded.gyro_filter.cutoff_hz == 80.0F);
     }
 
@@ -333,7 +343,6 @@ int main(void)
     assert(loaded.propeller_layout == PROPELLER_LAYOUT_PROPS_IN);
     assert(loaded.motors.direction[1] == MOTOR_DIRECTION_REVERSED);
     assert(loaded.motors.direction[3] == MOTOR_DIRECTION_REVERSED);
-    assert(loaded.mixer.roll_factor == 0.25F);
 
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     read_result = BOARD_PERSISTENT_STORAGE_READ_OK;

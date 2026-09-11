@@ -155,9 +155,10 @@ Planned milestones:
    timestamp continuity handling, and an explicit disabled-state reset —
    implemented in software; gains remain unvalidated and motor integration is
    intentionally deferred to 4.8.
-7. Self-leveling roll/pitch outer loop feeding the three-axis rate controller.
+7. Self-leveling roll/pitch outer loop feeding the three-axis rate controller —
+   implemented in software.
 8. Replace open-loop receiver mixing with the stabilized control path and a
-   fail-closed IMU gate.
+   fail-closed IMU gate — implemented in software; physical validation remains.
 9. Propeller-free sign, correction, saturation, loss, and recovery validation.
 10. Constrained first-hover preparation and test.
 

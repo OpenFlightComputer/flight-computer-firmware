@@ -500,12 +500,8 @@ static bool parse_configuration(const char *line,
         "stage_one_roll", "stage_one_pitch", "stage_one_yaw",
         "stage_one_throttle", "recovery_throttle_maximum",
     };
-    static const char *const mixer_names[3] = {
-        "roll_factor", "pitch_factor", "yaw_factor",
-    };
     const jsmntok_t *schema;
     const jsmntok_t *motors;
-    const jsmntok_t *mixer;
     const jsmntok_t *failsafe;
     const jsmntok_t *imu;
     const jsmntok_t *control;
@@ -518,15 +514,13 @@ static bool parse_configuration(const char *line,
     size_t index;
 
     if ((object == NULL) || (object->type != JSMN_OBJECT) ||
-        (object->size != 12)) {
+        (object->size != 10)) {
         return false;
     }
     schema = object_member(line, tokens, token_count,
                            token_index(tokens, object), "schema_version");
     motors = object_member(line, tokens, token_count,
                            token_index(tokens, object), "motors");
-    mixer = object_member(line, tokens, token_count,
-                          token_index(tokens, object), "mixer");
     failsafe = object_member(line, tokens, token_count,
                              token_index(tokens, object),
                              "receiver_failsafe");
@@ -535,10 +529,9 @@ static bool parse_configuration(const char *line,
     control = object_member(line, tokens, token_count,
                             token_index(tokens, object), "control");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 6U) || (motors == NULL) ||
+        (schema_value != 7U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
-        (mixer == NULL) || (mixer->type != JSMN_OBJECT) ||
-        (mixer->size != 6) || (failsafe == NULL) ||
+        (failsafe == NULL) ||
         (failsafe->type != JSMN_OBJECT) || (failsafe->size != 20) ||
         (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 6) ||
         !parse_control_configuration(line, tokens, token_count, control,
@@ -563,16 +556,6 @@ static bool parse_configuration(const char *line,
         return false;
     }
 
-    for (index = 0U; index < 3U; index++) {
-        const jsmntok_t *value = object_member(
-            line, tokens, token_count, token_index(tokens, mixer),
-            mixer_names[index]);
-        if ((value == NULL) || !parse_normalized_millionths(
-                                   line, value,
-                                   &configuration->mixer_factor_millionths[index])) {
-            return false;
-        }
-    }
     for (index = 0U; index < 5U; index++) {
         const jsmntok_t *timing = object_member(
             line, tokens, token_count, token_index(tokens, failsafe),
@@ -1083,9 +1066,7 @@ bool usb_json_build_configuration_response(
         "\"source\":\"%s\",\"configuration\":{"
         "\"schema_version\":%lu,\"motors\":{"
         "\"propeller_layout\":\"%s\",\"directions\":["
-        "\"%s\",\"%s\",\"%s\",\"%s\"]},\"mixer\":{"
-        "\"roll_factor\":%lu.%06lu,\"pitch_factor\":%lu.%06lu,"
-        "\"yaw_factor\":%lu.%06lu},\"control\":{"
+        "\"%s\",\"%s\",\"%s\",\"%s\"]},\"control\":{"
         "\"roll\":{\"deadband\":%lu.%06lu,"
         "\"maximum_angle_degrees\":%lu.%06lu,"
         "\"maximum_rate_dps\":%lu.%06lu,\"curve\":%s},"
@@ -1129,12 +1110,6 @@ bool usb_json_build_configuration_response(
         accepted ? "true" : "false", state, configuration_source,
         (unsigned long)configuration->schema_version, layout,
         directions[0], directions[1], directions[2], directions[3],
-        (unsigned long)(configuration->mixer_factor_millionths[0] / 1000000U),
-        (unsigned long)(configuration->mixer_factor_millionths[0] % 1000000U),
-        (unsigned long)(configuration->mixer_factor_millionths[1] / 1000000U),
-        (unsigned long)(configuration->mixer_factor_millionths[1] % 1000000U),
-        (unsigned long)(configuration->mixer_factor_millionths[2] / 1000000U),
-        (unsigned long)(configuration->mixer_factor_millionths[2] % 1000000U),
         (unsigned long)(configuration->control_axis_millionths[0][0] /
                         1000000U),
         (unsigned long)(configuration->control_axis_millionths[0][0] %

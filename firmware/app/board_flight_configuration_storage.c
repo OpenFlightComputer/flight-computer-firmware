@@ -26,7 +26,7 @@ typedef struct {
     uint32_t version;
     uint32_t schema_version;
     uint32_t timing_us[5];
-    float mixer_factors[3];
+    float reserved_mixer_factors[3];
     float failsafe_controls[5];
     uint32_t gyro_timing_us[2];
     float gyro_thresholds_dps[2];
@@ -176,11 +176,6 @@ static void encode(const flight_configuration_t *configuration,
             (uint32_t)configuration->receiver_failsafe.stage_two_after_us,
             (uint32_t)configuration->receiver_failsafe.recovery_stable_us,
         },
-        .mixer_factors = {
-            configuration->mixer.roll_factor,
-            configuration->mixer.pitch_factor,
-            configuration->mixer.yaw_factor,
-        },
         .failsafe_controls = {
             configuration->receiver_failsafe.stage_one_roll,
             configuration->receiver_failsafe.stage_one_pitch,
@@ -264,22 +259,21 @@ static void encode(const flight_configuration_t *configuration,
 static bool decode(const flight_configuration_payload_t *payload,
                    flight_configuration_t *configuration)
 {
+    flight_configuration_t defaults;
     control_curve_config_t *curves[4];
     size_t curve;
     size_t point;
     size_t motor;
 
-    if (payload->version != FLIGHT_CONFIGURATION_PAYLOAD_VERSION) {
+    if ((payload->version != FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+        ((payload->schema_version != 6U) &&
+         (payload->schema_version != 7U))) {
         return false;
     }
+    flight_configuration_defaults(&defaults);
     *configuration = (flight_configuration_t){
-        .schema_version = payload->schema_version,
+        .schema_version = defaults.schema_version,
         .propeller_layout = (propeller_layout_t)payload->propeller_layout,
-        .mixer = {
-            .roll_factor = payload->mixer_factors[0],
-            .pitch_factor = payload->mixer_factors[1],
-            .yaw_factor = payload->mixer_factors[2],
-        },
         .receiver_failsafe = {
             .stale_after_us = payload->timing_us[0],
             .loss_detected_after_us = payload->timing_us[1],
@@ -452,11 +446,6 @@ static bool decode_older(
     flight_configuration_defaults(configuration);
     configuration->propeller_layout =
         (propeller_layout_t)payload->propeller_layout;
-    configuration->mixer = (quad_x_mixer_config_t){
-        .roll_factor = payload->mixer_factors[0],
-        .pitch_factor = payload->mixer_factors[1],
-        .yaw_factor = payload->mixer_factors[2],
-    };
     configuration->receiver_failsafe = (receiver_failsafe_config_t){
         .stale_after_us = payload->timing_us[0],
         .loss_detected_after_us = payload->timing_us[1],
@@ -507,11 +496,6 @@ static bool decode_oldest(
     flight_configuration_defaults(configuration);
     configuration->propeller_layout =
         (propeller_layout_t)payload->propeller_layout;
-    configuration->mixer = (quad_x_mixer_config_t){
-        .roll_factor = payload->mixer_factors[0],
-        .pitch_factor = payload->mixer_factors[1],
-        .yaw_factor = payload->mixer_factors[2],
-    };
     configuration->receiver_failsafe = (receiver_failsafe_config_t){
         .stale_after_us = payload->timing_us[0],
         .loss_detected_after_us = payload->timing_us[1],
@@ -550,11 +534,6 @@ static bool decode_earliest(
     flight_configuration_defaults(configuration);
     configuration->propeller_layout =
         (propeller_layout_t)payload->propeller_layout;
-    configuration->mixer = (quad_x_mixer_config_t){
-        .roll_factor = payload->mixer_factors[0],
-        .pitch_factor = payload->mixer_factors[1],
-        .yaw_factor = payload->mixer_factors[2],
-    };
     configuration->receiver_failsafe = (receiver_failsafe_config_t){
         .stale_after_us = payload->timing_us[0],
         .loss_detected_after_us = payload->timing_us[1],

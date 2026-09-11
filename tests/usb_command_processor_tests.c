@@ -258,13 +258,11 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 6U,
+            .schema_version = 7U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL}},
-            .mixer = {.roll_factor = 0.25F, .pitch_factor = 0.25F,
-                      .yaw_factor = 0.15F},
             .control = {
                 .roll = {
                     .deadband = 0.03F,
@@ -798,11 +796,10 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":6,"
+        "\"config_write\",\"configuration\":{\"schema_version\":7,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
-        "\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
-        "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
+        "\"REVERSED\"]},"
         "\"control\":{"
         "\"roll\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
         "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","

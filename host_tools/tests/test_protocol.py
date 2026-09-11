@@ -78,15 +78,10 @@ def test_request_parameters_cannot_replace_correlated_envelope():
 
 def test_configuration_write_sends_the_complete_document():
     configuration = {
-        "schema_version": 5,
+        "schema_version": 7,
         "motors": {
             "propeller_layout": "PROPS_IN",
             "directions": ["NORMAL", "NORMAL", "REVERSED", "NORMAL"],
-        },
-        "mixer": {
-            "roll_factor": 0.25,
-            "pitch_factor": 0.25,
-            "yaw_factor": 0.15,
         },
         "receiver_failsafe": {
             "stale_after_us": 25000,

@@ -44,7 +44,6 @@ typedef struct {
     uint32_t schema_version;
     propeller_layout_t propeller_layout;
     motor_configuration_t motors;
-    quad_x_mixer_config_t mixer;
     control_input_shaping_config_t control;
     roll_attitude_controller_config_t roll_attitude_controller;
     pitch_attitude_controller_config_t pitch_attitude_controller;
