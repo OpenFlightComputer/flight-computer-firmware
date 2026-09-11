@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define USB_JSON_TOKEN_CAPACITY 320U
+#define USB_JSON_TOKEN_CAPACITY 352U
 #define USB_JSON_THROTTLE_SCALE 1000000U
 
 static bool token_equals(const char *line,
@@ -357,7 +357,7 @@ static bool parse_control_configuration(
     size_t axis;
 
     if ((control == NULL) || (control->type != JSMN_OBJECT) ||
-        (control->size != 10)) {
+        (control->size != 12)) {
         return false;
     }
     for (axis = 0U; axis < 3U; axis++) {
@@ -400,6 +400,9 @@ static bool parse_control_configuration(
         const jsmntok_t *rate_controller = object_member(
             line, tokens, token_count, token_index(tokens, control),
             "rate_controller");
+        const jsmntok_t *attitude_controller = object_member(
+            line, tokens, token_count, token_index(tokens, control),
+            "attitude_controller");
         static const char *const parameter_names[5] = {
             "kp", "ki", "kd", "integral_limit", "output_limit",
         };
@@ -422,6 +425,21 @@ static bool parse_control_configuration(
                    object_member(line, tokens, token_count,
                                  token_index(tokens, throttle), "curve"),
                    3U, configuration) &&
+               (attitude_controller != NULL) &&
+               (attitude_controller->type == JSMN_OBJECT) &&
+               (attitude_controller->size == 4) &&
+               parse_positive_millionths(
+                   line,
+                   object_member(line, tokens, token_count,
+                                 token_index(tokens, attitude_controller),
+                                 "roll_gain_per_s"),
+                   &configuration->attitude_gain_millionths[0]) &&
+               parse_positive_millionths(
+                   line,
+                   object_member(line, tokens, token_count,
+                                 token_index(tokens, attitude_controller),
+                                 "pitch_gain_per_s"),
+                   &configuration->attitude_gain_millionths[1]) &&
                (rate_controller != NULL) &&
                (rate_controller->type == JSMN_OBJECT) &&
                (rate_controller->size == 10) &&
@@ -517,7 +535,7 @@ static bool parse_configuration(const char *line,
     control = object_member(line, tokens, token_count,
                             token_index(tokens, object), "control");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 5U) || (motors == NULL) ||
+        (schema_value != 6U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
         (mixer == NULL) || (mixer->type != JSMN_OBJECT) ||
         (mixer->size != 6) || (failsafe == NULL) ||
@@ -1079,6 +1097,8 @@ bool usb_json_build_configuration_response(
         "\"maximum_rate_dps\":%lu.%06lu,\"curve\":%s},"
         "\"throttle\":{\"zero_deadband\":%lu.%06lu,"
         "\"maximum\":%lu.%06lu,\"curve\":%s},"
+        "\"attitude_controller\":{\"roll_gain_per_s\":%lu.%06lu,"
+        "\"pitch_gain_per_s\":%lu.%06lu},"
         "\"rate_controller\":{\"type\":\"PID\","
         "\"maximum_gap_us\":%lu,"
         "\"roll\":{\"kp\":%lu.%06lu,\"ki\":%lu.%06lu,"
@@ -1156,6 +1176,14 @@ bool usb_json_build_configuration_response(
         (unsigned long)(configuration->throttle_millionths[1] / 1000000U),
         (unsigned long)(configuration->throttle_millionths[1] % 1000000U),
         curves[3],
+        (unsigned long)(configuration->attitude_gain_millionths[0] /
+                        1000000U),
+        (unsigned long)(configuration->attitude_gain_millionths[0] %
+                        1000000U),
+        (unsigned long)(configuration->attitude_gain_millionths[1] /
+                        1000000U),
+        (unsigned long)(configuration->attitude_gain_millionths[1] %
+                        1000000U),
         (unsigned long)configuration->rate_controller_maximum_gap_us,
         (unsigned long)(configuration->rate_pid_millionths[0][0] / 1000000U),
         (unsigned long)(configuration->rate_pid_millionths[0][0] % 1000000U),

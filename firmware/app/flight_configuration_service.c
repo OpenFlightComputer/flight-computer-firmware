@@ -53,6 +53,7 @@ static bool apply_runtime(flight_configuration_service_t *service,
 {
     prepared_control_input_shaping_t prepared_control;
     prepared_quad_x_mixer_t prepared_mixer;
+    rate_controller_t rate_controller;
     const receiver_freshness_config_t freshness = {
         .fresh_through_us = configuration->receiver_failsafe.stale_after_us,
         .lost_after_us =
@@ -64,6 +65,8 @@ static bool apply_runtime(flight_configuration_service_t *service,
         !quad_x_mixer_prepare(&configuration->mixer,
                               configuration->propeller_layout,
                               &prepared_mixer) ||
+        !rate_controller_initialize(
+            &rate_controller, &configuration->rate_controller) ||
         !apply_imu_processing_configuration(
             service->imu_processing_pipeline, configuration)) {
         return false;
@@ -74,6 +77,7 @@ static bool apply_runtime(flight_configuration_service_t *service,
     }
     service->prepared_control = prepared_control;
     service->prepared_mixer = prepared_mixer;
+    service->rate_controller = rate_controller;
     if (!service->receiver_service->initialized) {
         return true;
     }
@@ -128,6 +132,9 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
         !quad_x_mixer_prepare(&service->active.mixer,
                               service->active.propeller_layout,
                               &service->prepared_mixer) ||
+        !rate_controller_initialize(
+            &service->rate_controller,
+            &service->active.rate_controller) ||
         !apply_imu_processing_configuration(
             service->imu_processing_pipeline, &service->active)) {
         return FLIGHT_CONFIGURATION_SERVICE_APPLY_ERROR;

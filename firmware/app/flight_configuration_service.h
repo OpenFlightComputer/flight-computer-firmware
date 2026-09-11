@@ -33,6 +33,7 @@ typedef struct {
     receiver_failsafe_t *receiver_failsafe;
     receiver_service_t *receiver_service;
     imu_processing_pipeline_t *imu_processing_pipeline;
+    rate_controller_t rate_controller;
     prepared_control_input_shaping_t prepared_control;
     prepared_quad_x_mixer_t prepared_mixer;
     flight_configuration_clock_t clock;

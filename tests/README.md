@@ -204,6 +204,9 @@ rejection without any formatted long-long I/O.
 The native IMU targets cover sample publication, stationary gyro calibration,
 first-order gyro filtering, accelerometer angle calculation, timestamp-derived
 complementary estimation, duplicate/stale/gap handling, and invalid
-configuration. Closed-loop control remains for its approved milestone.
+configuration. The controller targets additionally cover bounded angle-to-rate
+conversion, yaw-rate passthrough, PID continuity, zero-throttle reset, and the
+shadow flight-control integration. Controller outputs do not yet have motor
+authority.
 
 Hardware tests remain separate and must not be represented as passing host tests.

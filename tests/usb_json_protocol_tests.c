@@ -15,6 +15,9 @@
     "\"integral_limit\":0.15,\"output_limit\":0.30}," \
     "\"yaw\":{\"kp\":0.0015,\"ki\":0.0008,\"kd\":0.0," \
     "\"integral_limit\":0.10,\"output_limit\":0.20}}"
+#define ATTITUDE_CONTROLLER_JSON \
+    "\"attitude_controller\":{\"roll_gain_per_s\":4.0," \
+    "\"pitch_gain_per_s\":4.0},"
 
 static void assert_valid_json_line(const char *line, size_t length)
 {
@@ -86,7 +89,7 @@ static void valid_commands_and_key_order_are_accepted(void)
     request = parse(
         "{\"type\":\"command\",\"request_id\":8,"
         "\"command\":\"config_write\",\"configuration\":{"
-        "\"schema_version\":5,\"motors\":{\"propeller_layout\":"
+        "\"schema_version\":6,\"motors\":{\"propeller_layout\":"
         "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
         "\"NORMAL\",\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
         "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
@@ -103,7 +106,7 @@ static void valid_commands_and_key_order_are_accepted(void)
         "\"throttle\":{\"zero_deadband\":0.02,\"maximum\":1.0,"
         "\"curve\":{\"type\":\"CONTROL_POINTS\","
         "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
-        RATE_CONTROLLER_JSON "},"
+        ATTITUDE_CONTROLLER_JSON RATE_CONTROLLER_JSON "},"
         "\"receiver_failsafe\":{\"stale_after_us\":25000,"
         "\"loss_detected_after_us\":100000,\"hold_last_until_us\":400000,"
         "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"
@@ -130,6 +133,7 @@ static void valid_commands_and_key_order_are_accepted(void)
            500000U);
     assert(request.configuration.attitude_maximum_gap_us == 10000U);
     assert(request.configuration.rate_controller_maximum_gap_us == 10000U);
+    assert(request.configuration.attitude_gain_millionths[0] == 4000000U);
     assert(request.configuration.rate_pid_millionths[0][0] == 2000U);
     assert(request.configuration.control_axis_millionths[0][0] == 30000U);
     assert(request.configuration.control_axis_millionths[0][1] == 30000000U);
@@ -227,7 +231,7 @@ static void response_builders_are_exact_and_bounded(void)
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
     const usb_json_configuration_t configuration = {
-        .schema_version = 5U,
+        .schema_version = 6U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {-100000, 0, 0, 50000, 50000},
         .mixer_factor_millionths = {250000U, 250000U, 150000U},
@@ -244,6 +248,7 @@ static void response_builders_are_exact_and_bounded(void)
             {40000U, 0U, 150000000U},
         },
         .throttle_millionths = {20000U, 1000000U},
+        .attitude_gain_millionths = {4000000U, 4000000U},
         .rate_controller_maximum_gap_us = 10000U,
         .rate_pid_millionths = {
             {2000U, 1000U, 10U, 150000U, 300000U},
@@ -313,6 +318,9 @@ static void response_builders_are_exact_and_bounded(void)
     assert(strstr(output, "\"stage_one_roll\":-0.100000") != NULL);
     assert(strstr(output, "\"rate_controller\":{\"type\":\"PID\"") !=
            NULL);
+    assert(strstr(output,
+                  "\"attitude_controller\":{\"roll_gain_per_s\":"
+                  "4.000000") != NULL);
     assert_valid_json_line(output, length);
     assert(usb_json_build_configuration_response(
         USB_JSON_COMMAND_CONFIG_WRITE,
@@ -354,7 +362,7 @@ static void response_builders_are_exact_and_bounded(void)
 static void maximum_curve_response_fits_transport_capacity(void)
 {
     usb_json_configuration_t configuration = {
-        .schema_version = 5U,
+        .schema_version = 6U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {0, 0, 0, 50000, 50000},
         .mixer_factor_millionths = {250000U, 250000U, 150000U},
@@ -369,6 +377,7 @@ static void maximum_curve_response_fits_transport_capacity(void)
             {40000U, 0U, 150000000U},
         },
         .throttle_millionths = {20000U, 1000000U},
+        .attitude_gain_millionths = {4000000U, 4000000U},
         .rate_controller_maximum_gap_us = 10000U,
         .rate_pid_millionths = {
             {2000U, 1000U, 10U, 150000U, 300000U},

@@ -112,6 +112,12 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
                 },
             },
         },
+        .roll_attitude_controller = {
+            .gain_per_s = OFC_DEFAULT_ATTITUDE_ROLL_GAIN_PER_S,
+        },
+        .pitch_attitude_controller = {
+            .gain_per_s = OFC_DEFAULT_ATTITUDE_PITCH_GAIN_PER_S,
+        },
         .receiver_failsafe = {
             .stale_after_us = OFC_DEFAULT_FAILSAFE_STALE_AFTER_US,
             .loss_detected_after_us =
@@ -172,6 +178,10 @@ bool flight_configuration_is_valid(
            motor_configuration_is_valid(&configuration->motors) &&
            quad_x_mixer_config_is_valid(&configuration->mixer) &&
            control_input_shaping_config_is_valid(&configuration->control) &&
+           roll_attitude_controller_config_is_valid(
+               &configuration->roll_attitude_controller) &&
+           pitch_attitude_controller_config_is_valid(
+               &configuration->pitch_attitude_controller) &&
            rate_controller_config_is_valid(&configuration->rate_controller) &&
            receiver_failsafe_config_is_valid(
                &configuration->receiver_failsafe) &&

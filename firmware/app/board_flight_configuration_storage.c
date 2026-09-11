@@ -6,8 +6,9 @@
 #include <stdint.h>
 #include <string.h>
 
-#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(5)
-#define PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(4)
+#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(6)
+#define PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(5)
+#define SCHEMA_FOUR_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(4)
 #define OLDER_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(3)
 #define OLDEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(2)
 #define EARLIEST_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(1)
@@ -43,6 +44,7 @@ typedef struct {
     uint8_t rate_controller_type;
     uint8_t rate_controller_reserved[3];
     float rate_pid_parameters[RATE_CONTROLLER_AXIS_COUNT][5];
+    float attitude_angle_gain_per_s[2];
 } flight_configuration_payload_t;
 
 typedef struct {
@@ -63,7 +65,31 @@ typedef struct {
     float control_axis_parameters[3][3];
     float throttle_parameters[2];
     control_curve_payload_t control_curves[4];
+    uint32_t rate_controller_maximum_gap_us;
+    uint8_t rate_controller_type;
+    uint8_t rate_controller_reserved[3];
+    float rate_pid_parameters[RATE_CONTROLLER_AXIS_COUNT][5];
 } previous_flight_configuration_payload_t;
+
+typedef struct {
+    uint32_t version;
+    uint32_t schema_version;
+    uint32_t timing_us[5];
+    float mixer_factors[3];
+    float failsafe_controls[5];
+    uint32_t gyro_timing_us[2];
+    float gyro_thresholds_dps[2];
+    float processing_parameters[2];
+    uint32_t attitude_maximum_gap_us;
+    uint8_t propeller_layout;
+    uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
+    uint8_t gyro_filter_type;
+    uint8_t attitude_estimator_type;
+    uint8_t reserved[1];
+    float control_axis_parameters[3][3];
+    float throttle_parameters[2];
+    control_curve_payload_t control_curves[4];
+} schema_four_flight_configuration_payload_t;
 
 typedef struct {
     uint32_t version;
@@ -111,13 +137,15 @@ typedef struct {
     uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
 } legacy_motor_configuration_payload_t;
 
-_Static_assert(sizeof(flight_configuration_payload_t) == 480U,
+_Static_assert(sizeof(flight_configuration_payload_t) == 488U,
                "Flight configuration payload format changed");
-_Static_assert(sizeof(previous_flight_configuration_payload_t) == 412U,
+_Static_assert(sizeof(previous_flight_configuration_payload_t) == 480U,
                "Previous flight configuration payload format changed");
 _Static_assert(offsetof(flight_configuration_payload_t,
-                        rate_controller_maximum_gap_us) == 412U,
-               "Schema 4 payload is no longer a schema 5 prefix");
+                        attitude_angle_gain_per_s) == 480U,
+               "Schema 5 payload is no longer a schema 6 prefix");
+_Static_assert(sizeof(schema_four_flight_configuration_payload_t) == 412U,
+               "Schema 4 flight configuration payload format changed");
 _Static_assert(sizeof(older_flight_configuration_payload_t) == 96U,
                "Older flight configuration payload format changed");
 _Static_assert(sizeof(oldest_flight_configuration_payload_t) == 84U,
@@ -198,6 +226,10 @@ static void encode(const flight_configuration_t *configuration,
             configuration->rate_controller.maximum_gap_us,
         .rate_controller_type =
             (uint8_t)configuration->rate_controller.type,
+        .attitude_angle_gain_per_s = {
+            configuration->roll_attitude_controller.gain_per_s,
+            configuration->pitch_attitude_controller.gain_per_s,
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         payload->directions[motor] =
@@ -306,6 +338,12 @@ static bool decode(const flight_configuration_payload_t *payload,
             .type = (rate_controller_type_t)payload->rate_controller_type,
             .maximum_gap_us = payload->rate_controller_maximum_gap_us,
         },
+        .roll_attitude_controller = {
+            .gain_per_s = payload->attitude_angle_gain_per_s[0],
+        },
+        .pitch_attitude_controller = {
+            .gain_per_s = payload->attitude_angle_gain_per_s[1],
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         configuration->motors.direction[motor] =
@@ -350,10 +388,8 @@ static bool decode_previous(
 {
     flight_configuration_payload_t upgraded;
     flight_configuration_t defaults;
-    size_t axis;
-
     if ((payload->version != PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
-        (payload->schema_version != 4U)) {
+        (payload->schema_version != 5U)) {
         return false;
     }
     flight_configuration_defaults(&defaults);
@@ -361,6 +397,30 @@ static bool decode_previous(
     (void)memcpy(&upgraded, payload, sizeof(*payload));
     upgraded.version = FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
     upgraded.schema_version = defaults.schema_version;
+    upgraded.attitude_angle_gain_per_s[0] =
+        defaults.roll_attitude_controller.gain_per_s;
+    upgraded.attitude_angle_gain_per_s[1] =
+        defaults.pitch_attitude_controller.gain_per_s;
+    return decode(&upgraded, configuration);
+}
+
+static bool decode_schema_four(
+    const schema_four_flight_configuration_payload_t *payload,
+    flight_configuration_t *configuration)
+{
+    previous_flight_configuration_payload_t upgraded = {0};
+    flight_configuration_t defaults;
+    size_t axis;
+
+    if ((payload->version !=
+         SCHEMA_FOUR_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+        (payload->schema_version != 4U)) {
+        return false;
+    }
+    flight_configuration_defaults(&defaults);
+    (void)memcpy(&upgraded, payload, sizeof(*payload));
+    upgraded.version = PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
+    upgraded.schema_version = 5U;
     upgraded.rate_controller_maximum_gap_us =
         defaults.rate_controller.maximum_gap_us;
     upgraded.rate_controller_type = (uint8_t)defaults.rate_controller.type;
@@ -376,7 +436,7 @@ static bool decode_previous(
         upgraded.rate_pid_parameters[axis][4] =
             defaults.rate_controller.axis[axis].output_limit;
     }
-    return decode(&upgraded, configuration);
+    return decode_previous(&upgraded, configuration);
 }
 
 static bool decode_older(
@@ -540,6 +600,16 @@ static flight_configuration_load_result_t load_configuration(
         if ((board_persistent_storage_read(&previous, sizeof(previous)) ==
              BOARD_PERSISTENT_STORAGE_READ_OK) &&
             decode_previous(&previous, configuration)) {
+            return FLIGHT_CONFIGURATION_LOAD_OK;
+        }
+    }
+    {
+        schema_four_flight_configuration_payload_t schema_four;
+
+        if ((board_persistent_storage_read(&schema_four,
+                                           sizeof(schema_four)) ==
+             BOARD_PERSISTENT_STORAGE_READ_OK) &&
+            decode_schema_four(&schema_four, configuration)) {
             return FLIGHT_CONFIGURATION_LOAD_OK;
         }
     }

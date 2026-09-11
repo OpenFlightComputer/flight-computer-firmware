@@ -47,6 +47,7 @@ typedef struct {
     uint8_t attitude_estimator_type;
     uint32_t control_axis_millionths[3][3];
     uint32_t throttle_millionths[2];
+    uint32_t attitude_gain_millionths[2];
     uint32_t rate_controller_maximum_gap_us;
     uint32_t rate_pid_millionths[3][5];
     uint8_t rate_controller_type;

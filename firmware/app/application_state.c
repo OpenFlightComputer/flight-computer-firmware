@@ -60,6 +60,8 @@ volatile int32_t firmware_imu_body_gyroscope_z;
 volatile uint32_t firmware_imu_source_error_count;
 volatile uint32_t firmware_high_rate_worst_case_budget_us;
 volatile uint32_t firmware_high_rate_worst_case_utilization_permille;
+volatile uint32_t firmware_rate_controller_shadow_result =
+    (uint32_t)RATE_CONTROLLER_RESULT_NOT_INITIALIZED;
 
 task_registry_t firmware_task_registry;
 scheduler_t firmware_scheduler;
@@ -74,3 +76,5 @@ flight_configuration_service_t firmware_flight_configuration_service;
 imu_service_t firmware_imu_service;
 gyro_calibration_t firmware_gyro_calibration;
 imu_processing_pipeline_t firmware_imu_processing_pipeline;
+flight_control_desired_rates_t firmware_flight_control_shadow_desired_rates;
+rate_controller_output_t firmware_rate_controller_shadow_output;

@@ -1,11 +1,13 @@
 #ifndef OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_H
 #define OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_H
 
-#include "motor_configuration.h"
 #include "control_input_shaping.h"
+#include "motor_configuration.h"
+#include "pitch_attitude_controller.h"
 #include "quad_x_mixer.h"
 #include "rate_controller.h"
 #include "receiver_failsafe.h"
+#include "roll_attitude_controller.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -44,6 +46,8 @@ typedef struct {
     motor_configuration_t motors;
     quad_x_mixer_config_t mixer;
     control_input_shaping_config_t control;
+    roll_attitude_controller_config_t roll_attitude_controller;
+    pitch_attitude_controller_config_t pitch_attitude_controller;
     rate_controller_config_t rate_controller;
     receiver_failsafe_config_t receiver_failsafe;
     gyro_calibration_configuration_t gyro_calibration;

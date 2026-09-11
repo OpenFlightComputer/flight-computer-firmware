@@ -4,6 +4,7 @@
 #include "boot_status.h"
 #include "fault.h"
 #include "flight_configuration_service.h"
+#include "flight_control.h"
 #include "imu_service.h"
 #include "gyro_calibration.h"
 #include "imu_processing_pipeline.h"
@@ -31,6 +32,10 @@ extern flight_configuration_service_t firmware_flight_configuration_service;
 extern imu_service_t firmware_imu_service;
 extern gyro_calibration_t firmware_gyro_calibration;
 extern imu_processing_pipeline_t firmware_imu_processing_pipeline;
+extern flight_control_desired_rates_t
+    firmware_flight_control_shadow_desired_rates;
+extern rate_controller_output_t firmware_rate_controller_shadow_output;
+extern volatile uint32_t firmware_rate_controller_shadow_result;
 
 extern volatile uint32_t firmware_flight_control_task_executions;
 extern volatile uint32_t firmware_flight_control_submit_last_result;

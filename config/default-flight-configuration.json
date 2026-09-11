@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "motors": {
     "propeller_layout": "PROPS_IN",
     "directions": [
@@ -53,6 +53,10 @@
         "interpolation": "LINEAR",
         "points": [[0.0, 0.0], [1.0, 1.0]]
       }
+    },
+    "attitude_controller": {
+      "roll_gain_per_s": 4.0,
+      "pitch_gain_per_s": 4.0
     },
     "rate_controller": {
       "type": "PID",

@@ -111,13 +111,13 @@ int main(void)
                                 &mixer));
 
     active_source = MOTOR_CONTROL_SOURCE_NONE;
-    assert(flight_control_process_receiver(&control, &mixer, &decision, 42U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, NULL, 42U) ==
            FLIGHT_CONTROL_IDLE);
     assert(submit_count == 0U);
 
     active_source = MOTOR_CONTROL_SOURCE_RECEIVER;
     submit_result = MOTOR_CONTROL_SUBMIT_ACCEPTED;
-    assert(flight_control_process_receiver(&control, &mixer, &decision, 42U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, NULL, 42U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(submit_count == 1U);
     assert(submitted_command.valid);
@@ -127,21 +127,112 @@ int main(void)
     assert(fabsf(submitted_command.throttle[2] - 0.375F) < 0.000001F);
     assert(fabsf(submitted_command.throttle[3] - 0.425F) < 0.000001F);
 
+    {
+        const roll_attitude_controller_config_t roll_controller = {
+            .gain_per_s = 4.0F,
+        };
+        const pitch_attitude_controller_config_t pitch_controller = {
+            .gain_per_s = 4.0F,
+        };
+        const rate_controller_config_t rate_config = {
+            .type = RATE_CONTROLLER_TYPE_PID,
+            .maximum_gap_us = 10000U,
+            .axis = {
+                {.kp = 0.01F, .ki = 0.0F, .kd = 0.0F,
+                 .integral_limit = 0.2F, .output_limit = 1.0F},
+                {.kp = 0.01F, .ki = 0.0F, .kd = 0.0F,
+                 .integral_limit = 0.2F, .output_limit = 1.0F},
+                {.kp = 0.01F, .ki = 0.0F, .kd = 0.0F,
+                 .integral_limit = 0.2F, .output_limit = 1.0F},
+            },
+        };
+        rate_controller_t rate_controller;
+        flight_control_desired_rates_t desired_rates;
+        rate_controller_output_t rate_output;
+        volatile uint32_t rate_result = UINT32_MAX;
+        attitude_snapshot_t attitude = {
+            .filtered_gyroscope_dps = {10.0F, -5.0F, 2.0F},
+            .roll_degrees = 5.0F,
+            .pitch_degrees = -5.0F,
+            .acquired_at_us = 1000U,
+            .source_sequence = 1U,
+            .valid = true,
+        };
+        flight_control_shadow_stabilization_t stabilization;
+
+        assert(rate_controller_initialize(&rate_controller, &rate_config));
+        stabilization = (flight_control_shadow_stabilization_t){
+            .roll_controller = &roll_controller,
+            .pitch_controller = &pitch_controller,
+            .rate_controller = &rate_controller,
+            .attitude = &attitude,
+            .desired_rates = &desired_rates,
+            .rate_output = &rate_output,
+            .rate_result = &rate_result,
+        };
+        decision = live_decision();
+        assert(flight_control_process_receiver(&control, &mixer, &decision,
+                                               &stabilization, 42U) ==
+               FLIGHT_CONTROL_SUBMITTED);
+        assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_SEEDED);
+        assert(desired_rates.valid);
+        assert(desired_rates.desired_rate_dps[0] == 28.0F);
+        assert(desired_rates.desired_rate_dps[1] == -4.0F);
+        assert(desired_rates.desired_rate_dps[2] == 75.0F);
+        assert(!rate_output.valid);
+
+        attitude.acquired_at_us = 2000U;
+        attitude.source_sequence = 2U;
+        assert(flight_control_process_receiver(&control, &mixer, &decision,
+                                               &stabilization, 43U) ==
+               FLIGHT_CONTROL_SUBMITTED);
+        assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_UPDATED);
+        assert(rate_output.valid);
+        assert(fabsf(rate_output.axis[0].total - 0.18F) < 0.000001F);
+        assert(fabsf(rate_output.axis[1].total - 0.01F) < 0.000001F);
+        assert(fabsf(rate_output.axis[2].total - 0.73F) < 0.000001F);
+        assert(fabsf(submitted_command.throttle[0] - 0.725F) < 0.000001F);
+
+        attitude.valid = false;
+        assert(flight_control_process_receiver(&control, &mixer, &decision,
+                                               &stabilization, 44U) ==
+               FLIGHT_CONTROL_SUBMITTED);
+        assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_DISABLED);
+        assert(!desired_rates.valid);
+        assert(!rate_output.valid);
+
+        attitude.valid = true;
+        attitude.acquired_at_us = 3000U;
+        attitude.source_sequence = 3U;
+        assert(flight_control_process_receiver(&control, &mixer, &decision,
+                                               &stabilization, 45U) ==
+               FLIGHT_CONTROL_SUBMITTED);
+        assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_SEEDED);
+
+        decision.requested_control.throttle = 0.0F;
+        assert(flight_control_process_receiver(&control, &mixer, &decision,
+                                               &stabilization, 46U) ==
+               FLIGHT_CONTROL_SUBMITTED);
+        assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_DISABLED);
+        assert(!desired_rates.valid);
+        assert(!rate_output.valid);
+    }
+
     decision.action = RECEIVER_FAILSAFE_ACTION_STOP;
     failsafe_result = MOTOR_CONTROL_FAILSAFE_ACCEPTED;
-    assert(flight_control_process_receiver(&control, &mixer, &decision, 43U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, NULL, 43U) ==
            FLIGHT_CONTROL_FAILSAFE_ENTERED);
     assert(failsafe_count == 1U);
-    assert(submit_count == 1U);
+    assert(submit_count == 6U);
 
     failsafe_result = MOTOR_CONTROL_FAILSAFE_TRANSITION_ERROR;
-    assert(flight_control_process_receiver(&control, &mixer, &decision, 44U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, NULL, 44U) ==
            FLIGHT_CONTROL_FAILSAFE_ERROR);
     assert(failsafe_count == 2U);
 
     decision = live_decision();
     decision.requested_control.valid = false;
-    assert(flight_control_process_receiver(&control, &mixer, &decision, 45U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, NULL, 45U) ==
            FLIGHT_CONTROL_MIX_ERROR);
 
     {
@@ -159,7 +250,7 @@ int main(void)
         decision = live_decision();
         decision.action = RECEIVER_FAILSAFE_ACTION_STAGE_ONE;
         assert(flight_control_process_receiver(&strongly_shaped, &mixer,
-                                               &decision, 46U) ==
+                                               &decision, NULL, 46U) ==
                FLIGHT_CONTROL_SUBMITTED);
         /* Failsafe controls are physical normalized commands, not stick input. */
         assert(fabsf(submitted_command.throttle[0] - 0.725F) < 0.000001F);

@@ -325,6 +325,14 @@ static void configuration_to_usb(
             configuration->rate_controller.maximum_gap_us,
         .rate_controller_type =
             (uint8_t)configuration->rate_controller.type,
+        .attitude_gain_millionths = {
+            (uint32_t)(configuration->roll_attitude_controller.gain_per_s *
+                           1000000.0F +
+                       0.5F),
+            (uint32_t)(configuration->pitch_attitude_controller.gain_per_s *
+                           1000000.0F +
+                       0.5F),
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         usb->directions[motor] =
@@ -454,6 +462,14 @@ static void configuration_from_usb(
         .rate_controller = {
             .type = (rate_controller_type_t)usb->rate_controller_type,
             .maximum_gap_us = usb->rate_controller_maximum_gap_us,
+        },
+        .roll_attitude_controller = {
+            .gain_per_s =
+                (float)usb->attitude_gain_millionths[0] / 1000000.0F,
+        },
+        .pitch_attitude_controller = {
+            .gain_per_s =
+                (float)usb->attitude_gain_millionths[1] / 1000000.0F,
         },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {

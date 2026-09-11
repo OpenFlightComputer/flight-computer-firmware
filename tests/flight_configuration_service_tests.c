@@ -153,6 +153,7 @@ int main(void)
     assert(service.active.propeller_layout == PROPELLER_LAYOUT_PROPS_IN);
     assert(service.prepared_control.initialized);
     assert(service.prepared_mixer.initialized);
+    assert(service.rate_controller.initialized);
 
     configuration = service.active;
     configuration.propeller_layout = PROPELLER_LAYOUT_PROPS_OUT;
@@ -163,6 +164,7 @@ int main(void)
     configuration.attitude_estimator
         .accelerometer_correction_time_constant_s = 0.75F;
     configuration.control.roll.curve.points[1].output = 0.25F;
+    configuration.roll_attitude_controller.gain_per_s = 5.0F;
     now_us = 123U;
     assert(flight_configuration_service_write(&service, &configuration) ==
            FLIGHT_CONFIGURATION_SERVICE_OK);
@@ -182,6 +184,7 @@ int main(void)
     assert(service.prepared_control.roll.curve.segments[0].coefficient[1] ==
            0.5F);
     assert(service.prepared_mixer.coefficient[0][2] == -0.2F);
+    assert(service.active.roll_attitude_controller.gain_per_s == 5.0F);
 
     state_machine.current = SYSTEM_STATE_ARMED;
     assert(flight_configuration_service_write(&service, &configuration) ==

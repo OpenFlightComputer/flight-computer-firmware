@@ -6,8 +6,9 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.6 — bounded three-axis rate PID control — implemented in software
-and awaiting owner review. It is deliberately not connected to motor output.
+Milestone 4.7 — self-leveling attitude-to-rate control — implemented in
+software and awaiting owner review. It is deliberately shadow-only and is not
+connected to motor output.
 
 ## Last completed milestone
 
@@ -72,6 +73,18 @@ the receiver, mixer, authority gate, and DShot output path.
 - Kept Milestone 4.6 isolated from production motor authority. It adds no task
   and performs no runtime shadow calculation; the existing open-loop path is
   unchanged until the outer loop and stabilized integration milestones.
+- Added separate hardware-independent roll, pitch, and yaw attitude-control
+  modules. Roll and pitch convert angle error to desired rate with a
+  configurable default gain of `4.0 s^-1`; yaw directly preserves the pilot's
+  requested rate until an absolute-heading sensor exists. Flight control calls
+  all three directly, without function-pointer dispatch or a coordinator.
+- Integrated the attitude and rate controllers as shadow calculations in the
+  existing 1 kHz flight-control task. PID state resets at exact zero throttle,
+  failsafe, lost receiver authority, or unavailable IMU data. Open-loop motor
+  commands remain byte-for-byte independent of the shadow result.
+- Extended configuration, persistence, and USB transport to schema 6. The new
+  488-byte payload migrates schemas 1-5 and stores the separate roll and pitch
+  angle gains; no redundant type or axis-mode fields are persisted.
 - Extended the existing request-driven `imu` response and host visualization
   with filtered gyro, estimated roll/pitch, and bounded processing counters.
   No extra sensor read, snapshot producer, or scheduled diagnostics task was
@@ -140,15 +153,15 @@ the receiver, mixer, authority gate, and DShot output path.
   not delayed by the roughly 2 ms reset-bounded LED transaction.
 - Extended `imu` diagnostics and the host view with calibration state,
   progress, samples, restarts, raw bias, and bias-corrected gyro values.
-- All 48 native tests and all 67 Python host-tool tests pass, including the
+- All 49 native tests and all 67 Python host-tool tests pass, including the
   address/undefined-behavior sanitizer build. Debug and Release firmware build
-  with warnings as errors. Debug uses 167,244 bytes of Flash and 48,008 bytes
-  of RAM; Release uses 116,084 bytes of Flash and 47,992 bytes of RAM. The RAM
+  with warnings as errors. Debug uses 172,496 bytes of Flash and 48,304 bytes
+  of RAM; Release uses 119,872 bytes of Flash and 48,288 bytes of RAM. The RAM
   increase is primarily the bounded 4,096-byte configuration lines and USB
   queues required by maximum-size curve documents.
-- IMU estimates remain outside motor control in Milestone 4.5. Receiver stick
-  shaping now precedes the existing open-loop mixer; the rate/angle controllers
-  and fail-closed IMU control gate belong to later milestones.
+- IMU estimates now feed the Milestone 4.7 shadow controllers. Receiver stick
+  shaping still independently feeds the existing open-loop mixer; controller
+  outputs and the fail-closed IMU motor gate belong to Milestone 4.8.
 
 ## Milestone 4.5 assumptions and safety boundary
 
@@ -186,13 +199,18 @@ the receiver, mixer, authority gate, and DShot output path.
 - The conservative 30-degree angle, 180-degree-per-second roll/pitch, and
   150-degree-per-second yaw defaults are starting values, not flight-proven
   tuning.
+- The `4.0 s^-1` roll/pitch angle gain and all PID gains remain conservative
+  software defaults. The added 1 kHz shadow work and resulting desired rates
+  require on-board timing and motion validation before controller output may
+  affect motors.
 - Curve configuration affects live and held receiver input only. It cannot
   reshape USB bench commands or the explicitly configured receiver failsafe.
 
 ## Next proposed milestone
 
-Milestone 4.6 — add bounded three-axis rate PID control with anti-windup and
-zero-throttle integral reset, without yet replacing the open-loop motor path.
+Milestone 4.8 — add the fail-closed stabilized mixer path, making fresh valid
+IMU data and successful controller results prerequisites before PID corrections
+receive motor authority.
 
 ## Historical milestone record
 

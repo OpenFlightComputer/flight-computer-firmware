@@ -17,6 +17,9 @@
     "\"integral_limit\":0.15,\"output_limit\":0.30}," \
     "\"yaw\":{\"kp\":0.0015,\"ki\":0.0008,\"kd\":0.0," \
     "\"integral_limit\":0.10,\"output_limit\":0.20}}"
+#define ATTITUDE_CONTROLLER_JSON \
+    "\"attitude_controller\":{\"roll_gain_per_s\":4.0," \
+    "\"pitch_gain_per_s\":4.0},"
 
 #define INPUT_CAPACITY 4U
 
@@ -255,7 +258,7 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 5U,
+            .schema_version = 6U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
@@ -317,6 +320,12 @@ static void reset_fakes(void)
                     {.kp = 0.0015F, .ki = 0.0008F, .kd = 0.0F,
                      .integral_limit = 0.10F, .output_limit = 0.20F},
                 },
+            },
+            .roll_attitude_controller = {
+                .gain_per_s = 4.0F,
+            },
+            .pitch_attitude_controller = {
+                .gain_per_s = 4.0F,
             },
             .receiver_failsafe = {
                 .stale_after_us = 25000U,
@@ -789,7 +798,7 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":5,"
+        "\"config_write\",\"configuration\":{\"schema_version\":6,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
@@ -807,7 +816,7 @@ static void complete_configuration_commands_replace_singular_commands(void)
         "\"throttle\":{\"zero_deadband\":0.02,\"maximum\":1.0,"
         "\"curve\":{\"type\":\"CONTROL_POINTS\","
         "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
-        RATE_CONTROLLER_JSON "},"
+        ATTITUDE_CONTROLLER_JSON RATE_CONTROLLER_JSON "},"
         "\"receiver_failsafe\":{\"stale_after_us\":25000,"
         "\"loss_detected_after_us\":100000,\"hold_last_until_us\":400000,"
         "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"

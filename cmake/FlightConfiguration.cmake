@@ -25,8 +25,8 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 5)
-    message(FATAL_ERROR "Default configuration schema_version must be 5")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 6)
+    message(FATAL_ERROR "Default configuration schema_version must be 6")
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -73,6 +73,11 @@ foreach(axis IN ITEMS roll pitch yaw)
         ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_POINT_${point}_OUTPUT
             control ${axis} curve points ${point} 1)
     endforeach()
+endforeach()
+foreach(axis IN ITEMS roll pitch)
+    string(TOUPPER "${axis}" axis_upper)
+    ofc_json_get(OFC_CONFIG_ATTITUDE_${axis_upper}_GAIN
+        control attitude_controller ${axis}_gain_per_s)
 endforeach()
 ofc_json_get(rate_controller_type control rate_controller type)
 if(rate_controller_type STREQUAL "PID")
@@ -177,6 +182,12 @@ if(OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP LESS_EQUAL 0 OR
    OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP GREATER 1000000)
     message(FATAL_ERROR "Default rate controller timing is invalid")
 endif()
+foreach(axis IN ITEMS ROLL PITCH)
+    if(OFC_CONFIG_ATTITUDE_${axis}_GAIN LESS_EQUAL 0 OR
+       OFC_CONFIG_ATTITUDE_${axis}_GAIN GREATER 100)
+        message(FATAL_ERROR "Default attitude controller gain is invalid")
+    endif()
+endforeach()
 foreach(axis IN ITEMS ROLL PITCH YAW)
     foreach(gain IN ITEMS KP KI KD)
         if(OFC_CONFIG_RATE_PID_${axis}_${gain} LESS 0 OR

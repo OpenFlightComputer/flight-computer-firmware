@@ -472,6 +472,8 @@ add_executable(board_flight_configuration_storage_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
@@ -510,6 +512,8 @@ add_executable(flight_configuration_service_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
@@ -593,12 +597,32 @@ target_compile_options(rate_controller_tests PRIVATE
 )
 add_test(NAME rate_controller COMMAND rate_controller_tests)
 
+add_executable(attitude_controller_tests
+    attitude_controller_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/yaw_attitude_controller.c"
+)
+target_include_directories(attitude_controller_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+)
+target_link_libraries(attitude_controller_tests PRIVATE m)
+target_compile_options(attitude_controller_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME attitude_controller COMMAND attitude_controller_tests)
+
 add_executable(flight_control_tests
     flight_control_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_control.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/yaw_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
 )
 target_include_directories(flight_control_tests PRIVATE
@@ -606,6 +630,8 @@ target_include_directories(flight_control_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
 )
 target_compile_options(flight_control_tests PRIVATE
