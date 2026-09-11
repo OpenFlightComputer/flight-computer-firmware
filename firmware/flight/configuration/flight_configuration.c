@@ -11,6 +11,15 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
     static const motor_direction_t directions[MOTOR_COMMAND_MOTOR_COUNT] =
         OFC_DEFAULT_MOTOR_DIRECTIONS;
     size_t motor;
+    static const control_curve_point_t roll_points[3] =
+        OFC_DEFAULT_CONTROL_ROLL_POINTS;
+    static const control_curve_point_t pitch_points[3] =
+        OFC_DEFAULT_CONTROL_PITCH_POINTS;
+    static const control_curve_point_t yaw_points[3] =
+        OFC_DEFAULT_CONTROL_YAW_POINTS;
+    static const control_curve_point_t throttle_points[2] =
+        OFC_DEFAULT_CONTROL_THROTTLE_POINTS;
+    size_t point;
 
     if (configuration == NULL) {
         return;
@@ -23,6 +32,58 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
             .roll_factor = OFC_DEFAULT_MIXER_ROLL_FACTOR,
             .pitch_factor = OFC_DEFAULT_MIXER_PITCH_FACTOR,
             .yaw_factor = OFC_DEFAULT_MIXER_YAW_FACTOR,
+        },
+        .control = {
+            .roll = {
+                .deadband = OFC_DEFAULT_CONTROL_ROLL_DEADBAND,
+                .maximum_angle_degrees =
+                    OFC_DEFAULT_CONTROL_ROLL_MAXIMUM_ANGLE_DEGREES,
+                .maximum_rate_dps =
+                    OFC_DEFAULT_CONTROL_ROLL_MAXIMUM_RATE_DPS,
+                .curve = {
+                    .type = OFC_DEFAULT_CONTROL_CURVE_TYPE,
+                    .interpolation =
+                        OFC_DEFAULT_CONTROL_CURVE_INTERPOLATION,
+                    .point_count = 3U,
+                },
+            },
+            .pitch = {
+                .deadband = OFC_DEFAULT_CONTROL_PITCH_DEADBAND,
+                .maximum_angle_degrees =
+                    OFC_DEFAULT_CONTROL_PITCH_MAXIMUM_ANGLE_DEGREES,
+                .maximum_rate_dps =
+                    OFC_DEFAULT_CONTROL_PITCH_MAXIMUM_RATE_DPS,
+                .curve = {
+                    .type = OFC_DEFAULT_CONTROL_CURVE_TYPE,
+                    .interpolation =
+                        OFC_DEFAULT_CONTROL_CURVE_INTERPOLATION,
+                    .point_count = 3U,
+                },
+            },
+            .yaw = {
+                .deadband = OFC_DEFAULT_CONTROL_YAW_DEADBAND,
+                .maximum_angle_degrees =
+                    OFC_DEFAULT_CONTROL_YAW_MAXIMUM_ANGLE_DEGREES,
+                .maximum_rate_dps =
+                    OFC_DEFAULT_CONTROL_YAW_MAXIMUM_RATE_DPS,
+                .curve = {
+                    .type = OFC_DEFAULT_CONTROL_CURVE_TYPE,
+                    .interpolation =
+                        OFC_DEFAULT_CONTROL_CURVE_INTERPOLATION,
+                    .point_count = 3U,
+                },
+            },
+            .throttle = {
+                .zero_deadband =
+                    OFC_DEFAULT_CONTROL_THROTTLE_ZERO_DEADBAND,
+                .maximum = OFC_DEFAULT_CONTROL_THROTTLE_MAXIMUM,
+                .curve = {
+                    .type = OFC_DEFAULT_CONTROL_CURVE_TYPE,
+                    .interpolation =
+                        OFC_DEFAULT_CONTROL_CURVE_INTERPOLATION,
+                    .point_count = 2U,
+                },
+            },
         },
         .receiver_failsafe = {
             .stale_after_us = OFC_DEFAULT_FAILSAFE_STALE_AFTER_US,
@@ -62,6 +123,16 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         configuration->motors.direction[motor] = directions[motor];
     }
+    for (point = 0U; point < 3U; point++) {
+        configuration->control.roll.curve.points[point] = roll_points[point];
+        configuration->control.pitch.curve.points[point] =
+            pitch_points[point];
+        configuration->control.yaw.curve.points[point] = yaw_points[point];
+    }
+    for (point = 0U; point < 2U; point++) {
+        configuration->control.throttle.curve.points[point] =
+            throttle_points[point];
+    }
 }
 
 bool flight_configuration_is_valid(
@@ -73,6 +144,7 @@ bool flight_configuration_is_valid(
            (configuration->propeller_layout < PROPELLER_LAYOUT_COUNT) &&
            motor_configuration_is_valid(&configuration->motors) &&
            quad_x_mixer_config_is_valid(&configuration->mixer) &&
+           control_input_shaping_config_is_valid(&configuration->control) &&
            receiver_failsafe_config_is_valid(
                &configuration->receiver_failsafe) &&
            (configuration->receiver_failsafe.stale_after_us <= UINT32_MAX) &&

@@ -133,7 +133,8 @@ static task_callback_result_t run_flight_control_task(void *context)
     }
     firmware_flight_control_submit_last_result =
         (uint32_t)flight_control_process_receiver(
-            &firmware_flight_configuration_service.active,
+            &firmware_flight_configuration_service.prepared_control,
+            &firmware_flight_configuration_service.prepared_mixer,
             &decision,
             now_us);
     return TASK_CALLBACK_CONTINUE;

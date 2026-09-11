@@ -49,6 +49,9 @@ typedef struct {
 
 typedef struct {
     receiver_normalization_config_t config;
+    float axis_negative_scale[3];
+    float axis_positive_scale[3];
+    float throttle_scale;
     bool initialized;
 } receiver_normalizer_t;
 

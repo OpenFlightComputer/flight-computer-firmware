@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_SERVICE_H
 
 #include "flight_configuration_storage.h"
+#include "control_input_shaping.h"
 #include "imu_processing_pipeline.h"
 #include "receiver_failsafe.h"
 #include "receiver_service.h"
@@ -32,6 +33,8 @@ typedef struct {
     receiver_failsafe_t *receiver_failsafe;
     receiver_service_t *receiver_service;
     imu_processing_pipeline_t *imu_processing_pipeline;
+    prepared_control_input_shaping_t prepared_control;
+    prepared_quad_x_mixer_t prepared_mixer;
     flight_configuration_clock_t clock;
     flight_configuration_source_t source;
     bool initialized;

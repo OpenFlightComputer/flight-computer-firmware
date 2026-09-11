@@ -52,16 +52,30 @@ bool receiver_failsafe_release_stage_two(receiver_failsafe_t *failsafe)
     return true;
 }
 
-static flight_configuration_t configuration(void)
+static control_input_shaping_config_t control_configuration(void)
 {
-    return (flight_configuration_t){
-        .schema_version = 1U,
-        .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
-        .mixer = {
-            .roll_factor = 0.25F,
-            .pitch_factor = 0.25F,
-            .yaw_factor = 0.15F,
+    const control_curve_config_t identity = {
+        .type = CONTROL_CURVE_TYPE_CONTROL_POINTS,
+        .interpolation = CONTROL_CURVE_INTERPOLATION_LINEAR,
+        .point_count = 2U,
+        .points = {{0.0F, 0.0F}, {1.0F, 1.0F}},
+    };
+    return (control_input_shaping_config_t){
+        .roll = {
+            .maximum_angle_degrees = 30.0F,
+            .maximum_rate_dps = 180.0F,
+            .curve = identity,
         },
+        .pitch = {
+            .maximum_angle_degrees = 30.0F,
+            .maximum_rate_dps = 180.0F,
+            .curve = identity,
+        },
+        .yaw = {
+            .maximum_rate_dps = 150.0F,
+            .curve = identity,
+        },
+        .throttle = {.maximum = 1.0F, .curve = identity},
     };
 }
 
@@ -81,17 +95,29 @@ static receiver_failsafe_decision_t live_decision(void)
 
 int main(void)
 {
-    flight_configuration_t config = configuration();
+    const control_input_shaping_config_t control_config =
+        control_configuration();
+    const quad_x_mixer_config_t mixer_config = {
+        .roll_factor = 0.25F,
+        .pitch_factor = 0.25F,
+        .yaw_factor = 0.15F,
+    };
+    prepared_control_input_shaping_t control;
+    prepared_quad_x_mixer_t mixer;
     receiver_failsafe_decision_t decision = live_decision();
 
+    assert(control_input_shaping_prepare(&control_config, &control));
+    assert(quad_x_mixer_prepare(&mixer_config, PROPELLER_LAYOUT_PROPS_IN,
+                                &mixer));
+
     active_source = MOTOR_CONTROL_SOURCE_NONE;
-    assert(flight_control_process_receiver(&config, &decision, 42U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, 42U) ==
            FLIGHT_CONTROL_IDLE);
     assert(submit_count == 0U);
 
     active_source = MOTOR_CONTROL_SOURCE_RECEIVER;
     submit_result = MOTOR_CONTROL_SUBMIT_ACCEPTED;
-    assert(flight_control_process_receiver(&config, &decision, 42U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, 42U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(submit_count == 1U);
     assert(submitted_command.valid);
@@ -103,20 +129,41 @@ int main(void)
 
     decision.action = RECEIVER_FAILSAFE_ACTION_STOP;
     failsafe_result = MOTOR_CONTROL_FAILSAFE_ACCEPTED;
-    assert(flight_control_process_receiver(&config, &decision, 43U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, 43U) ==
            FLIGHT_CONTROL_FAILSAFE_ENTERED);
     assert(failsafe_count == 1U);
     assert(submit_count == 1U);
 
     failsafe_result = MOTOR_CONTROL_FAILSAFE_TRANSITION_ERROR;
-    assert(flight_control_process_receiver(&config, &decision, 44U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, 44U) ==
            FLIGHT_CONTROL_FAILSAFE_ERROR);
     assert(failsafe_count == 2U);
 
     decision = live_decision();
     decision.requested_control.valid = false;
-    assert(flight_control_process_receiver(&config, &decision, 45U) ==
+    assert(flight_control_process_receiver(&control, &mixer, &decision, 45U) ==
            FLIGHT_CONTROL_MIX_ERROR);
+
+    {
+        control_input_shaping_config_t shaped_config =
+            control_configuration();
+        prepared_control_input_shaping_t strongly_shaped;
+
+        shaped_config.roll.curve.point_count = 3U;
+        shaped_config.roll.curve.points[1] =
+            (control_curve_point_t){0.5F, 0.1F};
+        shaped_config.roll.curve.points[2] =
+            (control_curve_point_t){1.0F, 1.0F};
+        assert(control_input_shaping_prepare(&shaped_config,
+                                             &strongly_shaped));
+        decision = live_decision();
+        decision.action = RECEIVER_FAILSAFE_ACTION_STAGE_ONE;
+        assert(flight_control_process_receiver(&strongly_shaped, &mixer,
+                                               &decision, 46U) ==
+               FLIGHT_CONTROL_SUBMITTED);
+        /* Failsafe controls are physical normalized commands, not stick input. */
+        assert(fabsf(submitted_command.throttle[0] - 0.725F) < 0.000001F);
+    }
 
     {
         receiver_failsafe_t failsafe = {

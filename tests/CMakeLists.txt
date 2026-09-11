@@ -470,6 +470,8 @@ add_executable(board_flight_configuration_storage_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/board_flight_configuration_storage.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
@@ -504,6 +506,8 @@ add_executable(flight_configuration_service_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_configuration_service.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
@@ -543,10 +547,27 @@ target_compile_options(quad_x_mixer_tests PRIVATE
 )
 add_test(NAME quad_x_mixer COMMAND quad_x_mixer_tests)
 
+add_executable(control_input_shaping_tests
+    control_input_shaping_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+)
+target_include_directories(control_input_shaping_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+)
+target_link_libraries(control_input_shaping_tests PRIVATE m)
+target_compile_options(control_input_shaping_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME control_input_shaping COMMAND control_input_shaping_tests)
+
 add_executable(flight_control_tests
     flight_control_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_control.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
 )
 target_include_directories(flight_control_tests PRIVATE

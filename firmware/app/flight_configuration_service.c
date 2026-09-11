@@ -51,13 +51,20 @@ static bool runtime_is_safe(const flight_configuration_service_t *service)
 static bool apply_runtime(flight_configuration_service_t *service,
                           const flight_configuration_t *configuration)
 {
+    prepared_control_input_shaping_t prepared_control;
+    prepared_quad_x_mixer_t prepared_mixer;
     const receiver_freshness_config_t freshness = {
         .fresh_through_us = configuration->receiver_failsafe.stale_after_us,
         .lost_after_us =
             configuration->receiver_failsafe.loss_detected_after_us,
     };
 
-    if (!apply_imu_processing_configuration(
+    if (!control_input_shaping_prepare(&configuration->control,
+                                       &prepared_control) ||
+        !quad_x_mixer_prepare(&configuration->mixer,
+                              configuration->propeller_layout,
+                              &prepared_mixer) ||
+        !apply_imu_processing_configuration(
             service->imu_processing_pipeline, configuration)) {
         return false;
     }
@@ -65,6 +72,8 @@ static bool apply_runtime(flight_configuration_service_t *service,
         MOTOR_CONTROL_CONFIGURATION_APPLY_OK) {
         return false;
     }
+    service->prepared_control = prepared_control;
+    service->prepared_mixer = prepared_mixer;
     if (!service->receiver_service->initialized) {
         return true;
     }
@@ -114,7 +123,12 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     } else {
         return FLIGHT_CONFIGURATION_SERVICE_STORAGE_ERROR;
     }
-    if (!apply_imu_processing_configuration(
+    if (!control_input_shaping_prepare(&service->active.control,
+                                       &service->prepared_control) ||
+        !quad_x_mixer_prepare(&service->active.mixer,
+                              service->active.propeller_layout,
+                              &service->prepared_mixer) ||
+        !apply_imu_processing_configuration(
             service->imu_processing_pipeline, &service->active)) {
         return FLIGHT_CONFIGURATION_SERVICE_APPLY_ERROR;
     }

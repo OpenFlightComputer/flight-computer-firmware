@@ -246,13 +246,57 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 3U,
+            .schema_version = 4U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL}},
             .mixer = {.roll_factor = 0.25F, .pitch_factor = 0.25F,
                       .yaw_factor = 0.15F},
+            .control = {
+                .roll = {
+                    .deadband = 0.03F,
+                    .maximum_angle_degrees = 30.0F,
+                    .maximum_rate_dps = 180.0F,
+                    .curve = {
+                        .type = CONTROL_CURVE_TYPE_CONTROL_POINTS,
+                        .interpolation = CONTROL_CURVE_INTERPOLATION_LINEAR,
+                        .point_count = 2U,
+                        .points = {{0.0F, 0.0F}, {1.0F, 1.0F}},
+                    },
+                },
+                .pitch = {
+                    .deadband = 0.03F,
+                    .maximum_angle_degrees = 30.0F,
+                    .maximum_rate_dps = 180.0F,
+                    .curve = {
+                        .type = CONTROL_CURVE_TYPE_CONTROL_POINTS,
+                        .interpolation = CONTROL_CURVE_INTERPOLATION_LINEAR,
+                        .point_count = 2U,
+                        .points = {{0.0F, 0.0F}, {1.0F, 1.0F}},
+                    },
+                },
+                .yaw = {
+                    .deadband = 0.04F,
+                    .maximum_rate_dps = 150.0F,
+                    .curve = {
+                        .type = CONTROL_CURVE_TYPE_CONTROL_POINTS,
+                        .interpolation = CONTROL_CURVE_INTERPOLATION_LINEAR,
+                        .point_count = 2U,
+                        .points = {{0.0F, 0.0F}, {1.0F, 1.0F}},
+                    },
+                },
+                .throttle = {
+                    .zero_deadband = 0.02F,
+                    .maximum = 1.0F,
+                    .curve = {
+                        .type = CONTROL_CURVE_TYPE_CONTROL_POINTS,
+                        .interpolation = CONTROL_CURVE_INTERPOLATION_LINEAR,
+                        .point_count = 2U,
+                        .points = {{0.0F, 0.0F}, {1.0F, 1.0F}},
+                    },
+                },
+            },
             .receiver_failsafe = {
                 .stale_after_us = 25000U,
                 .loss_detected_after_us = 100000U,
@@ -724,11 +768,24 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":3,"
+        "\"config_write\",\"configuration\":{\"schema_version\":4,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
         "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
+        "\"control\":{"
+        "\"roll\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
+        "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
+        "\"pitch\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
+        "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
+        "\"yaw\":{\"deadband\":0.04,\"maximum_angle_degrees\":0.0,"
+        "\"maximum_rate_dps\":150.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
+        "\"throttle\":{\"zero_deadband\":0.02,\"maximum\":1.0,"
+        "\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}}},"
         "\"receiver_failsafe\":{\"stale_after_us\":25000,"
         "\"loss_detected_after_us\":100000,\"hold_last_until_us\":400000,"
         "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"

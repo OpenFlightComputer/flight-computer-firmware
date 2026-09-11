@@ -1,6 +1,6 @@
 # Unified flight configuration
 
-Phase 3 uses one versioned JSON document as the source for vehicle settings
+The firmware uses one versioned JSON document as the source for vehicle settings
 that must be shared between firmware, command-line tools, and a future GUI.
 There are intentionally no per-field mutation commands: clients read, edit,
 validate, and write one complete snapshot.
@@ -12,9 +12,10 @@ compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
 therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, the
 initial mixer factors, and the reviewed receiver-failsafe values in that file.
-Schema 3 also carries the startup gyro-calibration policy, the selected gyro
+Schema 4 also carries the startup gyro-calibration policy, the selected gyro
 filter and cutoff, and the selected attitude estimator, correction time
-constant, and maximum accepted sample gap.
+constant, and maximum accepted sample gap. It adds control-input deadbands,
+angle/rate limits, maximum throttle, and four bounded control-point curves.
 
 The motor array always uses logical aircraft order:
 
@@ -46,7 +47,8 @@ erases the persistent override and reapplies the compiled JSON defaults.
 Write and reset require lifecycle `DISARMED` with no pending arm. A successful
 write is persisted before the active snapshot is replaced. Runtime application
 updates all four motor directions, receiver freshness thresholds, receiver
-failsafe policy, and the IMU processing pipeline as one operation. Replacing
+failsafe policy, prepared input shaping and mixer data, and the IMU processing
+pipeline as one operation. Replacing
 the filter or estimator configuration clears its history so the next fresh IMU
 sample seeds a new estimate instead of mixing two configurations. Direction
 changes start a ten-frame DShot configuration sequence, and all four directions
@@ -62,16 +64,40 @@ Flight Computer V1 reserves STM32F405 sector 11 at `0x080E0000` through
 `0x080FFFFF`. The application linker region ends before it, so normal flashing
 does not overwrite settings. A programmer mass erase still clears the sector.
 
-The board layer stores a 96-byte versioned payload inside fixed 120-byte
+The board layer stores a 412-byte versioned payload inside fixed 536-byte
 append-only records. Each record has a format version, sequence, payload
-length, CRC32, and a commit word programmed last. The sector holds 1,092 full
+length, CRC32, and a commit word programmed last. The sector holds 244 full
 configuration records before an explicit reset is needed.
 
-The loader can migrate the prior 84-byte schema-2 document, the earlier
-88-byte schema-1 document, and the eight-byte motor-direction payload. During
-migration it preserves all fields that existed in the old payload and fills
-new fields from the canonical JSON defaults. Corrupt or unknown nonempty
-storage still fails startup closed.
+The loader can migrate the prior 96-byte schema-3 document, the 84-byte
+schema-2 document, the earlier 88-byte schema-1 document, and the eight-byte
+motor-direction payload. The storage layer still recognizes the previous
+120-byte record format. During migration it preserves all fields that existed
+in the old payload and fills new fields from the canonical JSON defaults.
+Corrupt or unknown nonempty storage still fails startup closed.
+
+## Control input configuration
+
+Roll, pitch, and yaw each have a centered deadband, a maximum rate, and a
+curve. Roll and pitch additionally have maximum angles for the later
+self-leveling outer loop. Throttle has a zero deadband, a maximum output, and
+its own curve. Each curve is described by two through eight normalized
+`[input, output]` points. Each curve must begin at `[0,0]` and end at `[1,1]`;
+inputs must increase and outputs may never decrease.
+
+The initial `CONTROL_POINTS`/`LINEAR` implementation interpolates between
+adjacent points. At configuration activation, firmware converts every segment
+to a fixed set of polynomial coefficients. Runtime evaluation performs a
+bounded scan of at most seven segments and one Horner polynomial evaluation.
+The coefficient representation intentionally has room for quadratic and cubic
+segments, so later interpolation types do not require changing the flight-loop
+interface or JSON curve container.
+
+The compiled defaults use a small 3% roll/pitch deadband, 4% yaw deadband,
+30-degree roll/pitch limits, 180-degree-per-second roll/pitch limits, and a
+150-degree-per-second yaw limit. Centered axes use a gentle three-point curve.
+Throttle initially remains linear after its 2% zero deadband, with a maximum
+of 100%, because a vehicle-specific lift-off plateau has not yet been measured.
 
 ## IMU processing configuration
 
@@ -101,10 +127,23 @@ boot because the accepted bias is deliberately immutable for that boot.
 ## Control-task relationship
 
 The receiver-service task receives, parses, timestamps, checks freshness, and
-normalizes CRSF data. A separate 1 kHz flight-control task reads that published
-snapshot, evaluates arming and receiver-loss policy, and applies the pure
-quad-X mixer. The existing highest-priority 1 kHz motor-control task remains the
-only owner of DShot submission.
+normalizes CRSF data. It does not construct curves or calculate motor values.
+A separate 1 kHz flight-control task reads that published snapshot, evaluates
+arming and receiver-loss policy, applies the already-prepared deadbands and
+curves, and then applies the already-prepared quad-X mixer. The existing
+highest-priority 1 kHz motor-control task remains the only owner of DShot
+submission.
+
+Throttle at or below the configured zero deadband returns an exact all-zero
+setpoint before roll, pitch, or yaw shaping is evaluated. USB motor tests and
+the Stage 1 receiver failsafe are physical output requests rather than pilot
+stick inputs, so they deliberately bypass pilot curves and deadbands.
+
+Milestone 4.5 still uses the shaped normalized axes in the existing open-loop
+mixer. It also computes the desired roll/pitch angles and yaw rate for the
+later controllers. The roll/pitch maximum-rate settings become active when the
+self-leveling outer loop is added; this milestone does not claim stabilized
+motor output.
 
 The mixer returns four exact zeros immediately when normalized throttle is
 exactly zero. Otherwise it scales roll, pitch, and yaw by the configured
@@ -123,9 +162,10 @@ A new low-to-high arm-switch edge is still required to arm again.
 
 ## Verification boundary
 
-Native tests cover JSON-derived defaults, configuration validation,
-serialization, legacy migration, disarmed-only replacement/reset, runtime
-application including processing-pipeline replacement, mixer equations,
+Native tests cover JSON-derived defaults, curve preparation and interpolation,
+deadbands, exact-zero early return, maximum-curve serialization, legacy
+migration, disarmed-only replacement/reset, runtime application including
+prepared shaping/mixer and processing-pipeline replacement, mixer equations,
 exact-zero handling, clamping, source ownership, and immediate Stage 2
 failsafe entry. Debug and Release cross-builds verify the generated header and
 flash integration.

@@ -26,6 +26,8 @@ typedef enum {
 #define USB_JSON_CONFIGURATION_MIXER_COUNT 3U
 #define USB_JSON_CONFIGURATION_GYRO_TIMING_COUNT 2U
 #define USB_JSON_CONFIGURATION_GYRO_THRESHOLD_COUNT 2U
+#define USB_JSON_CONFIGURATION_CURVE_COUNT 4U
+#define USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS 8U
 
 typedef struct {
     uint32_t schema_version;
@@ -43,6 +45,14 @@ typedef struct {
     uint32_t attitude_maximum_gap_us;
     uint8_t gyro_filter_type;
     uint8_t attitude_estimator_type;
+    uint32_t control_axis_millionths[3][3];
+    uint32_t throttle_millionths[2];
+    uint32_t curve_point_millionths
+        [USB_JSON_CONFIGURATION_CURVE_COUNT]
+        [USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS][2];
+    uint8_t curve_type[USB_JSON_CONFIGURATION_CURVE_COUNT];
+    uint8_t curve_interpolation[USB_JSON_CONFIGURATION_CURVE_COUNT];
+    uint8_t curve_point_count[USB_JSON_CONFIGURATION_CURVE_COUNT];
 } usb_json_configuration_t;
 
 typedef struct {

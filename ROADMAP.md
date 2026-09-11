@@ -149,7 +149,8 @@ Planned milestones:
 4. Roll/pitch attitude estimation with bounded basic gyro filtering —
    implemented in software; physical estimate sign, convergence, timing, and
    motion validation remains.
-5. Configurable input curves, deadbands, angle/rate limits, and throttle curve.
+5. Configurable input curves, deadbands, angle/rate limits, and throttle curve
+   — implemented in software; physical stick-response validation remains.
 6. Bounded rate PID control with anti-windup and zero-throttle integral reset.
 7. Self-leveling roll/pitch outer loop feeding the three-axis rate controller.
 8. Replace open-loop receiver mixing with the stabilized control path and a

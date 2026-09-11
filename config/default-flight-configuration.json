@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "motors": {
     "propeller_layout": "PROPS_IN",
     "directions": [
@@ -13,6 +13,47 @@
     "roll_factor": 0.25,
     "pitch_factor": 0.25,
     "yaw_factor": 0.15
+  },
+  "control": {
+    "roll": {
+      "deadband": 0.03,
+      "maximum_angle_degrees": 30.0,
+      "maximum_rate_dps": 180.0,
+      "curve": {
+        "type": "CONTROL_POINTS",
+        "interpolation": "LINEAR",
+        "points": [[0.0, 0.0], [0.5, 0.35], [1.0, 1.0]]
+      }
+    },
+    "pitch": {
+      "deadband": 0.03,
+      "maximum_angle_degrees": 30.0,
+      "maximum_rate_dps": 180.0,
+      "curve": {
+        "type": "CONTROL_POINTS",
+        "interpolation": "LINEAR",
+        "points": [[0.0, 0.0], [0.5, 0.35], [1.0, 1.0]]
+      }
+    },
+    "yaw": {
+      "deadband": 0.04,
+      "maximum_angle_degrees": 0.0,
+      "maximum_rate_dps": 150.0,
+      "curve": {
+        "type": "CONTROL_POINTS",
+        "interpolation": "LINEAR",
+        "points": [[0.0, 0.0], [0.5, 0.35], [1.0, 1.0]]
+      }
+    },
+    "throttle": {
+      "zero_deadband": 0.02,
+      "maximum": 1.0,
+      "curve": {
+        "type": "CONTROL_POINTS",
+        "interpolation": "LINEAR",
+        "points": [[0.0, 0.0], [1.0, 1.0]]
+      }
+    }
   },
   "receiver_failsafe": {
     "stale_after_us": 25000,

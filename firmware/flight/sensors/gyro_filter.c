@@ -22,6 +22,7 @@ bool gyro_filter_initialize(gyro_filter_t *filter,
     }
     *filter = (gyro_filter_t){
         .config = *config,
+        .time_constant_seconds = 1.0F / (TWO_PI * config->cutoff_hz),
         .initialized = true,
     };
     return true;
@@ -61,13 +62,11 @@ bool gyro_filter_process(gyro_filter_t *filter,
         }
         filter->sample_seen = true;
     } else {
-        const float time_constant =
-            1.0F / (TWO_PI * filter->config.cutoff_hz);
-
         if (dt_seconds <= 0.0F) {
             return false;
         }
-        alpha = dt_seconds / (time_constant + dt_seconds);
+        alpha = dt_seconds /
+                (filter->time_constant_seconds + dt_seconds);
         for (axis = 0U; axis < 3U; axis++) {
             filter->output_dps[axis] +=
                 alpha * (input_dps[axis] - filter->output_dps[axis]);

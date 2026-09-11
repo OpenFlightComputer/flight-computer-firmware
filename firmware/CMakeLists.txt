@@ -206,6 +206,8 @@ add_executable(flight_firmware
     flight/actuators/motor_output.c
     flight/configuration/flight_configuration.c
     flight/control/quad_x_mixer.c
+    flight/control/control_curve.c
+    flight/control/control_input_shaping.c
     flight/estimation/accelerometer_attitude.c
     flight/estimation/attitude_estimator.c
     flight/estimation/imu_processing_pipeline.c

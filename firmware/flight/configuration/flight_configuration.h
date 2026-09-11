@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_H
 
 #include "motor_configuration.h"
+#include "control_input_shaping.h"
 #include "quad_x_mixer.h"
 #include "receiver_failsafe.h"
 
@@ -41,6 +42,7 @@ typedef struct {
     propeller_layout_t propeller_layout;
     motor_configuration_t motors;
     quad_x_mixer_config_t mixer;
+    control_input_shaping_config_t control;
     receiver_failsafe_config_t receiver_failsafe;
     gyro_calibration_configuration_t gyro_calibration;
     gyro_filter_configuration_t gyro_filter;

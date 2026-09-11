@@ -25,8 +25,8 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 3)
-    message(FATAL_ERROR "Default configuration schema_version must be 3")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 4)
+    message(FATAL_ERROR "Default configuration schema_version must be 4")
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -48,6 +48,52 @@ ofc_direction_constant(OFC_CONFIG_MOTOR_3 3)
 ofc_json_get(OFC_CONFIG_MIXER_ROLL mixer roll_factor)
 ofc_json_get(OFC_CONFIG_MIXER_PITCH mixer pitch_factor)
 ofc_json_get(OFC_CONFIG_MIXER_YAW mixer yaw_factor)
+foreach(axis IN ITEMS roll pitch yaw)
+    string(TOUPPER "${axis}" axis_upper)
+    ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_DEADBAND
+        control ${axis} deadband)
+    ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_MAXIMUM_ANGLE
+        control ${axis} maximum_angle_degrees)
+    ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_MAXIMUM_RATE
+        control ${axis} maximum_rate_dps)
+    ofc_json_get(curve_type control ${axis} curve type)
+    ofc_json_get(curve_interpolation control ${axis} curve interpolation)
+    if(NOT curve_type STREQUAL "CONTROL_POINTS" OR
+       NOT curve_interpolation STREQUAL "LINEAR")
+        message(FATAL_ERROR "Default ${axis} curve must be linear control points")
+    endif()
+    string(JSON curve_point_count LENGTH
+        "${OFC_DEFAULT_CONFIGURATION_JSON}" control ${axis} curve points)
+    if(NOT curve_point_count EQUAL 3)
+        message(FATAL_ERROR "Default ${axis} curve requires exactly three points")
+    endif()
+    foreach(point RANGE 0 2)
+        ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_POINT_${point}_INPUT
+            control ${axis} curve points ${point} 0)
+        ofc_json_get(OFC_CONFIG_CONTROL_${axis_upper}_POINT_${point}_OUTPUT
+            control ${axis} curve points ${point} 1)
+    endforeach()
+endforeach()
+ofc_json_get(OFC_CONFIG_CONTROL_THROTTLE_ZERO_DEADBAND
+    control throttle zero_deadband)
+ofc_json_get(OFC_CONFIG_CONTROL_THROTTLE_MAXIMUM control throttle maximum)
+ofc_json_get(throttle_curve_type control throttle curve type)
+ofc_json_get(throttle_curve_interpolation control throttle curve interpolation)
+if(NOT throttle_curve_type STREQUAL "CONTROL_POINTS" OR
+   NOT throttle_curve_interpolation STREQUAL "LINEAR")
+    message(FATAL_ERROR "Default throttle curve must be linear control points")
+endif()
+string(JSON throttle_curve_point_count LENGTH
+    "${OFC_DEFAULT_CONFIGURATION_JSON}" control throttle curve points)
+if(NOT throttle_curve_point_count EQUAL 2)
+    message(FATAL_ERROR "Default throttle curve requires exactly two points")
+endif()
+foreach(point RANGE 0 1)
+    ofc_json_get(OFC_CONFIG_CONTROL_THROTTLE_POINT_${point}_INPUT
+        control throttle curve points ${point} 0)
+    ofc_json_get(OFC_CONFIG_CONTROL_THROTTLE_POINT_${point}_OUTPUT
+        control throttle curve points ${point} 1)
+endforeach()
 ofc_json_get(OFC_CONFIG_FAILSAFE_STALE receiver_failsafe stale_after_us)
 ofc_json_get(OFC_CONFIG_FAILSAFE_LOSS receiver_failsafe loss_detected_after_us)
 ofc_json_get(OFC_CONFIG_FAILSAFE_HOLD receiver_failsafe hold_last_until_us)
@@ -91,6 +137,26 @@ foreach(factor IN ITEMS OFC_CONFIG_MIXER_ROLL OFC_CONFIG_MIXER_PITCH
         message(FATAL_ERROR "Default mixer factor ${factor} must be within 0..1")
     endif()
 endforeach()
+foreach(deadband IN ITEMS OFC_CONFIG_CONTROL_ROLL_DEADBAND
+                          OFC_CONFIG_CONTROL_PITCH_DEADBAND
+                          OFC_CONFIG_CONTROL_YAW_DEADBAND
+                          OFC_CONFIG_CONTROL_THROTTLE_ZERO_DEADBAND)
+    if(${deadband} LESS 0 OR ${deadband} GREATER 0.25)
+        message(FATAL_ERROR "Default control deadband is invalid")
+    endif()
+endforeach()
+if(OFC_CONFIG_CONTROL_ROLL_MAXIMUM_ANGLE LESS_EQUAL 0 OR
+   OFC_CONFIG_CONTROL_ROLL_MAXIMUM_ANGLE GREATER 85 OR
+   OFC_CONFIG_CONTROL_PITCH_MAXIMUM_ANGLE LESS_EQUAL 0 OR
+   OFC_CONFIG_CONTROL_PITCH_MAXIMUM_ANGLE GREATER 85 OR
+   NOT OFC_CONFIG_CONTROL_YAW_MAXIMUM_ANGLE EQUAL 0 OR
+   OFC_CONFIG_CONTROL_ROLL_MAXIMUM_RATE LESS_EQUAL 0 OR
+   OFC_CONFIG_CONTROL_PITCH_MAXIMUM_RATE LESS_EQUAL 0 OR
+   OFC_CONFIG_CONTROL_YAW_MAXIMUM_RATE LESS_EQUAL 0 OR
+   OFC_CONFIG_CONTROL_THROTTLE_MAXIMUM LESS_EQUAL 0 OR
+   OFC_CONFIG_CONTROL_THROTTLE_MAXIMUM GREATER 1)
+    message(FATAL_ERROR "Default control limits are invalid")
+endif()
 if(NOT OFC_CONFIG_FAILSAFE_STALE LESS OFC_CONFIG_FAILSAFE_LOSS OR
    NOT OFC_CONFIG_FAILSAFE_LOSS LESS OFC_CONFIG_FAILSAFE_HOLD OR
    NOT OFC_CONFIG_FAILSAFE_HOLD LESS OFC_CONFIG_FAILSAFE_STAGE_TWO OR

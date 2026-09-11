@@ -10,13 +10,13 @@
 static void assert_valid_json_line(const char *line, size_t length)
 {
     jsmn_parser parser;
-    jsmntok_t tokens[96];
+    jsmntok_t tokens[256];
     int token_count;
 
     assert(length > 1U);
     assert(line[length - 1U] == '\n');
     jsmn_init(&parser);
-    token_count = jsmn_parse(&parser, line, length - 1U, tokens, 96U);
+    token_count = jsmn_parse(&parser, line, length - 1U, tokens, 256U);
     assert(token_count > 0);
     assert(tokens[0].type == JSMN_OBJECT);
     assert(tokens[0].start == 0);
@@ -77,10 +77,23 @@ static void valid_commands_and_key_order_are_accepted(void)
     request = parse(
         "{\"type\":\"command\",\"request_id\":8,"
         "\"command\":\"config_write\",\"configuration\":{"
-        "\"schema_version\":3,\"motors\":{\"propeller_layout\":"
+        "\"schema_version\":4,\"motors\":{\"propeller_layout\":"
         "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
         "\"NORMAL\",\"REVERSED\"]},\"mixer\":{\"roll_factor\":0.25,"
         "\"pitch_factor\":0.25,\"yaw_factor\":0.15},"
+        "\"control\":{"
+        "\"roll\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
+        "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
+        "\"pitch\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
+        "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
+        "\"yaw\":{\"deadband\":0.04,\"maximum_angle_degrees\":0.0,"
+        "\"maximum_rate_dps\":150.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}},"
+        "\"throttle\":{\"zero_deadband\":0.02,\"maximum\":1.0,"
+        "\"curve\":{\"type\":\"CONTROL_POINTS\","
+        "\"interpolation\":\"LINEAR\",\"points\":[[0,0],[1,1]]}}},"
         "\"receiver_failsafe\":{\"stale_after_us\":25000,"
         "\"loss_detected_after_us\":100000,\"hold_last_until_us\":400000,"
         "\"stage_two_after_us\":1500000,\"recovery_stable_us\":500000,"
@@ -106,6 +119,11 @@ static void valid_commands_and_key_order_are_accepted(void)
                .accelerometer_correction_time_constant_millionths ==
            500000U);
     assert(request.configuration.attitude_maximum_gap_us == 10000U);
+    assert(request.configuration.control_axis_millionths[0][0] == 30000U);
+    assert(request.configuration.control_axis_millionths[0][1] == 30000000U);
+    assert(request.configuration.curve_point_count[3] == 2U);
+    assert(request.configuration.curve_point_millionths[3][1][1] ==
+           1000000U);
     assert(parse("{\"type\":\"command\",\"request_id\":4,"
                  "\"command\":\"future\"}").command ==
            USB_JSON_COMMAND_UNSUPPORTED);
@@ -163,7 +181,7 @@ static void malformed_or_noncanonical_requests_are_rejected(void)
 
 static void response_builders_are_exact_and_bounded(void)
 {
-    char output[1280];
+    char output[2048];
     size_t length;
     static const char status[] =
         "{\"type\":\"response\",\"request_id\":42,"
@@ -197,7 +215,7 @@ static void response_builders_are_exact_and_bounded(void)
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
     const usb_json_configuration_t configuration = {
-        .schema_version = 3U,
+        .schema_version = 4U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {-100000, 0, 0, 50000, 50000},
         .mixer_factor_millionths = {250000U, 250000U, 150000U},
@@ -208,6 +226,19 @@ static void response_builders_are_exact_and_bounded(void)
         .gyro_filter_cutoff_millionths = 80000000U,
         .accelerometer_correction_time_constant_millionths = 500000U,
         .attitude_maximum_gap_us = 10000U,
+        .control_axis_millionths = {
+            {30000U, 30000000U, 180000000U},
+            {30000U, 30000000U, 180000000U},
+            {40000U, 0U, 150000000U},
+        },
+        .throttle_millionths = {20000U, 1000000U},
+        .curve_point_millionths = {
+            [0] = {{0U, 0U}, {1000000U, 1000000U}},
+            [1] = {{0U, 0U}, {1000000U, 1000000U}},
+            [2] = {{0U, 0U}, {1000000U, 1000000U}},
+            [3] = {{0U, 0U}, {1000000U, 1000000U}},
+        },
+        .curve_point_count = {2U, 2U, 2U, 2U},
     };
 
     assert(usb_json_build_status_response("DISARMED", "NONE", 42U, 42U,
@@ -300,10 +331,65 @@ static void response_builders_are_exact_and_bounded(void)
     assert(length == 0U);
 }
 
+static void maximum_curve_response_fits_transport_capacity(void)
+{
+    usb_json_configuration_t configuration = {
+        .schema_version = 4U,
+        .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
+        .failsafe_control_millionths = {0, 0, 0, 50000, 50000},
+        .mixer_factor_millionths = {250000U, 250000U, 150000U},
+        .gyro_timing_us = {100000U, 500000U},
+        .gyro_threshold_millionths = {5000000U, 500000U},
+        .gyro_filter_cutoff_millionths = 80000000U,
+        .accelerometer_correction_time_constant_millionths = 500000U,
+        .attitude_maximum_gap_us = 10000U,
+        .control_axis_millionths = {
+            {30000U, 30000000U, 180000000U},
+            {30000U, 30000000U, 180000000U},
+            {40000U, 0U, 150000000U},
+        },
+        .throttle_millionths = {20000U, 1000000U},
+    };
+    char output[4096];
+    size_t curve;
+    size_t length;
+    size_t point;
+
+    for (curve = 0U; curve < USB_JSON_CONFIGURATION_CURVE_COUNT; curve++) {
+        configuration.curve_point_count[curve] =
+            USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS;
+        for (point = 0U;
+             point < USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS;
+             point++) {
+            const uint32_t value =
+                point == (USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS - 1U)
+                    ? 1000000U
+                    : (uint32_t)(point * 142857U);
+
+            configuration.curve_point_millionths[curve][point][0] = value;
+            configuration.curve_point_millionths[curve][point][1] = value;
+        }
+    }
+    assert(usb_json_build_configuration_response(
+        USB_JSON_COMMAND_CONFIG_READ,
+        99U,
+        true,
+        "PERSISTENT",
+        &configuration,
+        "DISARMED",
+        NULL,
+        output,
+        sizeof(output),
+        &length));
+    assert(length < sizeof(output));
+    assert_valid_json_line(output, length);
+}
+
 int main(void)
 {
     valid_commands_and_key_order_are_accepted();
     malformed_or_noncanonical_requests_are_rejected();
     response_builders_are_exact_and_bounded();
+    maximum_curve_response_fits_transport_capacity();
     return 0;
 }

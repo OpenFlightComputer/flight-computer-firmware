@@ -10,9 +10,11 @@
 #include <string.h>
 
 #define STORAGE_MAGIC UINT32_C(0x4F464343)
-#define STORAGE_FORMAT_VERSION UINT32_C(2)
+#define STORAGE_FORMAT_VERSION UINT32_C(3)
+#define PREVIOUS_STORAGE_FORMAT_VERSION UINT32_C(2)
 #define STORAGE_COMMIT UINT32_C(0x434F4D54)
-#define STORAGE_PAYLOAD_CAPACITY 96U
+#define STORAGE_PAYLOAD_CAPACITY 512U
+#define PREVIOUS_STORAGE_PAYLOAD_CAPACITY 96U
 
 typedef struct {
     uint32_t magic;
@@ -23,6 +25,16 @@ typedef struct {
     uint32_t crc;
     uint32_t commit;
 } storage_record_t;
+
+typedef struct {
+    uint32_t magic;
+    uint32_t format_version;
+    uint32_t sequence;
+    uint32_t payload_length;
+    uint32_t payload[PREVIOUS_STORAGE_PAYLOAD_CAPACITY / sizeof(uint32_t)];
+    uint32_t crc;
+    uint32_t commit;
+} previous_storage_record_t;
 
 typedef struct {
     uint32_t magic;
@@ -78,6 +90,19 @@ static uint32_t legacy_record_crc(const legacy_storage_record_t *record)
     return ~crc;
 }
 
+static uint32_t previous_record_crc(const previous_storage_record_t *record)
+{
+    const uint8_t *bytes = (const uint8_t *)record;
+    const size_t protected_length = offsetof(previous_storage_record_t, crc);
+    uint32_t crc = UINT32_MAX;
+    size_t index;
+
+    for (index = 0U; index < protected_length; index++) {
+        crc = crc32_update(crc, bytes[index]);
+    }
+    return ~crc;
+}
+
 static const storage_record_t *record_at(size_t index)
 {
     const uintptr_t address =
@@ -91,6 +116,21 @@ static size_t record_capacity(void)
 {
     return FLIGHTCOMPUTER_V1_CONFIGURATION_FLASH_LENGTH /
            sizeof(storage_record_t);
+}
+
+static const previous_storage_record_t *previous_record_at(size_t index)
+{
+    const uintptr_t address =
+        (uintptr_t)FLIGHTCOMPUTER_V1_CONFIGURATION_FLASH_ADDRESS +
+        (index * sizeof(previous_storage_record_t));
+
+    return (const previous_storage_record_t *)address;
+}
+
+static size_t previous_record_capacity(void)
+{
+    return FLIGHTCOMPUTER_V1_CONFIGURATION_FLASH_LENGTH /
+           sizeof(previous_storage_record_t);
 }
 
 static bool record_is_erased(const storage_record_t *record)
@@ -120,11 +160,26 @@ static bool record_is_valid(const storage_record_t *record, size_t length)
            (snapshot.crc == record_crc(&snapshot));
 }
 
+static bool previous_record_is_valid(const previous_storage_record_t *record,
+                                     size_t length)
+{
+    previous_storage_record_t snapshot;
+
+    memcpy(&snapshot, record, sizeof(snapshot));
+    return (snapshot.magic == STORAGE_MAGIC) &&
+           (snapshot.format_version == PREVIOUS_STORAGE_FORMAT_VERSION) &&
+           (snapshot.payload_length == length) &&
+           (snapshot.payload_length <= PREVIOUS_STORAGE_PAYLOAD_CAPACITY) &&
+           (snapshot.commit == STORAGE_COMMIT) &&
+           (snapshot.crc == previous_record_crc(&snapshot));
+}
+
 board_persistent_storage_read_result_t board_persistent_storage_read(
     void *destination,
     size_t length)
 {
     const storage_record_t *latest = NULL;
+    const previous_storage_record_t *previous_latest = NULL;
     uint32_t latest_sequence = 0U;
     bool nonempty_seen = false;
     size_t index;
@@ -148,12 +203,30 @@ board_persistent_storage_read_result_t board_persistent_storage_read(
         }
     }
 
-    if (latest == NULL) {
+    if ((latest == NULL) && (length <= PREVIOUS_STORAGE_PAYLOAD_CAPACITY)) {
+        for (index = 0U; index < previous_record_capacity(); index++) {
+            const previous_storage_record_t *record =
+                previous_record_at(index);
+
+            if (previous_record_is_valid(record, length) &&
+                ((previous_latest == NULL) ||
+                 (record->sequence > latest_sequence))) {
+                previous_latest = record;
+                latest_sequence = record->sequence;
+            }
+        }
+    }
+
+    if ((latest == NULL) && (previous_latest == NULL)) {
         return nonempty_seen ? BOARD_PERSISTENT_STORAGE_READ_ERROR
                              : BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     }
 
-    memcpy(destination, latest->payload, length);
+    if (latest != NULL) {
+        memcpy(destination, latest->payload, length);
+    } else {
+        memcpy(destination, previous_latest->payload, length);
+    }
     return BOARD_PERSISTENT_STORAGE_READ_OK;
 }
 

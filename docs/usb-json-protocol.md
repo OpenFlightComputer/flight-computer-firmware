@@ -58,16 +58,23 @@ and fault behavior are identical to other future command producers. An
 accepted command is a 100 ms lease: without a fresh accepted request, the
 1 kHz motor-control task transmits stop frames and enters failsafe.
 
-Configuration uses complete documents rather than per-field mutations:
+Configuration uses complete documents rather than per-field mutations. The
+write envelope contains the complete schema-4 object from
+`config/default-flight-configuration.json`; this shell command shows the exact
+wire representation without duplicating that large document here:
 
-```json
+```text
 {"type":"command","request_id":51,"command":"config_read"}
-{"type":"command","request_id":52,"command":"config_write","configuration":{"schema_version":3,"motors":{"propeller_layout":"PROPS_IN","directions":["NORMAL","NORMAL","REVERSED","NORMAL"]},"mixer":{"roll_factor":0.250000,"pitch_factor":0.250000,"yaw_factor":0.150000},"receiver_failsafe":{"stale_after_us":25000,"loss_detected_after_us":100000,"hold_last_until_us":400000,"stage_two_after_us":1500000,"recovery_stable_us":500000,"stage_one_roll":0.000000,"stage_one_pitch":0.000000,"stage_one_yaw":0.000000,"stage_one_throttle":0.050000,"recovery_throttle_maximum":0.050000},"imu":{"gyro_calibration":{"settling_duration_us":100000,"sample_duration_us":500000,"maximum_rate_dps":5.000000,"maximum_standard_deviation_dps":0.500000},"gyro_filter":{"type":"FIRST_ORDER_LOW_PASS","cutoff_hz":80.000000},"attitude_estimator":{"type":"COMPLEMENTARY","accelerometer_correction_time_constant_s":0.500000,"maximum_gap_us":10000}}}}
+jq -c '{type:"command",request_id:52,command:"config_write",configuration:.}' config/default-flight-configuration.json
 {"type":"command","request_id":53,"command":"config_reset"}
 ```
 
-Only uppercase `PROPS_IN`/`PROPS_OUT` and `NORMAL`/`REVERSED` values are
-accepted. Decimal controls and factors use at most six fractional digits.
+Only uppercase `PROPS_IN`/`PROPS_OUT`, `NORMAL`/`REVERSED`,
+`CONTROL_POINTS`, and `LINEAR` values are accepted. Decimal controls, factors,
+limits, and curve points use at most six fractional digits. Each curve accepts
+two through eight monotonic points and every complete command/response remains
+bounded by the 4,096-byte transport line capacity.
+
 Write and reset are rejected with `state_rejected` unless the lifecycle is
 `DISARMED` with no arm pending. A storage failure returns
 `configuration_storage_error`. See `docs/flight-configuration.md` for the
@@ -88,10 +95,14 @@ Examples, each followed by one newline:
 {"type":"response","request_id":47,"command":"arm","ok":false,"state":"DISARMED","error":"motor_not_ready"}
 {"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":2,"throttle":0.100000}
 {"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":0,"throttle":0.020000,"error":"motor_not_allowed"}
-{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":3,"motors":{"propeller_layout":"PROPS_IN","directions":["NORMAL","NORMAL","NORMAL","NORMAL"]},"mixer":{"roll_factor":0.250000,"pitch_factor":0.250000,"yaw_factor":0.150000},"receiver_failsafe":{"stale_after_us":25000,"loss_detected_after_us":100000,"hold_last_until_us":400000,"stage_two_after_us":1500000,"recovery_stable_us":500000,"stage_one_roll":0.000000,"stage_one_pitch":0.000000,"stage_one_yaw":0.000000,"stage_one_throttle":0.050000,"recovery_throttle_maximum":0.050000},"imu":{"gyro_calibration":{"settling_duration_us":100000,"sample_duration_us":500000,"maximum_rate_dps":5.000000,"maximum_standard_deviation_dps":0.500000},"gyro_filter":{"type":"FIRST_ORDER_LOW_PASS","cutoff_hz":80.000000},"attitude_estimator":{"type":"COMPLEMENTARY","accelerometer_correction_time_constant_s":0.500000,"maximum_gap_us":10000}}}}
+{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":4,"motors":{},"mixer":{},"control":{},"receiver_failsafe":{},"imu":{}}}
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":50,"error":"unsupported_command"}
 ```
+
+The compact `config_read` line above abbreviates the five complete nested
+configuration objects for readability. Actual firmware responses include
+every required schema-4 field and can be written back unchanged.
 
 The receiver response is produced only when the USB command is dispatched. It
 copies the receiver service's already-published raw and normalized snapshots;

@@ -78,7 +78,7 @@ def test_request_parameters_cannot_replace_correlated_envelope():
 
 def test_configuration_write_sends_the_complete_document():
     configuration = {
-        "schema_version": 3,
+        "schema_version": 4,
         "motors": {
             "propeller_layout": "PROPS_IN",
             "directions": ["NORMAL", "NORMAL", "REVERSED", "NORMAL"],

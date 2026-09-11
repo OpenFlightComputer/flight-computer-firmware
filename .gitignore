@@ -1,5 +1,6 @@
 # CMake and generated build artifacts
 /build/
+/build-host/
 /out/
 /reports/
 /host_tools/.venv/

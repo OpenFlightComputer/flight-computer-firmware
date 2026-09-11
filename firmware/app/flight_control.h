@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_FLIGHT_CONTROL_H
 
 #include "flight_configuration.h"
+#include "control_input_shaping.h"
 #include "receiver_failsafe.h"
 
 #include <stdint.h>
@@ -18,7 +19,8 @@ typedef enum {
 } flight_control_result_t;
 
 flight_control_result_t flight_control_process_receiver(
-    const flight_configuration_t *configuration,
+    const prepared_control_input_shaping_t *control,
+    const prepared_quad_x_mixer_t *mixer,
     const receiver_failsafe_decision_t *decision,
     uint64_t now_us);
 flight_control_result_t flight_control_recover_receiver(

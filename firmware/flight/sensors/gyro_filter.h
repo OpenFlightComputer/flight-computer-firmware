@@ -15,6 +15,7 @@ typedef struct {
 
 typedef struct {
     gyro_filter_config_t config;
+    float time_constant_seconds;
     float output_dps[3];
     bool sample_seen;
     bool initialized;

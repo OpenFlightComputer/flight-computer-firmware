@@ -216,6 +216,14 @@ static void configuration_to_usb(
     const flight_configuration_t *configuration,
     usb_json_configuration_t *usb)
 {
+    const control_curve_config_t *curves[4] = {
+        &configuration->control.roll.curve,
+        &configuration->control.pitch.curve,
+        &configuration->control.yaw.curve,
+        &configuration->control.throttle.curve,
+    };
+    size_t curve;
+    size_t point;
     size_t motor;
 
     *usb = (usb_json_configuration_t){
@@ -280,10 +288,57 @@ static void configuration_to_usb(
         .gyro_filter_type = (uint8_t)configuration->gyro_filter.type,
         .attitude_estimator_type =
             (uint8_t)configuration->attitude_estimator.type,
+        .control_axis_millionths = {
+            {(uint32_t)(configuration->control.roll.deadband * 1000000.0F +
+                        0.5F),
+             (uint32_t)(configuration->control.roll.maximum_angle_degrees *
+                            1000000.0F +
+                        0.5F),
+             (uint32_t)(configuration->control.roll.maximum_rate_dps *
+                            1000000.0F +
+                        0.5F)},
+            {(uint32_t)(configuration->control.pitch.deadband * 1000000.0F +
+                        0.5F),
+             (uint32_t)(configuration->control.pitch.maximum_angle_degrees *
+                            1000000.0F +
+                        0.5F),
+             (uint32_t)(configuration->control.pitch.maximum_rate_dps *
+                            1000000.0F +
+                        0.5F)},
+            {(uint32_t)(configuration->control.yaw.deadband * 1000000.0F +
+                        0.5F),
+             (uint32_t)(configuration->control.yaw.maximum_angle_degrees *
+                            1000000.0F +
+                        0.5F),
+             (uint32_t)(configuration->control.yaw.maximum_rate_dps *
+                            1000000.0F +
+                        0.5F)},
+        },
+        .throttle_millionths = {
+            (uint32_t)(configuration->control.throttle.zero_deadband *
+                           1000000.0F +
+                       0.5F),
+            (uint32_t)(configuration->control.throttle.maximum * 1000000.0F +
+                       0.5F),
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         usb->directions[motor] =
             (uint8_t)configuration->motors.direction[motor];
+    }
+    for (curve = 0U; curve < 4U; curve++) {
+        usb->curve_type[curve] = (uint8_t)curves[curve]->type;
+        usb->curve_interpolation[curve] =
+            (uint8_t)curves[curve]->interpolation;
+        usb->curve_point_count[curve] = curves[curve]->point_count;
+        for (point = 0U; point < curves[curve]->point_count; point++) {
+            usb->curve_point_millionths[curve][point][0] =
+                (uint32_t)(curves[curve]->points[point].input * 1000000.0F +
+                           0.5F);
+            usb->curve_point_millionths[curve][point][1] =
+                (uint32_t)(curves[curve]->points[point].output * 1000000.0F +
+                           0.5F);
+        }
     }
 }
 
@@ -291,6 +346,9 @@ static void configuration_from_usb(
     const usb_json_configuration_t *usb,
     flight_configuration_t *configuration)
 {
+    control_curve_config_t *curves[4];
+    size_t curve;
+    size_t point;
     size_t motor;
 
     *configuration = (flight_configuration_t){
@@ -340,10 +398,62 @@ static void configuration_from_usb(
                 1000000.0F,
             .maximum_gap_us = usb->attitude_maximum_gap_us,
         },
+        .control = {
+            .roll = {
+                .deadband =
+                    (float)usb->control_axis_millionths[0][0] / 1000000.0F,
+                .maximum_angle_degrees =
+                    (float)usb->control_axis_millionths[0][1] / 1000000.0F,
+                .maximum_rate_dps =
+                    (float)usb->control_axis_millionths[0][2] / 1000000.0F,
+            },
+            .pitch = {
+                .deadband =
+                    (float)usb->control_axis_millionths[1][0] / 1000000.0F,
+                .maximum_angle_degrees =
+                    (float)usb->control_axis_millionths[1][1] / 1000000.0F,
+                .maximum_rate_dps =
+                    (float)usb->control_axis_millionths[1][2] / 1000000.0F,
+            },
+            .yaw = {
+                .deadband =
+                    (float)usb->control_axis_millionths[2][0] / 1000000.0F,
+                .maximum_angle_degrees =
+                    (float)usb->control_axis_millionths[2][1] / 1000000.0F,
+                .maximum_rate_dps =
+                    (float)usb->control_axis_millionths[2][2] / 1000000.0F,
+            },
+            .throttle = {
+                .zero_deadband =
+                    (float)usb->throttle_millionths[0] / 1000000.0F,
+                .maximum =
+                    (float)usb->throttle_millionths[1] / 1000000.0F,
+            },
+        },
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         configuration->motors.direction[motor] =
             (motor_direction_t)usb->directions[motor];
+    }
+    curves[0] = &configuration->control.roll.curve;
+    curves[1] = &configuration->control.pitch.curve;
+    curves[2] = &configuration->control.yaw.curve;
+    curves[3] = &configuration->control.throttle.curve;
+    for (curve = 0U; curve < 4U; curve++) {
+        curves[curve]->type =
+            (control_curve_type_t)usb->curve_type[curve];
+        curves[curve]->interpolation = (control_curve_interpolation_t)
+            usb->curve_interpolation[curve];
+        curves[curve]->point_count = usb->curve_point_count[curve];
+        for (point = 0U; point < curves[curve]->point_count; point++) {
+            curves[curve]->points[point] = (control_curve_point_t){
+                .input = (float)usb->curve_point_millionths[curve][point][0] /
+                         1000000.0F,
+                .output =
+                    (float)usb->curve_point_millionths[curve][point][1] /
+                    1000000.0F,
+            };
+        }
     }
 }
 

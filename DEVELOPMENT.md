@@ -6,7 +6,7 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.4 — bounded gyro filtering and roll/pitch attitude estimation —
+Milestone 4.5 — configurable input shaping and prepared control configuration —
 implemented in software and awaiting owner review and physical validation.
 
 ## Last completed milestone
@@ -37,6 +37,27 @@ the receiver, mixer, authority gate, and DShot output path.
   and parameters persist, migrate from schemas 1 and 2, and are reapplied
   immediately by a successful disarmed write. Reapplication resets processing
   history; startup-calibration policy still takes effect on the next boot.
+- Extended the unified configuration to schema 4 with separate roll, pitch,
+  yaw, and throttle curves; centered-axis deadbands; maximum roll/pitch angles;
+  maximum axis rates; throttle zero deadband; and maximum throttle.
+- Added a bounded control-point curve representation with two through eight
+  monotonic points. Linear interpolation is implemented now, while a prepared
+  four-coefficient segment representation keeps quadratic and monotone-cubic
+  interpolation replaceable without changing the flight-loop interface.
+- Prepared curve coefficients, deadband reciprocals, the quad-X mixer matrix,
+  receiver normalization reciprocals, and the gyro-filter time constant
+  outside their high-frequency paths.
+- Kept receiver acquisition and normalization separate from control shaping.
+  The 1 kHz flight-control task applies the prepared shaping before the mixer;
+  exact zero throttle exits before axis work. USB motor tests and the physical
+  Stage 1 failsafe command deliberately bypass pilot input shaping.
+- Added desired roll/pitch angle and yaw-rate setpoints for the later closed-loop
+  controllers. Current motor output remains open-loop; roll/pitch rate limits
+  are configuration prepared for the self-leveling outer loop and do not yet
+  provide stabilization.
+- Expanded the request-driven whole-document JSON protocol and persistent
+  payload for schema 4. Schema 1-3 and legacy motor records migrate by retaining
+  their known fields and filling new control settings from compiled defaults.
 - Extended the existing request-driven `imu` response and host visualization
   with filtered gyro, estimated roll/pitch, and bounded processing counters.
   No extra sensor read, snapshot producer, or scheduled diagnostics task was
@@ -105,14 +126,17 @@ the receiver, mixer, authority gate, and DShot output path.
   not delayed by the roughly 2 ms reset-bounded LED transaction.
 - Extended `imu` diagnostics and the host view with calibration state,
   progress, samples, restarts, raw bias, and bias-corrected gyro values.
-- All 45 native tests and all 67 Python host-tool tests pass, including the
+- All 46 native tests and all 67 Python host-tool tests pass, including the
   address/undefined-behavior sanitizer build. Debug and Release firmware build
-  with warnings as errors. Debug uses 147,232 bytes of Flash and 25,368 bytes
-  of RAM; Release uses 102,592 bytes of Flash and 25,352 bytes of RAM.
-- Motor-control use remains outside Milestone 4.4. The existing open-loop motor
-  path is unchanged; the fail-closed IMU control gate belongs to Milestone 4.8.
+  with warnings as errors. Debug uses 162,208 bytes of Flash and 47,944 bytes
+  of RAM; Release uses 112,404 bytes of Flash and 47,928 bytes of RAM. The RAM
+  increase is primarily the bounded 4,096-byte configuration lines and USB
+  queues required by maximum-size curve documents.
+- IMU estimates remain outside motor control in Milestone 4.5. Receiver stick
+  shaping now precedes the existing open-loop mixer; the rate/angle controllers
+  and fail-closed IMU control gate belong to later milestones.
 
-## Milestone 4.4 assumptions and safety boundary
+## Milestone 4.5 assumptions and safety boundary
 
 - The provisional V1 body mapping assumes the PCB top is aircraft forward and
   the component side is up. This is not yet physical evidence.
@@ -120,8 +144,8 @@ the receiver, mixer, authority gate, and DShot output path.
   the firmware does not claim to consume every sensor update.
 - Software builds cannot prove the 1 kHz deadlines, SPI recovery behavior, or
   physical axis signs. All remain explicitly pending on-board measurement.
-- IMU data is not yet an input to motor control, so this milestone does not
-  alter current flight behavior or pretend to provide stabilization.
+- IMU data is not yet an input to motor control, so the new shaping changes
+  stick response but does not pretend to provide stabilization.
 - The displayed engineering units use the configured ±2 g and ±2000
   degree-per-second ranges. They are diagnostic conversions, not yet calibrated
   control values.
@@ -142,11 +166,19 @@ the receiver, mixer, authority gate, and DShot output path.
 - The estimate is diagnostic-only. It has no motor authority until the later
   controller and fail-closed freshness gate are implemented and physically
   validated.
+- The initial throttle curve is intentionally linear after a 2% zero deadband.
+  A lift-off plateau must be based on physical vehicle measurements rather than
+  guessed before the first controlled tests.
+- The conservative 30-degree angle, 180-degree-per-second roll/pitch, and
+  150-degree-per-second yaw defaults are starting values, not flight-proven
+  tuning.
+- Curve configuration affects live and held receiver input only. It cannot
+  reshape USB bench commands or the explicitly configured receiver failsafe.
 
 ## Next proposed milestone
 
-Milestone 4.5 — add configurable input curves, deadbands, angle/rate limits,
-and the initial throttle curve without yet closing the IMU feedback loop.
+Milestone 4.6 — add bounded three-axis rate PID control with anti-windup and
+zero-throttle integral reset, without yet replacing the open-loop motor path.
 
 ## Historical milestone record
 

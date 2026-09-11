@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NEWLINE_FRAMER_MAX_LINE_LENGTH 1536U
+#define NEWLINE_FRAMER_MAX_LINE_LENGTH 4096U
 
 typedef void (*newline_framer_line_callback_t)(const uint8_t *line,
                                                size_t length,

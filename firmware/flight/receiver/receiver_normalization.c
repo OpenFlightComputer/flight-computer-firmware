@@ -68,16 +68,20 @@ static float clamp(float value, float minimum, float maximum)
 }
 
 static float normalize_axis(uint16_t raw,
-                            const receiver_axis_calibration_t *calibration)
+                            const receiver_axis_calibration_t *calibration,
+                            float negative_scale,
+                            float positive_scale)
 {
     float normalized;
 
     if (raw >= calibration->center) {
-        normalized = (float)((int32_t)raw - (int32_t)calibration->center) /
-                     (float)(calibration->maximum - calibration->center);
+        normalized =
+            (float)((int32_t)raw - (int32_t)calibration->center) *
+            positive_scale;
     } else {
-        normalized = (float)((int32_t)raw - (int32_t)calibration->center) /
-                     (float)(calibration->center - calibration->minimum);
+        normalized =
+            (float)((int32_t)raw - (int32_t)calibration->center) *
+            negative_scale;
     }
     normalized = clamp(normalized, -1.0f, 1.0f);
     return calibration->reversed ? -normalized : normalized;
@@ -85,11 +89,11 @@ static float normalize_axis(uint16_t raw,
 
 static float normalize_throttle(
     uint16_t raw,
-    const receiver_throttle_calibration_t *calibration)
+    const receiver_throttle_calibration_t *calibration,
+    float scale)
 {
     float normalized =
-        (float)((int32_t)raw - (int32_t)calibration->minimum) /
-        (float)(calibration->maximum - calibration->minimum);
+        (float)((int32_t)raw - (int32_t)calibration->minimum) * scale;
 
     normalized = clamp(normalized, 0.0f, 1.0f);
     return calibration->reversed ? 1.0f - normalized : normalized;
@@ -159,6 +163,19 @@ receiver_normalization_result_t receiver_normalizer_initialize(
 
     *normalizer = (receiver_normalizer_t){
         .config = *config,
+        .axis_negative_scale = {
+            1.0F / (float)(config->roll.center - config->roll.minimum),
+            1.0F / (float)(config->pitch.center - config->pitch.minimum),
+            1.0F / (float)(config->yaw.center - config->yaw.minimum),
+        },
+        .axis_positive_scale = {
+            1.0F / (float)(config->roll.maximum - config->roll.center),
+            1.0F / (float)(config->pitch.maximum - config->pitch.center),
+            1.0F / (float)(config->yaw.maximum - config->yaw.center),
+        },
+        .throttle_scale =
+            1.0F / (float)(config->throttle.maximum -
+                           config->throttle.minimum),
         .initialized = true,
     };
     return RECEIVER_NORMALIZATION_OK;
@@ -176,21 +193,27 @@ receiver_normalization_result_t receiver_normalize(
     if ((normalizer == NULL) || (frame == NULL) || (snapshot == NULL)) {
         return RECEIVER_NORMALIZATION_INVALID_ARGUMENT;
     }
-    if (!normalizer->initialized ||
-        !receiver_normalization_config_is_valid(&normalizer->config)) {
+    if (!normalizer->initialized) {
         return RECEIVER_NORMALIZATION_NOT_INITIALIZED;
     }
 
     config = &normalizer->config;
     *snapshot = (receiver_control_snapshot_t){
         .roll = normalize_axis(frame->channels[config->roll.channel],
-                               &config->roll),
+                               &config->roll,
+                               normalizer->axis_negative_scale[0],
+                               normalizer->axis_positive_scale[0]),
         .pitch = normalize_axis(frame->channels[config->pitch.channel],
-                                &config->pitch),
+                                &config->pitch,
+                                normalizer->axis_negative_scale[1],
+                                normalizer->axis_positive_scale[1]),
         .yaw = normalize_axis(frame->channels[config->yaw.channel],
-                              &config->yaw),
+                              &config->yaw,
+                              normalizer->axis_negative_scale[2],
+                              normalizer->axis_positive_scale[2]),
         .throttle = normalize_throttle(
-            frame->channels[config->throttle.channel], &config->throttle),
+            frame->channels[config->throttle.channel], &config->throttle,
+            normalizer->throttle_scale),
         .received_at_us = received_at_us,
         .source_sequence = source_sequence,
         .arm_switch_high =

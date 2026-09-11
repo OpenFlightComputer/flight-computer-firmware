@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define USB_JSON_TOKEN_CAPACITY 80U
+#define USB_JSON_TOKEN_CAPACITY 256U
 #define USB_JSON_THROTTLE_SCALE 1000000U
 
 static bool token_equals(const char *line,
@@ -274,6 +274,150 @@ static bool parse_direction_array(const char *line,
     return direction == 4U;
 }
 
+static bool parse_curve(const char *line,
+                        const jsmntok_t *tokens,
+                        int token_count,
+                        const jsmntok_t *object,
+                        size_t curve_index,
+                        usb_json_configuration_t *configuration)
+{
+    const jsmntok_t *points;
+    int points_index;
+    int index;
+    size_t point = 0U;
+
+    if ((object == NULL) || (object->type != JSMN_OBJECT) ||
+        (object->size != 6) ||
+        !token_equals(line,
+                      object_member(line, tokens, token_count,
+                                    token_index(tokens, object), "type"),
+                      "CONTROL_POINTS") ||
+        !token_equals(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, object), "interpolation"),
+            "LINEAR")) {
+        return false;
+    }
+    points = object_member(line, tokens, token_count,
+                           token_index(tokens, object), "points");
+    if ((points == NULL) || (points->type != JSMN_ARRAY) ||
+        (points->size < 2) ||
+        (points->size > (int)USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS)) {
+        return false;
+    }
+    points_index = token_index(tokens, points);
+    for (index = points_index + 1; index < token_count; index++) {
+        const jsmntok_t *pair = &tokens[index];
+        uint32_t values[2];
+        size_t value = 0U;
+        int child;
+
+        if (pair->parent != points_index) {
+            continue;
+        }
+        if ((pair->type != JSMN_ARRAY) || (pair->size != 2) ||
+            (point >= USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS)) {
+            return false;
+        }
+        for (child = index + 1; child < token_count; child++) {
+            if (tokens[child].parent != index) {
+                continue;
+            }
+            if ((value >= 2U) ||
+                !parse_normalized_millionths(line, &tokens[child],
+                                             &values[value])) {
+                return false;
+            }
+            value++;
+        }
+        if (value != 2U) {
+            return false;
+        }
+        configuration->curve_point_millionths[curve_index][point][0] =
+            values[0];
+        configuration->curve_point_millionths[curve_index][point][1] =
+            values[1];
+        point++;
+    }
+    configuration->curve_type[curve_index] = 0U;
+    configuration->curve_interpolation[curve_index] = 0U;
+    configuration->curve_point_count[curve_index] = (uint8_t)point;
+    return point == (size_t)points->size;
+}
+
+static bool parse_control_configuration(
+    const char *line,
+    const jsmntok_t *tokens,
+    int token_count,
+    const jsmntok_t *control,
+    usb_json_configuration_t *configuration)
+{
+    static const char *const axis_names[3] = {"roll", "pitch", "yaw"};
+    size_t axis;
+
+    if ((control == NULL) || (control->type != JSMN_OBJECT) ||
+        (control->size != 8)) {
+        return false;
+    }
+    for (axis = 0U; axis < 3U; axis++) {
+        const jsmntok_t *axis_object = object_member(
+            line, tokens, token_count, token_index(tokens, control),
+            axis_names[axis]);
+
+        if ((axis_object == NULL) || (axis_object->type != JSMN_OBJECT) ||
+            (axis_object->size != 8) ||
+            !parse_normalized_millionths(
+                line,
+                object_member(line, tokens, token_count,
+                              token_index(tokens, axis_object), "deadband"),
+                &configuration->control_axis_millionths[axis][0]) ||
+            !parse_positive_millionths(
+                line,
+                object_member(line, tokens, token_count,
+                              token_index(tokens, axis_object),
+                              "maximum_angle_degrees"),
+                &configuration->control_axis_millionths[axis][1]) ||
+            !parse_positive_millionths(
+                line,
+                object_member(line, tokens, token_count,
+                              token_index(tokens, axis_object),
+                              "maximum_rate_dps"),
+                &configuration->control_axis_millionths[axis][2]) ||
+            !parse_curve(
+                line, tokens, token_count,
+                object_member(line, tokens, token_count,
+                              token_index(tokens, axis_object), "curve"),
+                axis, configuration)) {
+            return false;
+        }
+    }
+    {
+        const jsmntok_t *throttle = object_member(
+            line, tokens, token_count, token_index(tokens, control),
+            "throttle");
+
+        return (throttle != NULL) && (throttle->type == JSMN_OBJECT) &&
+               (throttle->size == 6) &&
+               parse_normalized_millionths(
+                   line,
+                   object_member(line, tokens, token_count,
+                                 token_index(tokens, throttle),
+                                 "zero_deadband"),
+                   &configuration->throttle_millionths[0]) &&
+               parse_normalized_millionths(
+                   line,
+                   object_member(line, tokens, token_count,
+                                 token_index(tokens, throttle), "maximum"),
+                   &configuration->throttle_millionths[1]) &&
+               parse_curve(
+                   line, tokens, token_count,
+                   object_member(line, tokens, token_count,
+                                 token_index(tokens, throttle), "curve"),
+                   3U, configuration);
+    }
+}
+
 static bool parse_configuration(const char *line,
                                 const jsmntok_t *tokens,
                                 int token_count,
@@ -296,6 +440,7 @@ static bool parse_configuration(const char *line,
     const jsmntok_t *mixer;
     const jsmntok_t *failsafe;
     const jsmntok_t *imu;
+    const jsmntok_t *control;
     const jsmntok_t *gyro_calibration;
     const jsmntok_t *gyro_filter;
     const jsmntok_t *attitude_estimator;
@@ -305,7 +450,7 @@ static bool parse_configuration(const char *line,
     size_t index;
 
     if ((object == NULL) || (object->type != JSMN_OBJECT) ||
-        (object->size != 10)) {
+        (object->size != 12)) {
         return false;
     }
     schema = object_member(line, tokens, token_count,
@@ -319,18 +464,20 @@ static bool parse_configuration(const char *line,
                              "receiver_failsafe");
     imu = object_member(line, tokens, token_count,
                         token_index(tokens, object), "imu");
+    control = object_member(line, tokens, token_count,
+                            token_index(tokens, object), "control");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 3U) || (motors == NULL) ||
+        (schema_value != 4U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
         (mixer == NULL) || (mixer->type != JSMN_OBJECT) ||
         (mixer->size != 6) || (failsafe == NULL) ||
         (failsafe->type != JSMN_OBJECT) || (failsafe->size != 20) ||
-        (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 6)) {
+        (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 6) ||
+        !parse_control_configuration(line, tokens, token_count, control,
+                                     configuration)) {
         return false;
     }
-    *configuration = (usb_json_configuration_t){
-        .schema_version = schema_value,
-    };
+    configuration->schema_version = schema_value;
 
     layout = object_member(line, tokens, token_count,
                            token_index(tokens, motors), "propeller_layout");
@@ -479,6 +626,52 @@ static bool format_signed_millionths(int32_t value,
                                  (unsigned long)(magnitude % 1000000U));
 
     return (written >= 0) && ((size_t)written < capacity);
+}
+
+static bool format_curve(const usb_json_configuration_t *configuration,
+                         size_t curve,
+                         char *destination,
+                         size_t capacity)
+{
+    size_t offset = 0U;
+    size_t point;
+    int written;
+
+    if ((configuration->curve_type[curve] != 0U) ||
+        (configuration->curve_interpolation[curve] != 0U) ||
+        (configuration->curve_point_count[curve] < 2U) ||
+        (configuration->curve_point_count[curve] >
+         USB_JSON_CONFIGURATION_CURVE_MAXIMUM_POINTS)) {
+        return false;
+    }
+    written = snprintf(destination, capacity,
+                       "{\"type\":\"CONTROL_POINTS\","
+                       "\"interpolation\":\"LINEAR\",\"points\":[");
+    if ((written < 0) || ((size_t)written >= capacity)) {
+        return false;
+    }
+    offset = (size_t)written;
+    for (point = 0U; point < configuration->curve_point_count[curve];
+         point++) {
+        const uint32_t input =
+            configuration->curve_point_millionths[curve][point][0];
+        const uint32_t output =
+            configuration->curve_point_millionths[curve][point][1];
+
+        written = snprintf(
+            destination + offset, capacity - offset,
+            "%s[%lu.%06lu,%lu.%06lu]", point == 0U ? "" : ",",
+            (unsigned long)(input / 1000000U),
+            (unsigned long)(input % 1000000U),
+            (unsigned long)(output / 1000000U),
+            (unsigned long)(output % 1000000U));
+        if ((written < 0) || ((size_t)written >= (capacity - offset))) {
+            return false;
+        }
+        offset += (size_t)written;
+    }
+    written = snprintf(destination + offset, capacity - offset, "]}");
+    return (written >= 0) && ((size_t)written < (capacity - offset));
 }
 
 bool usb_json_parse_request(const char *line,
@@ -757,6 +950,7 @@ bool usb_json_build_configuration_response(
     char timing[5][UINT64_DECIMAL_BUFFER_CAPACITY];
     char controls[5][16];
     char gyro_timing[2][UINT64_DECIMAL_BUFFER_CAPACITY];
+    char curves[USB_JSON_CONFIGURATION_CURVE_COUNT][300];
     size_t timing_length;
     const char *layout;
     const char *directions[4];
@@ -773,6 +967,12 @@ bool usb_json_build_configuration_response(
         (configuration->gyro_filter_type != 0U) ||
         (configuration->attitude_estimator_type != 0U)) {
         return false;
+    }
+    for (index = 0U; index < USB_JSON_CONFIGURATION_CURVE_COUNT; index++) {
+        if (!format_curve(configuration, index, curves[index],
+                          sizeof(curves[index]))) {
+            return false;
+        }
     }
 
     layout = configuration->propeller_layout == 0U ? "PROPS_IN"
@@ -816,7 +1016,19 @@ bool usb_json_build_configuration_response(
         "\"propeller_layout\":\"%s\",\"directions\":["
         "\"%s\",\"%s\",\"%s\",\"%s\"]},\"mixer\":{"
         "\"roll_factor\":%lu.%06lu,\"pitch_factor\":%lu.%06lu,"
-        "\"yaw_factor\":%lu.%06lu},\"receiver_failsafe\":{"
+        "\"yaw_factor\":%lu.%06lu},\"control\":{"
+        "\"roll\":{\"deadband\":%lu.%06lu,"
+        "\"maximum_angle_degrees\":%lu.%06lu,"
+        "\"maximum_rate_dps\":%lu.%06lu,\"curve\":%s},"
+        "\"pitch\":{\"deadband\":%lu.%06lu,"
+        "\"maximum_angle_degrees\":%lu.%06lu,"
+        "\"maximum_rate_dps\":%lu.%06lu,\"curve\":%s},"
+        "\"yaw\":{\"deadband\":%lu.%06lu,"
+        "\"maximum_angle_degrees\":%lu.%06lu,"
+        "\"maximum_rate_dps\":%lu.%06lu,\"curve\":%s},"
+        "\"throttle\":{\"zero_deadband\":%lu.%06lu,"
+        "\"maximum\":%lu.%06lu,\"curve\":%s}},"
+        "\"receiver_failsafe\":{"
         "\"stale_after_us\":%s,\"loss_detected_after_us\":%s,"
         "\"hold_last_until_us\":%s,\"stage_two_after_us\":%s,"
         "\"recovery_stable_us\":%s,\"stage_one_roll\":%s,"
@@ -841,6 +1053,47 @@ bool usb_json_build_configuration_response(
         (unsigned long)(configuration->mixer_factor_millionths[1] % 1000000U),
         (unsigned long)(configuration->mixer_factor_millionths[2] / 1000000U),
         (unsigned long)(configuration->mixer_factor_millionths[2] % 1000000U),
+        (unsigned long)(configuration->control_axis_millionths[0][0] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[0][0] %
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[0][1] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[0][1] %
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[0][2] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[0][2] %
+                        1000000U), curves[0],
+        (unsigned long)(configuration->control_axis_millionths[1][0] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[1][0] %
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[1][1] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[1][1] %
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[1][2] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[1][2] %
+                        1000000U), curves[1],
+        (unsigned long)(configuration->control_axis_millionths[2][0] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[2][0] %
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[2][1] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[2][1] %
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[2][2] /
+                        1000000U),
+        (unsigned long)(configuration->control_axis_millionths[2][2] %
+                        1000000U), curves[2],
+        (unsigned long)(configuration->throttle_millionths[0] / 1000000U),
+        (unsigned long)(configuration->throttle_millionths[0] % 1000000U),
+        (unsigned long)(configuration->throttle_millionths[1] / 1000000U),
+        (unsigned long)(configuration->throttle_millionths[1] % 1000000U),
+        curves[3],
         timing[0], timing[1], timing[2], timing[3], timing[4],
         controls[0], controls[1], controls[2], controls[3], controls[4],
         gyro_timing[0], gyro_timing[1],
