@@ -50,6 +50,7 @@ static imu_service_t imu_service;
 static gyro_calibration_t gyro_calibration;
 static imu_processing_pipeline_t imu_processing_pipeline;
 static task_registry_t task_registry;
+static control_trace_t control_trace;
 
 static imu_source_result_t fake_imu_read(void *context,
                                          imu_raw_sample_t *sample)
@@ -404,6 +405,7 @@ static void reset_fakes(void)
         assert(task_registry_register(&task_registry, &definition) ==
                TASK_REGISTRATION_OK);
     }
+    control_trace_initialize(&control_trace);
     logging_initialize();
 }
 
@@ -435,6 +437,7 @@ static void initialize_system(usb_command_processor_t *processor,
                                             &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
+                                            &control_trace,
                                             "0.1.0",
                                             "test-build") ==
            USB_COMMAND_INIT_OK);
@@ -936,6 +939,7 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
+                                            &control_trace,
                                             "0.1.0", "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_initialize(&processor, &state_machine,
@@ -947,10 +951,70 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
+                                            &control_trace,
                                             NULL, "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_INVALID_STATE);
+}
+
+static void control_trace_read_is_transactional_and_start_is_disarmed_only(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+    control_trace_sample_t sample = {
+        .timestamp_us = current_time_us,
+        .system_state = SYSTEM_STATE_DISARMED,
+        .failsafe_state = RECEIVER_FAILSAFE_LIVE,
+        .failsafe_action = RECEIVER_FAILSAFE_ACTION_LIVE,
+        .imu_freshness = IMU_FRESHNESS_FRESH,
+        .control_result = FLIGHT_CONTROL_IDLE,
+        .rate_result = RATE_CONTROLLER_RESULT_DISABLED,
+    };
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+    queue_input("{\"type\":\"command\",\"request_id\":70,"
+                "\"command\":\"control_trace_start\","
+                "\"level\":\"HIGH_RATE\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(control_trace.level == CONTROL_TRACE_LEVEL_HIGH_RATE);
+    assert(strstr(captured_response, "\"accepted\":true") != NULL);
+    assert(control_trace_record(&control_trace, &sample));
+    assert(control_trace_pending_count(&control_trace) == 1U);
+
+    write_result = USB_CDC_WRITE_BUSY;
+    queue_input("{\"type\":\"command\",\"request_id\":71,"
+                "\"command\":\"control_trace_read\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_PENDING);
+    assert(control_trace_pending_count(&control_trace) == 1U);
+    assert(strstr(captured_response, "\"records\":[[") != NULL);
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_PENDING);
+    assert(control_trace_pending_count(&control_trace) == 1U);
+    write_result = USB_CDC_WRITE_ACCEPTED;
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(control_trace_pending_count(&control_trace) == 0U);
+
+    state_machine.current = SYSTEM_STATE_ARMED;
+    queue_input("{\"type\":\"command\",\"request_id\":72,"
+                "\"command\":\"control_trace_start\","
+                "\"level\":\"LOW_RATE\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"accepted\":false") != NULL);
+    assert(processor.statistics.control_trace_rejected_count == 1U);
+
+    queue_input("{\"type\":\"command\",\"request_id\":73,"
+                "\"command\":\"control_trace_stop\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(control_trace.level == CONTROL_TRACE_LEVEL_OFF);
 }
 
 int main(void)
@@ -966,6 +1030,7 @@ int main(void)
     complete_configuration_commands_replace_singular_commands();
     asynchronous_arm_is_reported_as_pending();
     invalid_unsupported_and_busy_responses_are_bounded();
+    control_trace_read_is_transactional_and_start_is_disarmed_only();
     initialization_and_invalid_state_are_checked();
     return 0;
 }

@@ -162,6 +162,14 @@ Planned milestones:
 9. Propeller-free sign, correction, saturation, loss, and recovery validation.
 10. Constrained first-hover preparation and test.
 
+After the control behavior has been physically validated, perform a
+behavior-preserving readability pass over the flight-control coordinator.
+Extract its authority/failsafe handling, setpoint preparation, stabilization,
+mixing, and motor-submission stages into small named functions or modules;
+validate inputs once at clear module boundaries, retain explicit fail-closed
+decisions, and keep diagnostic-specific branching outside the flight
+algorithms. This cleanup is recorded work but is not a first-hover blocker.
+
 Explicitly defer setpoint slew limiting until physical control tests show that
 expo plus angle/rate limits are insufficient. Also defer acrobatic/rate-only
 flight modes and their supporting airmode/armed-idle behavior. The initial

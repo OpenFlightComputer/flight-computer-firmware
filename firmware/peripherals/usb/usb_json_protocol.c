@@ -737,6 +737,7 @@ bool usb_json_parse_request(const char *line,
     const jsmntok_t *motor;
     const jsmntok_t *throttle;
     const jsmntok_t *configuration;
+    const jsmntok_t *level;
     int token_count;
 
     if ((line == NULL) || (request == NULL) || (line_length == 0U)) {
@@ -766,6 +767,7 @@ bool usb_json_parse_request(const char *line,
     throttle = object_member(line, tokens, token_count, 0, "throttle");
     configuration = object_member(line, tokens, token_count, 0,
                                   "configuration");
+    level = object_member(line, tokens, token_count, 0, "level");
     if (!token_equals(line, type, "command") || (command == NULL) ||
         (command->type != JSMN_STRING) || (request_id == NULL) ||
         !parse_uint32(line, request_id, &request->request_id)) {
@@ -780,6 +782,12 @@ bool usb_json_parse_request(const char *line,
         request->command = USB_JSON_COMMAND_RECEIVER;
     } else if (token_equals(line, command, "imu")) {
         request->command = USB_JSON_COMMAND_IMU;
+    } else if (token_equals(line, command, "control_trace_start")) {
+        request->command = USB_JSON_COMMAND_CONTROL_TRACE_START;
+    } else if (token_equals(line, command, "control_trace_read")) {
+        request->command = USB_JSON_COMMAND_CONTROL_TRACE_READ;
+    } else if (token_equals(line, command, "control_trace_stop")) {
+        request->command = USB_JSON_COMMAND_CONTROL_TRACE_STOP;
     } else if (token_equals(line, command, "arm")) {
         request->command = USB_JSON_COMMAND_ARM;
     } else if (token_equals(line, command, "disarm")) {
@@ -812,6 +820,25 @@ bool usb_json_parse_request(const char *line,
                    line, tokens, token_count, configuration,
                    &request->configuration);
     }
+    if (request->command == USB_JSON_COMMAND_CONTROL_TRACE_START) {
+        if ((tokens[0].size != 8) || (level == NULL) ||
+            (level->type != JSMN_STRING) || (motor != NULL) ||
+            (throttle != NULL) || (configuration != NULL)) {
+            return false;
+        }
+        if (token_equals(line, level, "EVENTS")) {
+            request->trace_level = USB_JSON_TRACE_LEVEL_EVENTS;
+        } else if (token_equals(line, level, "LOW_RATE")) {
+            request->trace_level = USB_JSON_TRACE_LEVEL_LOW_RATE;
+        } else if (token_equals(line, level, "HIGH_RATE")) {
+            request->trace_level = USB_JSON_TRACE_LEVEL_HIGH_RATE;
+        } else if (token_equals(line, level, "FULL_RATE")) {
+            request->trace_level = USB_JSON_TRACE_LEVEL_FULL_RATE;
+        } else {
+            return false;
+        }
+        return true;
+    }
     return (tokens[0].size == 6) && (motor == NULL) &&
            (throttle == NULL) && (configuration == NULL);
 }
@@ -827,6 +854,12 @@ const char *usb_json_command_name(usb_json_command_t command)
         return "receiver";
     case USB_JSON_COMMAND_IMU:
         return "imu";
+    case USB_JSON_COMMAND_CONTROL_TRACE_START:
+        return "control_trace_start";
+    case USB_JSON_COMMAND_CONTROL_TRACE_READ:
+        return "control_trace_read";
+    case USB_JSON_COMMAND_CONTROL_TRACE_STOP:
+        return "control_trace_stop";
     case USB_JSON_COMMAND_ARM:
         return "arm";
     case USB_JSON_COMMAND_DISARM:

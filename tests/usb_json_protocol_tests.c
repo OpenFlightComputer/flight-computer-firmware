@@ -61,6 +61,17 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(parse("{\"type\":\"command\",\"request_id\":44,"
                  "\"command\":\"imu\"}").command ==
            USB_JSON_COMMAND_IMU);
+    request = parse("{\"type\":\"command\",\"request_id\":45,"
+                    "\"command\":\"control_trace_start\","
+                    "\"level\":\"HIGH_RATE\"}");
+    assert(request.command == USB_JSON_COMMAND_CONTROL_TRACE_START);
+    assert(request.trace_level == USB_JSON_TRACE_LEVEL_HIGH_RATE);
+    assert(parse("{\"type\":\"command\",\"request_id\":46,"
+                 "\"command\":\"control_trace_read\"}").command ==
+           USB_JSON_COMMAND_CONTROL_TRACE_READ);
+    assert(parse("{\"type\":\"command\",\"request_id\":47,"
+                 "\"command\":\"control_trace_stop\"}").command ==
+           USB_JSON_COMMAND_CONTROL_TRACE_STOP);
     request = parse("{\"request_id\":4294967295,\"type\":\"command\","
                     "\"command\":\"arm\"}");
     assert(request.command == USB_JSON_COMMAND_ARM);
@@ -177,6 +188,12 @@ static void malformed_or_noncanonical_requests_are_rejected(void)
         "\"request_id\":1,\"motor\":256,\"throttle\":0.1}",
         "{\"type\":\"command\",\"command\":\"status\","
         "\"request_id\":1,\"motor\":1,\"throttle\":0.1}",
+        "{\"type\":\"command\",\"command\":\"control_trace_start\","
+        "\"request_id\":1}",
+        "{\"type\":\"command\",\"command\":\"control_trace_start\","
+        "\"request_id\":1,\"level\":\"OFF\"}",
+        "{\"type\":\"command\",\"command\":\"control_trace_start\","
+        "\"request_id\":1,\"level\":\"high_rate\"}",
         "{\"type\":\"command\",\"command\":\"config_write\","
         "\"request_id\":1}",
         "{\"type\":\"command\",\"command\":\"config_read\","

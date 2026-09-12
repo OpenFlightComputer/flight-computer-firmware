@@ -6,9 +6,9 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.8 — stabilized receiver mixing and fail-closed IMU authority —
-implemented in software and awaiting owner review. It is connected to motor
-output but has not yet been physically validated.
+Milestone 4.9 — bounded control-pipeline diagnostics — implemented in software
+and awaiting owner review. The live dashboard and trace transport have not yet
+been physically validated.
 
 ## Last completed milestone
 
@@ -17,6 +17,28 @@ that the controller can arm and drive the secured, propeller-free motors through
 the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
+
+- Added an opt-in fixed 64-record flight-control trace with event-only, 10 Hz,
+  100 Hz, and 1 kHz levels. It is off after reset, starts only while disarmed,
+  may continue through armed/failsafe operation, and stops on disarm or fault.
+- Captures existing receiver, shaped setpoint, attitude, desired/measured rate,
+  PID, mixer, motor, lifecycle, freshness, and failsafe results without a new
+  scheduler task or duplicate control calculation. A full ring drops new data
+  and exposes a saturating loss counter; flight work never waits for USB.
+- Keeps trace assembly in the diagnostics-owned `control_trace_recorder`.
+  Flight control exposes only an optional, stack-local output observation;
+  there is no global per-cycle diagnostic state. The flight-control task and
+  USB trace response path are split into short, named orchestration stages.
+- Added transactional chunked USB reads: records remain in RAM through busy
+  retries and are consumed only after the response is accepted for transmit.
+- Added `./ofc device control --watch`, with a host-owned attitude horizon,
+  Quad-X motor diagram, rate histories, PID table, status, buffer health, and
+  optional JSON/CSV export.
+- All 50 native tests pass normally and under address/undefined-behavior
+  sanitizers, all 77 Python host-tool tests pass, and Debug and Release
+  firmware build with warnings as errors. The Debug image uses 60,152 bytes of
+  RAM (45.89%) and 183,924 bytes of application flash (20.05%). Physical trace
+  timing, signs, and control behavior remain explicitly unvalidated.
 
 - Added a flat hardware-independent IMU processing pipeline after the existing
   sample publication and startup gyro calibration. It converts mapped counts

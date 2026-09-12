@@ -10,6 +10,9 @@ typedef enum {
     USB_JSON_COMMAND_HEALTH,
     USB_JSON_COMMAND_RECEIVER,
     USB_JSON_COMMAND_IMU,
+    USB_JSON_COMMAND_CONTROL_TRACE_START,
+    USB_JSON_COMMAND_CONTROL_TRACE_READ,
+    USB_JSON_COMMAND_CONTROL_TRACE_STOP,
     USB_JSON_COMMAND_ARM,
     USB_JSON_COMMAND_DISARM,
     USB_JSON_COMMAND_MOTOR_TEST,
@@ -19,6 +22,14 @@ typedef enum {
     USB_JSON_COMMAND_UNSUPPORTED,
     USB_JSON_COMMAND_INVALID,
 } usb_json_command_t;
+
+typedef enum {
+    USB_JSON_TRACE_LEVEL_EVENTS = 0,
+    USB_JSON_TRACE_LEVEL_LOW_RATE,
+    USB_JSON_TRACE_LEVEL_HIGH_RATE,
+    USB_JSON_TRACE_LEVEL_FULL_RATE,
+    USB_JSON_TRACE_LEVEL_COUNT,
+} usb_json_trace_level_t;
 
 #define USB_JSON_CONFIGURATION_MOTOR_COUNT 4U
 #define USB_JSON_CONFIGURATION_TIMING_COUNT 5U
@@ -62,6 +73,7 @@ typedef struct {
     uint32_t request_id;
     uint32_t throttle_millionths;
     uint8_t motor;
+    usb_json_trace_level_t trace_level;
     usb_json_configuration_t configuration;
 } usb_json_request_t;
 

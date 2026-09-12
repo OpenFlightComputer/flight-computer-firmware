@@ -19,6 +19,8 @@ from openflightcomputer.cli import build_parser
         ["device", "receiver", "--watch", "--interval", "0.2"],
         ["device", "imu"],
         ["device", "imu", "--watch", "--interval", "0.2"],
+        ["device", "control"],
+        ["device", "control", "--watch", "--level", "full", "--output", "trace.csv"],
         ["device", "monitor"],
         ["motor", "run", "--motor", "1", "--throttle", "1.0", "--duration", "60"],
         ["config", "read"],
@@ -173,3 +175,64 @@ def test_configuration_write_sends_file_as_one_document(
         "parameters": {"configuration": configuration},
     }
     assert json.loads(capsys.readouterr().out) == configuration
+
+
+def test_control_watch_starts_reads_and_stops_trace(monkeypatch):
+    requests = []
+
+    class FakeConnectionContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exception_type, exception, traceback):
+            return False
+
+    class FakeClient:
+        def __init__(self, connection):
+            assert connection is not None
+
+        def request(self, command, **options):
+            requests.append((command, options.get("parameters")))
+            if command == "control_trace_read":
+                return {
+                    "type": "response", "command": command,
+                    "schema_version": 1, "capture_id": 1, "level": "OFF",
+                    "capturing": False, "pending_records": 0,
+                    "dropped_records": 0, "scale": 1000, "records": [],
+                }
+            return {"type": "response", "command": command, "ok": True}
+
+    class FakeLive:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exception_type, exception, traceback):
+            return False
+
+        def update(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(
+        cli, "wait_for_flight_port",
+        lambda *args, **kwargs: SimpleNamespace(device="test-port"),
+    )
+    monkeypatch.setattr(
+        cli, "UsbCdcConnection",
+        SimpleNamespace(open=lambda port: FakeConnectionContext()),
+    )
+    monkeypatch.setattr(cli, "JsonProtocolClient", FakeClient)
+    monkeypatch.setattr(cli, "Live", FakeLive)
+
+    result = cli._device_control(SimpleNamespace(
+        port=None, timeout=1.0, watch=True, level="high", interval=0.1,
+        output=None,
+    ))
+    assert result == 0
+    assert requests == [
+        ("control_trace_start", {"level": "HIGH_RATE"}),
+        ("control_trace_read", None),
+        ("control_trace_stop", None),
+    ]

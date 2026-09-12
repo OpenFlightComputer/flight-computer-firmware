@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.live import Live
 
 from openflightcomputer.device import DeviceError, UsbCdcConnection, wait_for_flight_port
+from openflightcomputer.control import ControlTraceView, export_trace
 from openflightcomputer.firmware import REPOSITORY_ROOT, FirmwareBuildError, build_firmware
 from openflightcomputer.imu import ImuView
 from openflightcomputer.models import ProgressEvent
@@ -108,6 +109,25 @@ def build_parser() -> argparse.ArgumentParser:
     _add_device_options(imu)
     imu.add_argument(
         "--watch", action="store_true", help="continuously refresh the IMU view"
+    )
+    control = device_commands.add_parser(
+        "control", help="inspect attitude, rate control, mixing, and motor output"
+    )
+    _add_device_options(control)
+    control.add_argument(
+        "--watch", action="store_true", help="start a trace and continuously refresh"
+    )
+    control.add_argument(
+        "--level", choices=("events", "low", "high", "full"), default="high",
+        help="trace granularity for --watch (default: high, 100 Hz)",
+    )
+    control.add_argument(
+        "--interval", type=_inspection_interval, default=0.1, metavar="SECONDS",
+        help="USB polling interval, minimum 0.1 (default: 0.1)",
+    )
+    control.add_argument(
+        "--output", type=Path, metavar="JSON_OR_CSV",
+        help="export all received records when the view closes",
     )
     imu.add_argument(
         "--interval",
@@ -259,6 +279,61 @@ def _device_imu(arguments: argparse.Namespace) -> int:
                 time.sleep(arguments.interval)
 
 
+def _device_control(arguments: argparse.Namespace) -> int:
+    port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
+    view = ControlTraceView()
+    console = Console()
+    started = False
+    interrupted = False
+    with UsbCdcConnection.open(port) as connection:
+        client = JsonProtocolClient(connection)
+        try:
+            if arguments.watch:
+                level = {
+                    "events": "EVENTS", "low": "LOW_RATE",
+                    "high": "HIGH_RATE", "full": "FULL_RATE",
+                }[arguments.level]
+                client.request(
+                    "control_trace_start",
+                    parameters={"level": level},
+                    timeout_seconds=arguments.timeout,
+                )
+                started = True
+                print(
+                    f"Watching control trace on {port.device}; press Ctrl-C to stop.",
+                    file=sys.stderr,
+                )
+                with Live(view.render(), console=console, refresh_per_second=10) as live:
+                    while True:
+                        batch = view.update(client.request(
+                            "control_trace_read", timeout_seconds=arguments.timeout
+                        ))
+                        live.update(view.render(), refresh=True)
+                        if not batch.capturing and batch.pending_records <= len(batch.records):
+                            break
+                        if batch.pending_records <= len(batch.records):
+                            time.sleep(arguments.interval)
+            else:
+                view.update(client.request(
+                    "control_trace_read", timeout_seconds=arguments.timeout
+                ))
+                console.print(view.render())
+        except KeyboardInterrupt:
+            interrupted = True
+        finally:
+            if started:
+                try:
+                    client.request("control_trace_stop", timeout_seconds=arguments.timeout)
+                except ProtocolError:
+                    pass
+    if arguments.output is not None:
+        export_trace(arguments.output, view.records)
+        print(f"Control trace: {arguments.output}")
+    if view.dropped_records:
+        print(f"Warning: firmware dropped {view.dropped_records} trace records.", file=sys.stderr)
+    return 130 if interrupted else 0
+
+
 def _smoke(arguments: argparse.Namespace) -> int:
     progress = (lambda _event: None) if arguments.json else _progress
     result = run_smoke(
@@ -359,6 +434,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _device_receiver(arguments)
             if arguments.device_command == "imu":
                 return _device_imu(arguments)
+            if arguments.device_command == "control":
+                return _device_control(arguments)
             return _device_request(arguments, arguments.device_command)
         if arguments.command == "motor":
             return _motor_run(arguments)

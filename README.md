@@ -49,12 +49,13 @@ and hardware-independent quad-X mixing. Propeller-free receiver to
 motor operation has been physically exercised on Flight Computer V1.
 
 Phase 4 adds stabilization for the first constrained hover. Milestones 4.1
-through 4.8 pin Bosch's official BMI270 SensorAPI, add the tester-proven V1
+through 4.9 pin Bosch's official BMI270 SensorAPI, add the tester-proven V1
 SPI3 transport, publish timestamped body-axis samples from a 1 kHz service, and
 provide stationary gyro calibration, bounded filtering, roll/pitch attitude
 estimation, request-driven bench visualization through
-`./ofc device imu --watch`, and connect angle/rate control to the receiver motor
-path through a fail-closed IMU gate and saturation-preserving mixer. Physical
+`./ofc device imu --watch`, connect angle/rate control to the receiver motor
+path through a fail-closed IMU gate and saturation-preserving mixer, and add a
+bounded `./ofc device control --watch` validation dashboard. Physical
 sign, timing, estimate, correction, and gain validation remain; see
 `docs/bmi270.md` and
 `DEVELOPMENT.md` for the exact boundary.
@@ -89,6 +90,7 @@ inspection, and repeatable non-arming smoke tests:
 ./ofc device status
 ./ofc device receiver --watch
 ./ofc device imu --watch
+./ofc device control --watch
 ./ofc device monitor
 ./ofc smoke --profile release
 ./ofc smoke --no-flash
@@ -105,5 +107,8 @@ Each firmware build produces ELF, HEX, BIN, map, and compile-command artifacts. 
 
 Motor-command ownership between USB testing and the receiver is documented in
 [docs/control-authority.md](docs/control-authority.md).
+
+The bounded flight-control trace and live terminal dashboard are documented in
+[docs/control-diagnostics.md](docs/control-diagnostics.md).
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the review handoff, [ROADMAP.md](ROADMAP.md) for milestone boundaries, [docs/dshot-motor-backend.md](docs/dshot-motor-backend.md) for the four-channel timer/DMA implementation, [docs/motor-output-mapping.md](docs/motor-output-mapping.md) for the fixed V1 routes, grouped DMA decision, and configurable logical assignment, [docs/dshot-encoder.md](docs/dshot-encoder.md) for packet construction and value separation, [docs/motor-command.md](docs/motor-command.md) for the normalized motor snapshot, [docs/motor-output.md](docs/motor-output.md) for the backend-independent output and ownership contract, [docs/v1-bringup-carryover.md](docs/v1-bringup-carryover.md) for the physical acceptance findings and their owning milestones, [docs/phase-0-integration-review.md](docs/phase-0-integration-review.md) for the consolidated foundation contracts, [docs/hardware-validation-checklist.md](docs/hardware-validation-checklist.md) for remaining flight-image checks, [docs/health-reporting.md](docs/health-reporting.md) for health derivation and response bounds, [docs/usb-json-protocol.md](docs/usb-json-protocol.md) for commands and framing, [docs/logging.md](docs/logging.md) for logging policy and usage, [docs/usb-cdc-logging.md](docs/usb-cdc-logging.md) for USB transport behavior, [docs/fault-system.md](docs/fault-system.md) for fault policy and records, [docs/safety.md](docs/safety.md) for lifecycle safety behavior, [docs/scheduler.md](docs/scheduler.md) for scheduler behavior, [docs/task-model.md](docs/task-model.md) for the task contract, [docs/timebase.md](docs/timebase.md) for the clock design, [docs/build-and-debug.md](docs/build-and-debug.md) for setup, flashing, and debugger checks, [docs/architecture.md](docs/architecture.md) for responsibility rules, [docs/flightcomputer-v1-hardware.md](docs/flightcomputer-v1-hardware.md) for the reviewed board map, and [docs/existing-sources.md](docs/existing-sources.md) for the inspected hardware and tester evidence.

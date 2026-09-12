@@ -24,6 +24,9 @@ The supported commands are:
 | `health` | Report derived overall health, lifecycle state, severity counts, and bounded active-fault details |
 | `receiver` | Inspect the latest raw and normalized receiver state plus link and transport diagnostics |
 | `imu` | Inspect the latest mapped IMU sample and acquisition/scheduler diagnostics while not flying |
+| `control_trace_start` | Start a bounded event/10 Hz/100 Hz/1 kHz control trace while disarmed |
+| `control_trace_read` | Read the next bounded trace chunk without changing flight behavior |
+| `control_trace_stop` | Stop capture while retaining unread records |
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
 | `motor_test` | Submit a leased single-motor command through the production safety gate |
@@ -132,6 +135,22 @@ to the host. The command returns `state_rejected` in
 `ARMED` or `FAILSAFE`. If no valid sample exists, the snapshot fields and task
 object are `null`, while service and combined high-rate counters remain
 available.
+
+Control tracing uses these strict request shapes:
+
+```json
+{"type":"command","request_id":60,"command":"control_trace_start","level":"HIGH_RATE"}
+{"type":"command","request_id":61,"command":"control_trace_read"}
+{"type":"command","request_id":62,"command":"control_trace_stop"}
+```
+
+`level` is exactly `EVENTS`, `LOW_RATE`, `HIGH_RATE`, or `FULL_RATE`. Start is
+accepted only in `DISARMED`; reading and stopping remain available while
+armed. Read responses contain metadata, a scale of 1000, and compact fixed-
+schema arrays so bounded chunks fit the existing line capacity. The host owns
+schema decoding and visualization. Firmware only discards peeked records after
+the response enters the USB transmit queue. See `docs/control-diagnostics.md`
+for record contents, sampling rates, lifecycle behavior, and overflow policy.
 
 Milestone 0.12 derives `OK`, `WARNING`, `DEGRADED`, `UNKNOWN`, or `CRITICAL`
 from the existing lifecycle and fault authorities. Each serialized active fault

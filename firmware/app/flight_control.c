@@ -109,6 +109,7 @@ flight_control_result_t flight_control_process_receiver(
     const prepared_quad_x_mixer_t *mixer,
     const receiver_failsafe_decision_t *decision,
     flight_control_stabilization_t *stabilization,
+    flight_control_output_t *output,
     uint64_t now_us)
 {
     quad_x_mixer_output_t mixer_output;
@@ -116,6 +117,9 @@ flight_control_result_t flight_control_process_receiver(
     rate_controller_result_t rate_result;
     control_setpoint_t setpoint;
 
+    if (output != NULL) {
+        *output = (flight_control_output_t){0};
+    }
     if ((control == NULL) || (mixer == NULL) || (decision == NULL) ||
         (motor_control_active_source() != MOTOR_CONTROL_SOURCE_RECEIVER) ||
         (decision->action == RECEIVER_FAILSAFE_ACTION_NONE)) {
@@ -144,6 +148,9 @@ flight_control_result_t flight_control_process_receiver(
         return enter_control_failsafe(
             stabilization, FLIGHT_CONTROL_CONTROL_FAILSAFE_ENTERED);
     }
+    if (output != NULL) {
+        output->setpoint = setpoint;
+    }
     if (setpoint.throttle == 0.0F) {
         static const float zero_correction[RATE_CONTROLLER_AXIS_COUNT];
 
@@ -152,6 +159,10 @@ flight_control_result_t flight_control_process_receiver(
                                          now_us, &mixer_output)) {
             return enter_control_failsafe(
                 stabilization, FLIGHT_CONTROL_CONTROL_FAILSAFE_ENTERED);
+        }
+        if (output != NULL) {
+            output->mixer_output = mixer_output;
+            output->mixer_output_valid = true;
         }
         return motor_control_submit(MOTOR_CONTROL_SOURCE_RECEIVER,
                                     &mixer_output.command) ==
@@ -207,6 +218,11 @@ flight_control_result_t flight_control_process_receiver(
                                      now_us, &mixer_output)) {
         return enter_control_failsafe(
             stabilization, FLIGHT_CONTROL_CONTROL_FAILSAFE_ENTERED);
+    }
+    if (output != NULL) {
+        output->setpoint = setpoint;
+        output->mixer_output = mixer_output;
+        output->mixer_output_valid = true;
     }
     return motor_control_submit(MOTOR_CONTROL_SOURCE_RECEIVER,
                                 &mixer_output.command) ==

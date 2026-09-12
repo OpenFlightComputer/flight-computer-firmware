@@ -165,6 +165,9 @@ add_executable(flight_firmware
     app/application_state.c
     app/application_tasks.c
     app/board_flight_configuration_storage.c
+    app/control_trace.c
+    app/control_trace_recorder.c
+    app/usb_control_trace_response.c
     app/diagnostic_fast_task.c
     app/diagnostic_medium_task.c
     app/diagnostic_slow_task.c

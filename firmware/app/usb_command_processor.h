@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_USB_COMMAND_PROCESSOR_H
 
 #include "fault.h"
+#include "control_trace.h"
 #include "flight_configuration_service.h"
 #include "imu_service.h"
 #include "gyro_calibration.h"
@@ -34,6 +35,10 @@ typedef struct {
     uint32_t receiver_count;
     uint32_t imu_count;
     uint32_t imu_rejected_count;
+    uint32_t control_trace_start_count;
+    uint32_t control_trace_read_count;
+    uint32_t control_trace_stop_count;
+    uint32_t control_trace_rejected_count;
     uint32_t motor_test_count;
     uint32_t motor_test_accepted_count;
     uint32_t motor_test_rejected_count;
@@ -58,10 +63,12 @@ typedef struct {
     const imu_processing_pipeline_t *imu_processing_pipeline;
     const task_registry_t *task_registry;
     flight_configuration_service_t *configuration_service;
+    control_trace_t *control_trace;
     const char *firmware_version;
     const char *build_id;
     char pending_response[USB_CDC_TRANSMIT_CAPACITY];
     size_t pending_response_length;
+    size_t pending_trace_discard_count;
     usb_command_statistics_t statistics;
     system_state_transition_result_t last_transition_result;
     bool pending_response_valid;
@@ -85,6 +92,7 @@ usb_command_init_result_t usb_command_processor_initialize(
     const imu_processing_pipeline_t *imu_processing_pipeline,
     const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
+    control_trace_t *control_trace,
     const char *firmware_version,
     const char *build_id);
 usb_command_process_result_t usb_command_processor_process_once(

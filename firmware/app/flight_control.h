@@ -28,6 +28,12 @@ typedef struct {
 } flight_control_desired_rates_t;
 
 typedef struct {
+    control_setpoint_t setpoint;
+    quad_x_mixer_output_t mixer_output;
+    bool mixer_output_valid;
+} flight_control_output_t;
+
+typedef struct {
     const roll_attitude_controller_config_t *roll_controller;
     const pitch_attitude_controller_config_t *pitch_controller;
     rate_controller_t *rate_controller;
@@ -43,6 +49,8 @@ flight_control_result_t flight_control_process_receiver(
     const prepared_quad_x_mixer_t *mixer,
     const receiver_failsafe_decision_t *decision,
     flight_control_stabilization_t *stabilization,
+    /* Optional observation of values produced by this control step. */
+    flight_control_output_t *output,
     uint64_t now_us);
 flight_control_result_t flight_control_recover_receiver(
     receiver_failsafe_t *failsafe);

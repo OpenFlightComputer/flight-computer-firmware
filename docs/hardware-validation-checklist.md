@@ -126,6 +126,17 @@ firmware link must not be recorded as proof that the flight image works.
 - [ ] Arm and confirm the RGB LED turns off before DShot direction preparation;
   disarm and confirm motor stop behavior is not delayed by the later green
   background update.
+- [ ] With propellers removed, start `./ofc device control --watch` while
+  disarmed, then arm from the receiver. Confirm the dashboard follows physical
+  roll/pitch signs, desired and measured rate signs, PID correction signs, and
+  the expected Quad-X motor responses for each stick and board movement.
+- [ ] Exercise mixer saturation and receiver failsafe in the control dashboard.
+  Confirm the trace continues through `FAILSAFE`, stops after disarm, reports
+  no unexplained sequence/reset behavior, and makes every dropped RAM record
+  visible.
+- [ ] Measure the 1 kHz flight-control task and combined high-rate budget with
+  tracing off, at `HIGH_RATE`, and during a short `FULL_RATE` capture. Confirm
+  diagnostics do not introduce a task overrun or delay motor stop behavior.
 
 ## Manufacturing evidence to preserve
 

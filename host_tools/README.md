@@ -36,6 +36,21 @@ to g and degrees per second and draws independent bars for the two ranges.
 Inspection is disarmed-only, and watch polling cannot be configured faster than
 10 Hz, so the diagnostic path cannot run during active flight.
 
+Inspect the complete control pipeline with a terminal attitude horizon,
+desired/measured rates, PID terms, Quad-X motor outputs, and trace health:
+
+```bash
+./ofc device control --watch
+./ofc device control --watch --level low
+./ofc device control --watch --level full --output control-trace.json
+./ofc device control --watch --output control-trace.csv
+```
+
+Trace capture must start while disarmed but may continue while armed. It stops
+automatically after disarm or fault. Animation and long history live on the
+host; firmware uses a fixed non-blocking RAM ring and reports any dropped
+records. See `docs/control-diagnostics.md` for the capture contract.
+
 The separately explicit propeller-free bench path is:
 
 ```bash

@@ -1,5 +1,6 @@
 #include "usb_command_processor.h"
 
+#include "usb_control_trace_response.h"
 #include "health.h"
 #include "logging.h"
 #include "motor_control.h"
@@ -32,6 +33,11 @@ static usb_command_process_result_t try_send_pending_response(
         processor->pending_response_length);
     switch (write_result) {
     case USB_CDC_WRITE_ACCEPTED:
+        if (processor->pending_trace_discard_count > 0U) {
+            control_trace_discard(processor->control_trace,
+                                  processor->pending_trace_discard_count);
+            processor->pending_trace_discard_count = 0U;
+        }
         processor->pending_response_valid = false;
         processor->pending_response_length = 0U;
         saturating_increment(&processor->statistics.response_sent_count);
@@ -40,16 +46,134 @@ static usb_command_process_result_t try_send_pending_response(
         saturating_increment(&processor->statistics.response_busy_count);
         return USB_COMMAND_PROCESS_RESPONSE_PENDING;
     case USB_CDC_WRITE_ERROR:
+        processor->pending_trace_discard_count = 0U;
         processor->pending_response_valid = false;
         processor->pending_response_length = 0U;
         saturating_increment(&processor->statistics.response_error_count);
         return USB_COMMAND_PROCESS_TRANSPORT_ERROR;
     }
 
+    processor->pending_trace_discard_count = 0U;
     processor->pending_response_valid = false;
     processor->pending_response_length = 0U;
     saturating_increment(&processor->statistics.response_error_count);
     return USB_COMMAND_PROCESS_TRANSPORT_ERROR;
+}
+
+static control_trace_level_t control_trace_level_from_usb(
+    usb_json_trace_level_t level)
+{
+    switch (level) {
+    case USB_JSON_TRACE_LEVEL_EVENTS:
+        return CONTROL_TRACE_LEVEL_EVENTS;
+    case USB_JSON_TRACE_LEVEL_LOW_RATE:
+        return CONTROL_TRACE_LEVEL_LOW_RATE;
+    case USB_JSON_TRACE_LEVEL_HIGH_RATE:
+        return CONTROL_TRACE_LEVEL_HIGH_RATE;
+    case USB_JSON_TRACE_LEVEL_FULL_RATE:
+        return CONTROL_TRACE_LEVEL_FULL_RATE;
+    case USB_JSON_TRACE_LEVEL_COUNT:
+        break;
+    }
+
+    return CONTROL_TRACE_LEVEL_OFF;
+}
+
+static bool build_control_trace_start_response(
+    usb_command_processor_t *processor,
+    const usb_json_request_t *request)
+{
+    const control_trace_level_t level =
+        control_trace_level_from_usb(request->trace_level);
+    const bool state_allows_start =
+        processor->state_machine->current == SYSTEM_STATE_DISARMED;
+    const bool accepted = state_allows_start &&
+                          control_trace_start(processor->control_trace,
+                                              level,
+                                              processor->clock());
+    const char *error = NULL;
+
+    saturating_increment(&processor->statistics.control_trace_start_count);
+    if (!accepted) {
+        saturating_increment(
+            &processor->statistics.control_trace_rejected_count);
+        error = state_allows_start ? "trace_already_active"
+                                   : "state_rejected";
+    }
+    return usb_control_trace_status_response_build(
+        "control_trace_start",
+        request->request_id,
+        accepted,
+        processor->state_machine->current,
+        error,
+        processor->control_trace,
+        processor->pending_response,
+        sizeof(processor->pending_response),
+        &processor->pending_response_length);
+}
+
+static bool build_control_trace_stop_response(
+    usb_command_processor_t *processor,
+    const usb_json_request_t *request)
+{
+    saturating_increment(&processor->statistics.control_trace_stop_count);
+    control_trace_stop(processor->control_trace);
+    return usb_control_trace_status_response_build(
+        "control_trace_stop",
+        request->request_id,
+        true,
+        processor->state_machine->current,
+        NULL,
+        processor->control_trace,
+        processor->pending_response,
+        sizeof(processor->pending_response),
+        &processor->pending_response_length);
+}
+
+static bool build_control_trace_read_response(
+    usb_command_processor_t *processor,
+    const usb_json_request_t *request)
+{
+    control_trace_batch_t batch;
+    control_trace_record_t records[CONTROL_TRACE_USB_RECORD_LIMIT];
+    size_t serialized_count = 0U;
+
+    saturating_increment(&processor->statistics.control_trace_read_count);
+    if (!control_trace_peek(processor->control_trace,
+                            records,
+                            CONTROL_TRACE_USB_RECORD_LIMIT,
+                            &batch)) {
+        return false;
+    }
+    if (!usb_control_trace_read_response_build(
+            request->request_id,
+            processor->control_trace,
+            records,
+            &batch,
+            processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length,
+            &serialized_count)) {
+        return false;
+    }
+    processor->pending_trace_discard_count = serialized_count;
+    return true;
+}
+
+static bool build_control_trace_response(
+    usb_command_processor_t *processor,
+    const usb_json_request_t *request)
+{
+    switch (request->command) {
+    case USB_JSON_COMMAND_CONTROL_TRACE_START:
+        return build_control_trace_start_response(processor, request);
+    case USB_JSON_COMMAND_CONTROL_TRACE_STOP:
+        return build_control_trace_stop_response(processor, request);
+    case USB_JSON_COMMAND_CONTROL_TRACE_READ:
+        return build_control_trace_read_response(processor, request);
+    default:
+        return false;
+    }
 }
 
 static bool build_error(usb_command_processor_t *processor,
@@ -633,6 +757,10 @@ static bool build_command_response(usb_command_processor_t *processor,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
     }
+    case USB_JSON_COMMAND_CONTROL_TRACE_START:
+    case USB_JSON_COMMAND_CONTROL_TRACE_READ:
+    case USB_JSON_COMMAND_CONTROL_TRACE_STOP:
+        return build_control_trace_response(processor, request);
     case USB_JSON_COMMAND_ARM:
     case USB_JSON_COMMAND_DISARM: {
         const system_state_t previous = processor->state_machine->current;
@@ -723,6 +851,7 @@ usb_command_init_result_t usb_command_processor_initialize(
     const imu_processing_pipeline_t *imu_processing_pipeline,
     const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
+    control_trace_t *control_trace,
     const char *firmware_version,
     const char *build_id)
 {
@@ -737,6 +866,7 @@ usb_command_init_result_t usb_command_processor_initialize(
         !imu_processing_pipeline->initialized ||
         (task_registry == NULL) ||
         (configuration_service == NULL) || !configuration_service->initialized ||
+        (control_trace == NULL) || !control_trace->initialized ||
         (firmware_version == NULL) || (build_id == NULL)) {
         return USB_COMMAND_INIT_INVALID_ARGUMENT;
     }
@@ -751,6 +881,7 @@ usb_command_init_result_t usb_command_processor_initialize(
         .imu_processing_pipeline = imu_processing_pipeline,
         .task_registry = task_registry,
         .configuration_service = configuration_service,
+        .control_trace = control_trace,
         .firmware_version = firmware_version,
         .build_id = build_id,
         .initialized = true,
@@ -778,6 +909,8 @@ usb_command_process_result_t usb_command_processor_process_once(
         (processor->task_registry == NULL) ||
         (processor->configuration_service == NULL) ||
         !processor->configuration_service->initialized ||
+        (processor->control_trace == NULL) ||
+        !processor->control_trace->initialized ||
         (processor->firmware_version == NULL) ||
         (processor->build_id == NULL)) {
         return USB_COMMAND_PROCESS_INVALID_STATE;
@@ -798,6 +931,7 @@ usb_command_process_result_t usb_command_processor_process_once(
     }
 
     saturating_increment(&processor->statistics.command_count);
+    processor->pending_trace_discard_count = 0U;
     if (!usb_json_parse_request((const char *)line, line_length, &request)) {
         saturating_increment(&processor->statistics.malformed_count);
         response_built = build_error(processor,

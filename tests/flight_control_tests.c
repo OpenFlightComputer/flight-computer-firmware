@@ -117,6 +117,7 @@ int main(void)
         .acquired_at_us = 1000U, .source_sequence = 1U, .valid = true,
     };
     flight_control_stabilization_t stabilization;
+    flight_control_output_t output;
     receiver_failsafe_decision_t decision = live_decision();
 
     assert(control_input_shaping_prepare(&control_config, &control));
@@ -137,13 +138,13 @@ int main(void)
 
     active_source = MOTOR_CONTROL_SOURCE_NONE;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 42U) ==
+                                           &stabilization, &output, 42U) ==
            FLIGHT_CONTROL_IDLE);
     active_source = MOTOR_CONTROL_SOURCE_RECEIVER;
 
     /* The first valid IMU sample seeds derivative history and commands stop. */
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 42U) ==
+                                           &stabilization, &output, 42U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_SEEDED);
     assert(submitted_command.throttle[0] == 0.0F);
@@ -155,7 +156,7 @@ int main(void)
     attitude.acquired_at_us = 2000U;
     attitude.source_sequence = 2U;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 43U) ==
+                                           &stabilization, &output, 43U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_UPDATED);
     assert(close_to(rate_output.axis[0].total, 0.18F));
@@ -167,13 +168,13 @@ int main(void)
 
     stabilization.imu_freshness = IMU_FRESHNESS_STALE;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 44U) ==
+                                           &stabilization, &output, 44U) ==
            FLIGHT_CONTROL_WAITING_FOR_IMU);
     assert(submit_count == 2U);
 
     stabilization.imu_freshness = IMU_FRESHNESS_LOST;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 45U) ==
+                                           &stabilization, &output, 45U) ==
            FLIGHT_CONTROL_IMU_FAILSAFE_ENTERED);
     assert(failsafe_count == 1U);
 
@@ -182,9 +183,13 @@ int main(void)
     decision.requested_control.throttle = 0.0F;
     stabilization.imu_freshness = IMU_FRESHNESS_UNAVAILABLE;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 46U) ==
+                                           &stabilization, &output, 46U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(submitted_command.throttle[0] == 0.0F);
+    /* Control execution does not require the optional diagnostic output. */
+    assert(flight_control_process_receiver(&control, &mixer, &decision,
+                                           &stabilization, NULL, 46U) ==
+           FLIGHT_CONTROL_SUBMITTED);
 
     decision = live_decision();
     decision.action = RECEIVER_FAILSAFE_ACTION_STAGE_ONE;
@@ -192,14 +197,14 @@ int main(void)
     attitude.acquired_at_us = 3000U;
     attitude.source_sequence = 3U;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 47U) ==
+                                           &stabilization, &output, 47U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(submitted_command.throttle[0] == 0.0F);
     assert(desired_rates.desired_rate_dps[0] == 28.0F);
 
     decision.action = RECEIVER_FAILSAFE_ACTION_STOP;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
-                                           &stabilization, 48U) ==
+                                           &stabilization, &output, 48U) ==
            FLIGHT_CONTROL_FAILSAFE_ENTERED);
 
     {

@@ -425,6 +425,7 @@ static bool initialize_usb(void)
             &firmware_imu_processing_pipeline,
             &firmware_task_registry,
             &firmware_flight_configuration_service,
+            &firmware_control_trace,
             firmware_version,
             firmware_build_id) != USB_COMMAND_INIT_OK) {
         firmware_fault_last_result =
@@ -477,6 +478,7 @@ void application_runtime_initialize(void)
     bool imu_available;
 
     initialize_core();
+    control_trace_initialize(&firmware_control_trace);
     initialize_board();
     imu_available = initialize_imu();
     initialize_motor_control();

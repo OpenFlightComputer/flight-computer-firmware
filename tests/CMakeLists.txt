@@ -141,6 +141,24 @@ target_compile_options(task_tests PRIVATE
 
 add_test(NAME task COMMAND task_tests)
 
+add_executable(control_trace_tests
+    control_trace_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/control_trace.c"
+)
+target_include_directories(control_trace_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+target_compile_options(control_trace_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME control_trace COMMAND control_trace_tests)
+
 add_executable(receiver_service_tests
     receiver_service_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/receiver_service.c"
@@ -955,6 +973,8 @@ add_executable(usb_command_processor_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/logging_config.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_command_processor.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/control_trace.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_control_trace_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_health_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_imu_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_receiver_response.c"
