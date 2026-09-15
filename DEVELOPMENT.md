@@ -22,6 +22,12 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Corrected the Quad-X pitch column after the mounted propeller-free tilt test
+  showed positive feedback: pitch disturbances previously increased the motor
+  pair that reinforced the measured tilt. Positive pitch correction now raises
+  the front pair, matching the nose-up-positive body convention. Physical
+  confirmation remains required on the rebuilt image before first flight.
+
 - Added an opt-in fixed 64-record flight-control trace with event-only, 10 Hz,
   100 Hz, and 1 kHz levels. It is off after reset, starts only while disarmed,
   may continue through armed/failsafe operation, and stops on disarm or fault.

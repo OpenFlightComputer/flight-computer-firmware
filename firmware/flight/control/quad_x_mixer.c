@@ -73,10 +73,10 @@ bool quad_x_mixer_prepare(propeller_layout_t layout,
     yaw = layout == PROPELLER_LAYOUT_PROPS_OUT ? -1.0F : 1.0F;
     *prepared = (prepared_quad_x_mixer_t){
         .coefficient = {
-            {1.0F, -1.0F, yaw},
-            {1.0F, 1.0F, -yaw},
-            {-1.0F, -1.0F, -yaw},
-            {-1.0F, 1.0F, yaw},
+            {1.0F, 1.0F, yaw},
+            {1.0F, -1.0F, -yaw},
+            {-1.0F, 1.0F, -yaw},
+            {-1.0F, -1.0F, yaw},
         },
         .initialized = true,
     };

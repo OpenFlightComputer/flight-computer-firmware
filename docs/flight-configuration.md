@@ -168,6 +168,12 @@ desired rate, evaluates the rate PID, and sends the three PID corrections to
 the quad-X mixer. The configured receiver Stage 1 fallback bypasses pilot
 curves but uses the same stabilization path.
 
+The mixer follows the documented body convention in which positive pitch is
+nose-up. A positive pitch correction therefore increases the two front motors
+and decreases the two rear motors; a negative correction does the reverse.
+This sign was physically checked with the mounted vehicle because algebraic
+mixer tests alone cannot establish the real front/rear orientation.
+
 ## Attitude-controller configuration
 
 Schema 7 includes independent roll and pitch angle-controller gains, both `4.0

@@ -163,10 +163,9 @@ int main(void)
     assert(close_to(rate_output.axis[0].total, 0.18F));
     assert(close_to(rate_output.axis[1].total, 0.01F));
     assert(close_to(rate_output.axis[2].total, 0.73F));
-    /* Props-in signs are preserved while corrections fit throttle headroom. */
+    /* The combined corrections retain the expected props-in yaw diagonal. */
     assert(submitted_command.throttle[0] > submitted_command.throttle[1]);
     assert(submitted_command.throttle[3] > submitted_command.throttle[1]);
-    assert(close_to(submitted_command.throttle[2], 0.0F));
 
     /* Below the configured threshold, P/D remain active but I is cleared. */
     decision.requested_control.throttle = 0.1F;

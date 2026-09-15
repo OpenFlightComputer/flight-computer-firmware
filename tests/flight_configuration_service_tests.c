@@ -198,6 +198,10 @@ int main(void)
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_PERSISTENT);
     assert(service.prepared_control.roll.curve.segments[0].coefficient[1] ==
            0.5F);
+    assert(service.prepared_mixer.coefficient[0][1] == 1.0F);
+    assert(service.prepared_mixer.coefficient[1][1] == -1.0F);
+    assert(service.prepared_mixer.coefficient[2][1] == 1.0F);
+    assert(service.prepared_mixer.coefficient[3][1] == -1.0F);
     assert(service.prepared_mixer.coefficient[0][2] == -1.0F);
     assert(service.active.roll_attitude_controller.gain_per_s == 5.0F);
     assert(level_calibration.state == LEVEL_CALIBRATION_READY);
