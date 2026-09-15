@@ -66,6 +66,15 @@ writes, and average/maximum sector-write latency in addition to captured and
 dropped sample counts. These values distinguish temporary card stalls from a
 sustained throughput shortfall without adding work to the flight task.
 
-Zero-drop 100 Hz recording and power-loss recovery remain hardware-validation
-items before first flight. A future batched multi-block writer may restore the
-500 Hz target without changing the on-card format or flight capture boundary.
+Zero-drop 100 Hz recording is physically validated on a standalone 18.41-second
+run; power-loss recovery remains a hardware-validation item before first
+flight. A future batched multi-block writer may restore the 500 Hz target
+without changing the on-card format or flight capture boundary.
+
+The current format indexes at most 16 logs. Physical testing showed that
+attempting a seventeenth recording enters `ERROR` before capturing data and
+also prevents log reads until reboot. Development workflows must archive and
+initialize storage before reaching that limit. Phase 5 must replace this with
+a bounded retention policy that safely reclaims the oldest completed log,
+reports every overwrite, and never sacrifices read access merely because the
+index is full.

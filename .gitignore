@@ -22,6 +22,7 @@ compile_commands.json
 /control-trace*.csv
 /flight-log-*.json
 /flight-log-*.ofcb
+/historic_logs/
 
 # Editor and operating-system state
 .DS_Store

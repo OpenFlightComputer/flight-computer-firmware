@@ -131,11 +131,11 @@ firmware link must not be recorded as proof that the flight image works.
 - [ ] Arm and confirm the RGB LED turns off before DShot direction preparation;
   disarm and confirm motor stop behavior is not delayed by the later green
   background update.
-- [ ] With propellers removed, start `./ofc device control --watch` while
+- [x] With propellers removed, start `./ofc device control --watch` while
   disarmed, then arm from the receiver. Confirm the dashboard follows physical
   roll/pitch signs, desired and measured rate signs, PID correction signs, and
   the expected Quad-X motor responses for each stick and board movement.
-- [ ] Exercise mixer saturation and receiver failsafe in the control dashboard.
+- [x] Exercise mixer saturation and receiver failsafe in the control dashboard.
   Confirm the trace preserves the first terminal `FAILSAFE` sample and then
   stops, reports no unexplained sequence/reset behavior, and makes every
   dropped RAM record visible.
@@ -208,7 +208,7 @@ firmware link must not be recorded as proof that the flight image works.
   development begins.
 - [x] Implement a persistent, disarmed-only runtime direction configuration
   without requiring firmware recompilation or wiring changes.
-- [ ] Confirm persistence across a power cycle and a normal firmware flash,
+- [x] Confirm persistence across a power cycle and a normal firmware flash,
   then record every motor's rotation direction before first flight.
 
 ## Flight-image evidence log
@@ -281,3 +281,30 @@ firmware link must not be recorded as proof that the flight image works.
   frame after checking state, health, 100 ms lease, and prior completion. It
   requires a new battery-disconnected flash, zero-only run, and physical motor
   retry before the twitch cause is considered resolved.
+
+### 2026-09-15 — Stabilized propeller-free acceptance on Release `f927edf`
+
+- The corrected Quad-X pitch column was flashed, read back through the firmware
+  identity as `f927edf`, and exercised with the secured vehicle. Nose-down
+  motion raised the front pair, nose-up motion raised the rear pair, and roll
+  continued to oppose both physical tilt directions. The 1,848-record USB
+  trace contained no dropped records, stale IMU samples, failsafe transition,
+  or control interval over 10 ms.
+- Individual 5% motor runs identified M1/front-left as clockwise,
+  M2/rear-left as counter-clockwise, M3/front-right as counter-clockwise, and
+  M4/rear-right as clockwise when viewed from above. This matches the active
+  persistent `PROPS_IN` configuration with all four direction values `NORMAL`.
+- A battery-only run with USB and SWD disconnected armed from the RadioMaster
+  receiver, exercised stabilized motor output, disarmed normally, and was
+  recovered later over USB as a complete blackbox log. It contains 1,843
+  samples over 18.41 seconds at 100 Hz with zero drops, a 1,000 microsecond
+  median control interval, a 1,004 microsecond maximum recorded controller
+  interval, and a final `DISARMED` sample with all motors zero. SD writes
+  averaged 4,913 microseconds, peaked at 15,815 microseconds, and used at most
+  5 of 32 queued sectors before fully draining.
+- The seventeenth indexed recording exposed the fixed 16-log capacity: start
+  failed before capturing data and left blackbox access in `ERROR` until MCU
+  reset. The 16 complete logs were downloaded in raw `.ofcb` form and decoded
+  with CRC validation into the ignored local `historic_logs/` archive before
+  `storage initialize` restored an empty `READY` index. Automatic bounded
+  rollover remains Phase 5 work; blackbox power-loss recovery remains open.

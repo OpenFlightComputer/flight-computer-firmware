@@ -11,8 +11,9 @@ implemented in software. The USB trace and first-flight 100 Hz raw-sector
 blackbox share one canonical flight-task capture boundary; SD writes proceed
 asynchronously in a background task. Hardware testing showed that the current
 single-sector writer cannot sustain 500 Hz, so 500 Hz remains a multi-block
-write optimization. Sustained 100 Hz recording and power-loss recovery still
-require bench validation before first flight.
+write optimization. Sustained standalone 100 Hz recording is physically
+validated with zero drops. Power-loss recovery remains a bench-validation item
+before first flight.
 
 ## Last completed milestone
 
@@ -25,8 +26,25 @@ the receiver, mixer, authority gate, and DShot output path.
 - Corrected the Quad-X pitch column after the mounted propeller-free tilt test
   showed positive feedback: pitch disturbances previously increased the motor
   pair that reinforced the measured tilt. Positive pitch correction now raises
-  the front pair, matching the nose-up-positive body convention. Physical
-  confirmation remains required on the rebuilt image before first flight.
+  the front pair, matching the nose-up-positive body convention. A repeated
+  physical test on Release build `f927edf` confirmed negative feedback for both
+  pitch directions while preserving the already-correct roll response.
+
+- Physically identified all four secured, propeller-free motors and confirmed
+  the configured props-in directions: M1/front-left clockwise, M2/rear-left
+  counter-clockwise, M3/front-right counter-clockwise, and M4/rear-right
+  clockwise. No runtime reversal is required for the current vehicle.
+- Completed an 18.41-second computer-independent receiver-control run on
+  Release build `f927edf`. The recovered blackbox contains 1,843 ordered 100 Hz
+  samples, zero drops, fresh IMU and live receiver state throughout, a 1,000
+  microsecond median control interval, no control gap over 1,004 microseconds,
+  and a terminal `DISARMED` sample with four zero motor commands. The SD queue
+  peaked at 5 of 32 entries and fully drained before power removal.
+- Reaching the fixed 16-log index capacity caused the next recording attempt
+  to enter terminal blackbox `ERROR` before capturing a sample. All 16 complete
+  logs were CRC-decoded and archived locally before the index was reset. Phase
+  5 now explicitly requires bounded oldest-complete-log reclamation rather
+  than loss of recording and read access at capacity.
 
 - Added an opt-in fixed 64-record flight-control trace with event-only, 10 Hz,
   100 Hz, and 1 kHz levels. It is off after reset, starts only while disarmed,

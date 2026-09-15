@@ -160,9 +160,11 @@ Planned milestones:
 8. Replace open-loop receiver mixing with the stabilized control path and a
    fail-closed IMU gate — implemented in software; physical validation remains.
 9. Propeller-free sign, correction, saturation, loss, and recovery validation,
-   supported by a 100 Hz automatic microSD blackbox — implemented in software;
-   validate zero-drop recording at 100 Hz before first flight. The original
-   500 Hz target requires batched SD multi-block writes and remains deferred.
+   supported by a 100 Hz automatic microSD blackbox — implemented and
+   physically validated on the secured vehicle, including corrected roll and
+   pitch feedback, receiver loss, terminal-state capture, and zero-drop
+   standalone recording. Power-loss recovery remains open. The original 500 Hz
+   target requires batched SD multi-block writes and remains deferred.
 10. Constrained first-hover preparation and test.
 
 After the control behavior has been physically validated, perform a
@@ -199,6 +201,13 @@ in Phase 3.
 | 5 | Post-flight blackbox evolution: retention policy, richer events, compression, and optional filesystem/export improvements |
 | 6 | Optional external peripherals such as GPS |
 | 7 | Evidence-driven Flight Computer V2 review |
+
+Phase 5 must replace the current fixed 16-log failure behavior with a bounded
+retention policy. Reaching the log-index capacity must never leave blackbox
+storage in a terminal error state or prevent existing logs from being read.
+The selected policy should safely reclaim the oldest completed log, preserve
+recoverable in-progress data across power loss, expose every overwrite through
+diagnostics, and remain compatible with host-side download and archival.
 
 After first-flight capability exists, add a separate evidence-driven vehicle
 condition and flight-phase layer. It may infer conditions such as `LANDED`,
