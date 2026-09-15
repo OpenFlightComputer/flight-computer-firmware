@@ -475,7 +475,13 @@ static void directions_are_applied_disarmed_and_reapplied_before_arm(
            direction_count + MOTOR_CONTROL_DIRECTION_COMMAND_REPETITIONS);
     assert(motor_control_apply_configuration(&default_motor_configuration) ==
            MOTOR_CONTROL_CONFIGURATION_APPLY_UNSAFE_STATE);
+    assert(!motor_control_set_external_arm_ready(false));
     assert(motor_control_disarm() == MOTOR_CONTROL_DISARM_ACCEPTED);
+    assert(motor_control_set_external_arm_ready(false));
+    assert(motor_control_arm(MOTOR_CONTROL_SOURCE_USB_TEST) ==
+           MOTOR_CONTROL_ARM_BLOCKED_EXTERNAL_INTERLOCK);
+    assert(state_machine->current == SYSTEM_STATE_DISARMED);
+    assert(motor_control_set_external_arm_ready(true));
 }
 
 static void allowed_health_passes_fresh_commands_with_mapping(

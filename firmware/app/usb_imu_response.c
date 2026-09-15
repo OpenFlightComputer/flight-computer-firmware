@@ -75,6 +75,7 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
     char sequence[UINT64_DECIMAL_BUFFER_CAPACITY];
     char age[UINT64_DECIMAL_BUFFER_CAPACITY];
     char attitude[320];
+    char level_calibration[320];
     size_t formatted_length;
     int written;
 
@@ -86,11 +87,27 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
          (unsigned int)GYRO_CALIBRATION_READY) ||
         (diagnostics->calibration_ready !=
          (diagnostics->calibration_state == GYRO_CALIBRATION_READY)) ||
+        ((unsigned int)diagnostics->level_calibration_state >=
+         (unsigned int)LEVEL_CALIBRATION_STATE_COUNT) ||
         !format_attitude(&diagnostics->attitude, attitude,
                          sizeof(attitude))) {
         return false;
     }
-
+    written = snprintf(
+        level_calibration, sizeof(level_calibration),
+        "\"level_calibration\":{\"state\":\"%s\","
+        "\"progress_permille\":%lu,\"samples\":%lu,"
+        "\"calibrated\":%s,\"roll_trim_millidegrees\":%ld,"
+        "\"pitch_trim_millidegrees\":%ld}",
+        level_calibration_state_name(diagnostics->level_calibration_state),
+        (unsigned long)diagnostics->level_calibration_progress_permille,
+        (unsigned long)diagnostics->level_calibration_sample_count,
+        diagnostics->level_calibrated ? "true" : "false",
+        (long)to_milli(diagnostics->level_roll_trim_degrees),
+        (long)to_milli(diagnostics->level_pitch_trim_degrees));
+    if ((written < 0) || ((size_t)written >= sizeof(level_calibration))) {
+        return false;
+    }
     if (!diagnostics->state.snapshot.valid) {
         written = snprintf(
             destination,
@@ -102,7 +119,7 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
             "\"gyroscope_corrected_raw\":null,"
             "\"calibration\":{\"state\":\"%s\",\"progress_permille\":%lu,"
             "\"samples\":%lu,\"restarts\":%lu,\"bias_raw\":null},"
-            "%s,\"processing\":{\"processed\":%lu,\"duplicates\":%lu,"
+            "%s,%s,\"processing\":{\"processed\":%lu,\"duplicates\":%lu,"
             "\"rejected\":%lu,\"continuity_resets\":%lu},"
             "\"service\":{\"reads\":%lu,\"published\":%lu,"
             "\"source_errors\":%lu},\"task\":null,"
@@ -114,7 +131,7 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
             (unsigned long)diagnostics->calibration_progress_permille,
             (unsigned long)diagnostics->calibration_sample_count,
             (unsigned long)diagnostics->calibration_restart_count,
-            attitude,
+            level_calibration, attitude,
             (unsigned long)diagnostics->processing_statistics
                 .processed_sample_count,
             (unsigned long)diagnostics->processing_statistics
@@ -160,7 +177,7 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
             "\"z\":%ld},\"calibration\":{\"state\":\"%s\","
             "\"progress_permille\":%lu,\"samples\":%lu,"
             "\"restarts\":%lu,\"bias_raw\":{\"x\":%ld,\"y\":%ld,"
-            "\"z\":%ld}},%s,\"processing\":{\"processed\":%lu,"
+            "\"z\":%ld}},%s,%s,\"processing\":{\"processed\":%lu,"
             "\"duplicates\":%lu,\"rejected\":%lu,"
             "\"continuity_resets\":%lu},\"service\":{\"reads\":%lu,"
             "\"published\":%lu,\"source_errors\":%lu},"
@@ -186,7 +203,7 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
             (long)diagnostics->calibration_bias[0],
             (long)diagnostics->calibration_bias[1],
             (long)diagnostics->calibration_bias[2],
-            attitude,
+            level_calibration, attitude,
             (unsigned long)diagnostics->processing_statistics
                 .processed_sample_count,
             (unsigned long)diagnostics->processing_statistics
@@ -215,7 +232,7 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
             "\"gyroscope_raw\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
             "\"gyroscope_corrected_raw\":null,\"calibration\":{"
             "\"state\":\"%s\",\"progress_permille\":%lu,"
-            "\"samples\":%lu,\"restarts\":%lu,\"bias_raw\":null},%s,"
+            "\"samples\":%lu,\"restarts\":%lu,\"bias_raw\":null},%s,%s,"
             "\"processing\":{\"processed\":%lu,\"duplicates\":%lu,"
             "\"rejected\":%lu,\"continuity_resets\":%lu},"
             "\"service\":{\"reads\":%lu,\"published\":%lu,"
@@ -236,7 +253,7 @@ bool usb_imu_response_build(const usb_imu_diagnostics_t *diagnostics,
             (unsigned long)diagnostics->calibration_progress_permille,
             (unsigned long)diagnostics->calibration_sample_count,
             (unsigned long)diagnostics->calibration_restart_count,
-            attitude,
+            level_calibration, attitude,
             (unsigned long)diagnostics->processing_statistics
                 .processed_sample_count,
             (unsigned long)diagnostics->processing_statistics

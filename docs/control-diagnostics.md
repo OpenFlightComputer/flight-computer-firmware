@@ -9,10 +9,11 @@ or construct JSON in the high-priority path.
 
 `control_trace` owns a fixed 64-record RAM ring and is off after every reset.
 Capture can only be started while `DISARMED`; once started it may continue
-through `ARMED` and `FAILSAFE`, then stops automatically on `DISARMED` or
-`FAULT`. Recording never waits for USB and never overwrites an unread record.
-When the ring is full, the new record is dropped and the saturating
-`dropped_records` counter makes that loss visible.
+through `ARMED`, then stops after preserving the terminal sample on
+`DISARMED`, `FAILSAFE`, or `FAULT`. Recording never waits for USB and never
+overwrites an unread record. One ring slot is reserved for that terminal
+sample. When the remaining ring is full, the new record is dropped and the
+saturating `dropped_records` counter makes that loss visible.
 
 | Level | Periodic samples | Intended use |
 | --- | ---: | --- |
@@ -26,10 +27,14 @@ Each record contains receiver controls, the shaped setpoint, estimated
 roll/pitch, desired and measured rates, per-axis P/I/D/total corrections,
 four final motor commands, mixer scale/shift/saturation, lifecycle and
 authority, failsafe, IMU freshness, timestamps, sequences, and validity flags.
+The current non-airmode mixer keeps `collective_shift` at zero; the field is
+retained so a future explicitly selected airmode remains observable without a
+trace-schema change.
 
 The flight-control coordinator returns its ordinary cycle result to the task.
 The task gives that result and the already-published receiver/IMU/controller
-snapshots to the trace module. This keeps control algorithms independent of
+snapshots plus the IMU pipeline's already-published observation to the trace
+module. This keeps control algorithms independent of
 diagnostics and confines the trace-enabled check to the task boundary.
 
 ## USB ownership and backpressure
@@ -41,8 +46,9 @@ discarded only after the complete response is accepted by the USB transmit
 queue. A busy transport retries the identical response and therefore cannot
 silently consume trace data.
 
-Wire schema 1 represents each record as this ordered array; nested numeric
-values are signed integers divided by the response's `scale` (currently 1000):
+Wire schema 2 represents each record as this ordered array. The two raw-count
+vectors remain integers; other physical and normalized values are signed
+integers divided by the response's `scale` (currently 1000):
 
 ```text
 [sequence, timestamp_us, imu_sequence, event_flags,
@@ -57,11 +63,22 @@ values are signed integers divided by the response's `scale` (currently 1000):
   pitch_P, pitch_I, pitch_D, pitch_total,
   yaw_P, yaw_I, yaw_D, yaw_total],
  [motor_1, motor_2, motor_3, motor_4],
- mixer_scale, collective_shift, mixer_saturated]
+ mixer_scale, collective_shift, mixer_saturated,
+ [raw_accel_x, raw_accel_y, raw_accel_z],
+ [raw_gyro_x, raw_gyro_y, raw_gyro_z],
+ [unfiltered_accel_x, unfiltered_accel_y, unfiltered_accel_z],
+ [filtered_accel_x, filtered_accel_y, filtered_accel_z],
+ [unfiltered_accel_magnitude, filtered_accel_magnitude],
+ [unfiltered_accel_roll, unfiltered_accel_pitch],
+ [filtered_accel_roll, filtered_accel_pitch],
+ [corrected_gyro_x, corrected_gyro_y, corrected_gyro_z],
+ [filtered_gyro_x, filtered_gyro_y, filtered_gyro_z],
+ [gyro_predicted_roll, gyro_predicted_pitch], accelerometer_weight]
 ```
 
-Validity bits 0 through 4 correspond to receiver, setpoint, attitude, rate
-output, and mixer output. Enum values follow their firmware declarations; the
+Validity bits 0 through 5 correspond to receiver, setpoint, attitude, rate
+output, mixer output, and the detailed IMU observation. Enum values follow
+their firmware declarations; the
 Python decoder rejects values it does not understand instead of mislabelling
 them.
 
@@ -85,9 +102,22 @@ Select another capture level or export all received records:
 ./ofc device control --watch --output control-trace.csv
 ```
 
+Every watch exports a JSON trace by default, including when it is stopped with
+Ctrl-C. The optional `--output` selects a different base path or CSV format.
+Before closing the connection, the host stops capture and drains the remaining
+firmware records. An export never overwrites the requested base filename. The
+host adds the trace-file schema and an eight-character identifier, for example
+`control-trace-v1-a1b2c3d4.json`. JSON exports are self-describing documents
+containing the trace-file and wire-schema versions, UTC creation time, exact
+firmware version and build ID, complete active flight configuration and its
+source/schema, capture settings, drop count, and records. This metadata makes
+captures from different firmware builds and configurations directly
+comparable. CSV exports repeat the same metadata in each row.
+
 The Rich dashboard draws an attitude horizon, the four Quad-X motor positions
 and outputs, desired/measured rate histories, PID terms, mixer saturation,
-lifecycle/authority, failsafe, IMU freshness, and buffer drops. Animation and
+lifecycle/authority, failsafe, IMU freshness, the raw and filtered sensor and
+estimator stages, and buffer drops. Animation and
 history live entirely on the computer. A request without `--watch` drains and
 displays an already-started or automatically-stopped capture without starting
 a new one.

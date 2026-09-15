@@ -2,12 +2,14 @@
 #define OPENFLIGHTCOMPUTER_APPLICATION_STATE_H
 
 #include "boot_status.h"
+#include "blackbox.h"
 #include "control_trace.h"
 #include "fault.h"
 #include "flight_configuration_service.h"
 #include "flight_control.h"
 #include "imu_service.h"
 #include "gyro_calibration.h"
+#include "level_calibration.h"
 #include "imu_processing_pipeline.h"
 #include "receiver_arming.h"
 #include "receiver_failsafe.h"
@@ -32,8 +34,10 @@ extern receiver_failsafe_decision_t firmware_receiver_failsafe_decision;
 extern flight_configuration_service_t firmware_flight_configuration_service;
 extern imu_service_t firmware_imu_service;
 extern gyro_calibration_t firmware_gyro_calibration;
+extern level_calibration_t firmware_level_calibration;
 extern imu_processing_pipeline_t firmware_imu_processing_pipeline;
 extern control_trace_t firmware_control_trace;
+extern blackbox_t firmware_blackbox;
 extern flight_control_desired_rates_t
     firmware_flight_control_desired_rates;
 extern rate_controller_output_t firmware_rate_controller_output;
@@ -51,5 +55,4 @@ extern volatile bool firmware_receiver_stage_two_latched;
 extern volatile bool firmware_receiver_recovery_ready;
 extern volatile uint32_t firmware_high_rate_worst_case_budget_us;
 extern volatile uint32_t firmware_high_rate_worst_case_utilization_permille;
-
 #endif

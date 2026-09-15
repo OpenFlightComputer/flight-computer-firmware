@@ -19,10 +19,25 @@ typedef struct {
     float maximum_standard_deviation_dps;
 } gyro_calibration_configuration_t;
 
+typedef struct {
+    uint64_t sample_duration_us;
+    float maximum_acceleration_standard_deviation_g;
+    float maximum_acceleration_magnitude_error_g;
+    float maximum_trim_degrees;
+    float roll_trim_degrees;
+    float pitch_trim_degrees;
+    bool calibrated;
+} level_calibration_configuration_t;
+
 typedef enum {
     FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS = 0,
     FLIGHT_GYRO_FILTER_TYPE_COUNT,
 } flight_gyro_filter_type_t;
+
+typedef enum {
+    FLIGHT_ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS = 0,
+    FLIGHT_ACCELERATION_FILTER_TYPE_COUNT,
+} flight_acceleration_filter_type_t;
 
 typedef enum {
     FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY = 0,
@@ -33,6 +48,11 @@ typedef struct {
     flight_gyro_filter_type_t type;
     float cutoff_hz;
 } gyro_filter_configuration_t;
+
+typedef struct {
+    flight_acceleration_filter_type_t type;
+    float cutoff_hz;
+} acceleration_filter_configuration_t;
 
 typedef struct {
     flight_attitude_estimator_type_t type;
@@ -50,6 +70,8 @@ typedef struct {
     rate_controller_config_t rate_controller;
     receiver_failsafe_config_t receiver_failsafe;
     gyro_calibration_configuration_t gyro_calibration;
+    level_calibration_configuration_t level_calibration;
+    acceleration_filter_configuration_t acceleration_filter;
     gyro_filter_configuration_t gyro_filter;
     attitude_estimator_configuration_t attitude_estimator;
 } flight_configuration_t;

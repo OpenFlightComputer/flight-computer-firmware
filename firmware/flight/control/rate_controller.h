@@ -21,6 +21,7 @@ typedef enum {
 typedef struct {
     rate_controller_type_t type;
     uint32_t maximum_gap_us;
+    float integral_activation_throttle;
     rate_pid_config_t axis[RATE_CONTROLLER_AXIS_COUNT];
 } rate_controller_config_t;
 
@@ -47,6 +48,7 @@ typedef struct {
     rate_pid_t axis[RATE_CONTROLLER_AXIS_COUNT];
     uint64_t previous_acquired_at_us;
     uint64_t previous_source_sequence;
+    bool actuator_saturated;
     bool sample_seeded;
     bool initialized;
 } rate_controller_t;
@@ -55,6 +57,9 @@ bool rate_controller_config_is_valid(const rate_controller_config_t *config);
 bool rate_controller_initialize(rate_controller_t *controller,
                                 const rate_controller_config_t *config);
 void rate_controller_reset(rate_controller_t *controller);
+void rate_controller_clear_integrals(rate_controller_t *controller);
+void rate_controller_report_actuator_saturation(rate_controller_t *controller,
+                                                bool saturated);
 rate_controller_result_t rate_controller_process(
     rate_controller_t *controller,
     const float desired_rate_dps[RATE_CONTROLLER_AXIS_COUNT],
@@ -62,6 +67,7 @@ rate_controller_result_t rate_controller_process(
     uint64_t acquired_at_us,
     uint64_t source_sequence,
     bool control_enabled,
+    bool integration_enabled,
     rate_controller_output_t *output);
 const char *rate_controller_type_name(rate_controller_type_t type);
 

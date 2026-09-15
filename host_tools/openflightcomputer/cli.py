@@ -14,7 +14,18 @@ from rich.console import Console
 from rich.live import Live
 
 from openflightcomputer.device import DeviceError, UsbCdcConnection, wait_for_flight_port
-from openflightcomputer.control import ControlTraceView, export_trace
+from openflightcomputer.control import (
+    ControlTraceMetadata,
+    ControlTraceView,
+    export_trace,
+)
+from openflightcomputer.blackbox import (
+    decode_log,
+    default_log_path,
+    download_log,
+    select_log,
+    write_decoded_json,
+)
 from openflightcomputer.firmware import REPOSITORY_ROOT, FirmwareBuildError, build_firmware
 from openflightcomputer.imu import ImuView
 from openflightcomputer.models import ProgressEvent
@@ -106,6 +117,10 @@ def build_parser() -> argparse.ArgumentParser:
     imu = device_commands.add_parser(
         "imu", help="inspect the latest mapped BMI270 sample"
     )
+    imu.add_argument(
+        "imu_action", nargs="?", choices=("calibrate-level",),
+        help="calibrate and persist the mounted flight computer's level attitude",
+    )
     _add_device_options(imu)
     imu.add_argument(
         "--watch", action="store_true", help="continuously refresh the IMU view"
@@ -127,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     control.add_argument(
         "--output", type=Path, metavar="JSON_OR_CSV",
-        help="export all received records when the view closes",
+        help="export all records with a unique versioned filename and metadata",
     )
     imu.add_argument(
         "--interval",
@@ -175,6 +190,37 @@ def build_parser() -> argparse.ArgumentParser:
         "reset", help="erase the override and restore compiled JSON defaults"
     )
     _add_device_options(configuration_reset)
+
+    storage = commands.add_parser("storage", help="inspect or initialize blackbox storage")
+    storage_commands = storage.add_subparsers(dest="storage_command", required=True)
+    storage_status = storage_commands.add_parser("status", help="show SD and blackbox status")
+    _add_device_options(storage_status)
+    storage_initialize = storage_commands.add_parser(
+        "initialize", help="erase the SD card's raw blackbox index"
+    )
+    _add_device_options(storage_initialize)
+    storage_initialize.add_argument(
+        "--yes", action="store_true", help="confirm erasing every existing blackbox log"
+    )
+
+    flight_log = commands.add_parser("flight-log", help="list, download, or decode flight logs")
+    flight_log_commands = flight_log.add_subparsers(dest="flight_log_command", required=True)
+    flight_log_list = flight_log_commands.add_parser("list", help="list logs stored on the SD card")
+    _add_device_options(flight_log_list)
+    flight_log_download = flight_log_commands.add_parser(
+        "download", help="download one log by ID or use 'latest'"
+    )
+    _add_device_options(flight_log_download)
+    flight_log_download.add_argument("log", help="numeric log ID or 'latest'")
+    flight_log_download.add_argument("--output", type=Path, metavar="OFCB")
+    flight_log_download.add_argument(
+        "--json-output", type=Path, metavar="JSON", help="also decode into inspectable JSON"
+    )
+    flight_log_decode = flight_log_commands.add_parser(
+        "decode", help="decode an already downloaded .ofcb file"
+    )
+    flight_log_decode.add_argument("file", type=_existing_file, metavar="OFCB")
+    flight_log_decode.add_argument("--output", type=Path, metavar="JSON")
 
     smoke = commands.add_parser(
         "smoke", help="optionally flash, then run non-arming status and health checks"
@@ -266,6 +312,34 @@ def _device_imu(arguments: argparse.Namespace) -> int:
     console = Console()
     with UsbCdcConnection.open(port) as connection:
         client = JsonProtocolClient(connection)
+        if arguments.imu_action == "calibrate-level":
+            client.request(
+                "imu_level_calibration_start",
+                timeout_seconds=arguments.timeout,
+            )
+            print(
+                "Keep the flight computer level and completely still while it calibrates.",
+                file=sys.stderr,
+            )
+            deadline = time.monotonic() + arguments.timeout
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    raise ProtocolError("timed out waiting for level calibration")
+                response = client.request(
+                    "imu", timeout_seconds=max(0.01, remaining)
+                )
+                view.update(response)
+                state = view.sample.level_calibration_state
+                if state == "READY":
+                    console.print(view.render())
+                    print("Level calibration saved.")
+                    return 0
+                if state not in {"COLLECTING", "SAVING"}:
+                    raise ProtocolError(
+                        f"level calibration failed: {state.lower()}"
+                    )
+                time.sleep(min(arguments.interval, max(0.0, remaining)))
         if not arguments.watch:
             view.update(client.request("imu", timeout_seconds=arguments.timeout))
             console.print(view.render())
@@ -285,9 +359,18 @@ def _device_control(arguments: argparse.Namespace) -> int:
     console = Console()
     started = False
     interrupted = False
+    status_response: dict[str, object] = {}
+    configuration_response: dict[str, object] = {}
     with UsbCdcConnection.open(port) as connection:
         client = JsonProtocolClient(connection)
         try:
+            if arguments.watch or (arguments.output is not None):
+                status_response = client.request(
+                    "status", timeout_seconds=arguments.timeout
+                )
+                configuration_response = client.request(
+                    "config_read", timeout_seconds=arguments.timeout
+                )
             if arguments.watch:
                 level = {
                     "events": "EVENTS", "low": "LOW_RATE",
@@ -326,9 +409,26 @@ def _device_control(arguments: argparse.Namespace) -> int:
                     client.request("control_trace_stop", timeout_seconds=arguments.timeout)
                 except ProtocolError:
                     pass
-    if arguments.output is not None:
-        export_trace(arguments.output, view.records)
-        print(f"Control trace: {arguments.output}")
+                else:
+                    try:
+                        while True:
+                            batch = view.update(client.request(
+                                "control_trace_read",
+                                timeout_seconds=arguments.timeout,
+                            ))
+                            if batch.pending_records <= len(batch.records):
+                                break
+                    except ProtocolError:
+                        pass
+    output = arguments.output
+    if arguments.watch and output is None:
+        output = Path("control-trace.json")
+    if output is not None:
+        metadata = ControlTraceMetadata.create(
+            status_response, configuration_response, view
+        )
+        output_path = export_trace(output, view.records, metadata)
+        print(f"Control trace: {output_path}")
     if view.dropped_records:
         print(f"Warning: firmware dropped {view.dropped_records} trace records.", file=sys.stderr)
     return 130 if interrupted else 0
@@ -407,6 +507,49 @@ def _configuration_request(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _storage_request(arguments: argparse.Namespace) -> int:
+    if arguments.storage_command == "initialize" and not arguments.yes:
+        raise ValueError("storage initialize erases the log index; pass --yes to confirm")
+    command = f"storage_{arguments.storage_command}"
+    port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
+    with UsbCdcConnection.open(port) as connection:
+        response = JsonProtocolClient(connection).request(
+            command, timeout_seconds=arguments.timeout
+        )
+    print(json.dumps(response, indent=2, sort_keys=True))
+    return 0
+
+
+def _flight_log_request(arguments: argparse.Namespace) -> int:
+    if arguments.flight_log_command == "decode":
+        decoded = decode_log(arguments.file.read_bytes())
+        output = arguments.output or arguments.file.with_suffix(".json")
+        write_decoded_json(output, decoded)
+        print(f"Decoded flight log: {output}")
+        return 0
+
+    port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
+    with UsbCdcConnection.open(port) as connection:
+        client = JsonProtocolClient(connection)
+        response = client.request("flight_log_list", timeout_seconds=arguments.timeout)
+        logs = response.get("logs")
+        if not isinstance(logs, list):
+            raise ProtocolError("flight computer returned an invalid log list")
+        if arguments.flight_log_command == "list":
+            print(json.dumps(response, indent=2, sort_keys=True))
+            return 0
+        log = select_log(logs, arguments.log)
+        data = download_log(client, log, timeout=arguments.timeout)
+
+    output = arguments.output or default_log_path(int(log["id"]))
+    output.write_bytes(data)
+    print(f"Flight log: {output}")
+    if arguments.json_output is not None:
+        write_decoded_json(arguments.json_output, decode_log(data))
+        print(f"Decoded flight log: {arguments.json_output}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     try:
@@ -441,6 +584,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _motor_run(arguments)
         if arguments.command == "config":
             return _configuration_request(arguments)
+        if arguments.command == "storage":
+            return _storage_request(arguments)
+        if arguments.command == "flight-log":
+            return _flight_log_request(arguments)
         return _smoke(arguments)
     except KeyboardInterrupt:
         return 130

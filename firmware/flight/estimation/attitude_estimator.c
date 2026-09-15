@@ -40,6 +40,9 @@ void attitude_estimator_reset(attitude_estimator_t *estimator)
     if ((estimator != NULL) && estimator->initialized) {
         estimator->roll_degrees = 0.0F;
         estimator->pitch_degrees = 0.0F;
+        estimator->predicted_roll_degrees = 0.0F;
+        estimator->predicted_pitch_degrees = 0.0F;
+        estimator->accelerometer_weight = 0.0F;
         estimator->estimate_seen = false;
     }
 }
@@ -69,6 +72,9 @@ bool attitude_estimator_process(
     if (!estimator->estimate_seen) {
         estimator->roll_degrees = accelerometer->roll_degrees;
         estimator->pitch_degrees = accelerometer->pitch_degrees;
+        estimator->predicted_roll_degrees = estimator->roll_degrees;
+        estimator->predicted_pitch_degrees = estimator->pitch_degrees;
+        estimator->accelerometer_weight = 1.0F;
         estimator->estimate_seen = true;
     } else {
         if (dt_seconds <= 0.0F) {
@@ -91,6 +97,9 @@ bool attitude_estimator_process(
         estimator->pitch_degrees = wrap_degrees(
             predicted_pitch + accelerometer_weight *
                 wrap_degrees(accelerometer->pitch_degrees - predicted_pitch));
+        estimator->predicted_roll_degrees = predicted_roll;
+        estimator->predicted_pitch_degrees = predicted_pitch;
+        estimator->accelerometer_weight = accelerometer_weight;
         if (!isfinite(estimator->roll_degrees) ||
             !isfinite(estimator->pitch_degrees)) {
             return false;

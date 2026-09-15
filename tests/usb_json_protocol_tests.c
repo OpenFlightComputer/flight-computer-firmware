@@ -9,6 +9,7 @@
 
 #define RATE_CONTROLLER_JSON \
     "\"rate_controller\":{\"type\":\"PID\",\"maximum_gap_us\":10000," \
+    "\"integral_activation_throttle\":0.2," \
     "\"roll\":{\"kp\":0.002,\"ki\":0.001,\"kd\":0.00001," \
     "\"integral_limit\":0.15,\"output_limit\":0.30}," \
     "\"pitch\":{\"kp\":0.002,\"ki\":0.001,\"kd\":0.00001," \
@@ -18,6 +19,13 @@
 #define ATTITUDE_CONTROLLER_JSON \
     "\"attitude_controller\":{\"roll_gain_per_s\":4.0," \
     "\"pitch_gain_per_s\":4.0},"
+#define LEVEL_CALIBRATION_JSON \
+    "\"level_calibration\":{\"calibrated\":false," \
+    "\"sample_duration_us\":500000," \
+    "\"maximum_acceleration_standard_deviation_g\":0.02," \
+    "\"maximum_acceleration_magnitude_error_g\":0.15," \
+    "\"maximum_trim_degrees\":10.0,\"roll_trim_degrees\":0.0," \
+    "\"pitch_trim_degrees\":0.0},"
 
 static void assert_valid_json_line(const char *line, size_t length)
 {
@@ -61,6 +69,9 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(parse("{\"type\":\"command\",\"request_id\":44,"
                  "\"command\":\"imu\"}").command ==
            USB_JSON_COMMAND_IMU);
+    assert(parse("{\"type\":\"command\",\"request_id\":48,"
+                 "\"command\":\"imu_level_calibration_start\"}").command ==
+           USB_JSON_COMMAND_IMU_LEVEL_CALIBRATION_START);
     request = parse("{\"type\":\"command\",\"request_id\":45,"
                     "\"command\":\"control_trace_start\","
                     "\"level\":\"HIGH_RATE\"}");
@@ -97,10 +108,25 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(parse("{\"type\":\"command\",\"request_id\":9,"
                  "\"command\":\"config_reset\"}").command ==
            USB_JSON_COMMAND_CONFIG_RESET);
+    assert(parse("{\"type\":\"command\",\"request_id\":10,"
+                 "\"command\":\"storage_status\"}").command ==
+           USB_JSON_COMMAND_STORAGE_STATUS);
+    assert(parse("{\"type\":\"command\",\"request_id\":11,"
+                 "\"command\":\"storage_initialize\"}").command ==
+           USB_JSON_COMMAND_STORAGE_INITIALIZE);
+    assert(parse("{\"type\":\"command\",\"request_id\":12,"
+                 "\"command\":\"flight_log_list\"}").command ==
+           USB_JSON_COMMAND_FLIGHT_LOG_LIST);
+    request = parse("{\"type\":\"command\",\"request_id\":13,"
+                    "\"command\":\"flight_log_read\",\"log_id\":7,"
+                    "\"sector_offset\":19}");
+    assert(request.command == USB_JSON_COMMAND_FLIGHT_LOG_READ);
+    assert(request.log_id == 7U);
+    assert(request.sector_offset == 19U);
     request = parse(
         "{\"type\":\"command\",\"request_id\":8,"
         "\"command\":\"config_write\",\"configuration\":{"
-        "\"schema_version\":7,\"motors\":{\"propeller_layout\":"
+        "\"schema_version\":9,\"motors\":{\"propeller_layout\":"
         "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
         "\"NORMAL\",\"REVERSED\"]},"
         "\"control\":{"
@@ -125,8 +151,12 @@ static void valid_commands_and_key_order_are_accepted(void)
         "\"recovery_throttle_maximum\":0.05},\"imu\":{"
         "\"gyro_calibration\":{\"settling_duration_us\":100000,"
         "\"sample_duration_us\":500000,\"maximum_rate_dps\":5.0,"
-        "\"maximum_standard_deviation_dps\":0.5},\"gyro_filter\":{"
+        "\"maximum_standard_deviation_dps\":0.5},"
+        LEVEL_CALIBRATION_JSON
+        "\"gyro_filter\":{"
         "\"type\":\"FIRST_ORDER_LOW_PASS\",\"cutoff_hz\":80.0},"
+        "\"accelerometer_filter\":{"
+        "\"type\":\"FIRST_ORDER_LOW_PASS\",\"cutoff_hz\":20.0},"
         "\"attitude_estimator\":{\"type\":\"COMPLEMENTARY\","
         "\"accelerometer_correction_time_constant_s\":0.5,"
         "\"maximum_gap_us\":10000}}}}");
@@ -137,6 +167,8 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(request.configuration.gyro_timing_us[1] == 500000U);
     assert(request.configuration.gyro_threshold_millionths[0] == 5000000U);
     assert(request.configuration.gyro_filter_cutoff_millionths == 80000000U);
+    assert(request.configuration.accelerometer_filter_cutoff_millionths ==
+           20000000U);
     assert(request.configuration
                .accelerometer_correction_time_constant_millionths ==
            500000U);
@@ -246,14 +278,17 @@ static void response_builders_are_exact_and_bounded(void)
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
     const usb_json_configuration_t configuration = {
-        .schema_version = 7U,
+        .schema_version = 9U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {-100000, 0, 0, 50000, 50000},
         .directions = {0U, 0U, 1U, 0U},
         .propeller_layout = 0U,
         .gyro_timing_us = {100000U, 500000U},
         .gyro_threshold_millionths = {5000000U, 500000U},
+        .level_sample_duration_us = 500000U,
+        .level_threshold_millionths = {20000U, 150000U, 10000000U},
         .gyro_filter_cutoff_millionths = 80000000U,
+        .accelerometer_filter_cutoff_millionths = 20000000U,
         .accelerometer_correction_time_constant_millionths = 500000U,
         .attitude_maximum_gap_us = 10000U,
         .control_axis_millionths = {
@@ -264,6 +299,7 @@ static void response_builders_are_exact_and_bounded(void)
         .throttle_millionths = {20000U, 1000000U},
         .attitude_gain_millionths = {4000000U, 4000000U},
         .rate_controller_maximum_gap_us = 10000U,
+        .rate_controller_integral_activation_throttle_millionths = 200000U,
         .rate_pid_millionths = {
             {2000U, 1000U, 10U, 150000U, 300000U},
             {2000U, 1000U, 10U, 150000U, 300000U},
@@ -376,12 +412,15 @@ static void response_builders_are_exact_and_bounded(void)
 static void maximum_curve_response_fits_transport_capacity(void)
 {
     usb_json_configuration_t configuration = {
-        .schema_version = 7U,
+        .schema_version = 9U,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {0, 0, 0, 50000, 50000},
         .gyro_timing_us = {100000U, 500000U},
         .gyro_threshold_millionths = {5000000U, 500000U},
+        .level_sample_duration_us = 500000U,
+        .level_threshold_millionths = {20000U, 150000U, 10000000U},
         .gyro_filter_cutoff_millionths = 80000000U,
+        .accelerometer_filter_cutoff_millionths = 20000000U,
         .accelerometer_correction_time_constant_millionths = 500000U,
         .attitude_maximum_gap_us = 10000U,
         .control_axis_millionths = {
@@ -392,6 +431,7 @@ static void maximum_curve_response_fits_transport_capacity(void)
         .throttle_millionths = {20000U, 1000000U},
         .attitude_gain_millionths = {4000000U, 4000000U},
         .rate_controller_maximum_gap_us = 10000U,
+        .rate_controller_integral_activation_throttle_millionths = 200000U,
         .rate_pid_millionths = {
             {2000U, 1000U, 10U, 150000U, 300000U},
             {2000U, 1000U, 10U, 150000U, 300000U},

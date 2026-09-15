@@ -22,10 +22,12 @@ typedef struct {
 static int8_t sensor_init_result;
 static int8_t sensor_config_result;
 static int8_t sensor_enable_result;
+static int8_t sensor_power_mode_result;
 static int8_t sensor_sample_result;
 static bool callbacks_validated;
 static bool configuration_validated;
 static bool enable_validated;
+static bool power_mode_validated;
 
 static bool fake_initialize(spi_device_t *device)
 {
@@ -83,10 +85,12 @@ static void reset_stubs(void)
     sensor_init_result = BMI2_OK;
     sensor_config_result = BMI2_OK;
     sensor_enable_result = BMI2_OK;
+    sensor_power_mode_result = BMI2_OK;
     sensor_sample_result = BMI2_OK;
     callbacks_validated = false;
     configuration_validated = false;
     enable_validated = false;
+    power_mode_validated = false;
 }
 
 int8_t bmi270_init(struct bmi2_dev *device)
@@ -126,7 +130,7 @@ int8_t bmi2_set_sensor_config(struct bmi2_sens_config *configuration,
     assert(sensor_count == 2U);
     assert(configuration[0].type == BMI2_ACCEL);
     assert(configuration[0].cfg.acc.odr == BMI2_ACC_ODR_1600HZ);
-    assert(configuration[0].cfg.acc.range == BMI2_ACC_RANGE_2G);
+    assert(configuration[0].cfg.acc.range == BMI2_ACC_RANGE_8G);
     assert(configuration[0].cfg.acc.bwp == BMI2_ACC_NORMAL_AVG4);
     assert(configuration[0].cfg.acc.filter_perf == BMI2_PERF_OPT_MODE);
     assert(configuration[1].type == BMI2_GYRO);
@@ -149,6 +153,14 @@ int8_t bmi2_sensor_enable(const uint8_t *sensors,
     assert(sensors[1] == BMI2_GYRO);
     enable_validated = true;
     return sensor_enable_result;
+}
+
+int8_t bmi2_set_adv_power_save(uint8_t enable, struct bmi2_dev *device)
+{
+    assert(device != NULL);
+    assert(enable == BMI2_DISABLE);
+    power_mode_validated = true;
+    return sensor_power_mode_result;
 }
 
 int8_t bmi2_get_sensor_data(struct bmi2_sens_data *data,
@@ -191,6 +203,7 @@ static void initializes_with_proven_configuration_and_reads_sample(void)
     assert(callbacks_validated);
     assert(configuration_validated);
     assert(enable_validated);
+    assert(power_mode_validated);
     assert(fake.select_count == 2U);
     assert(fake.deselect_count == 2U);
     assert(fake.transfer_count == 2U);
@@ -243,6 +256,12 @@ static void reports_each_initialization_boundary(void)
     sensor_enable_result = BMI2_E_COM_FAIL;
     assert(bmi270_driver_initialize(&driver, &spi) ==
            BMI270_DRIVER_INIT_ENABLE_ERROR);
+
+    spi = make_spi(&fake);
+    reset_stubs();
+    sensor_power_mode_result = BMI2_E_COM_FAIL;
+    assert(bmi270_driver_initialize(&driver, &spi) ==
+           BMI270_DRIVER_INIT_POWER_MODE_ERROR);
 }
 
 static void rejects_invalid_and_failed_sample_reads(void)

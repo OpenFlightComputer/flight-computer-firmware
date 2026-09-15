@@ -123,7 +123,7 @@ Most selections below are established by routing plus the manufacturing-test imp
   together using TIM8 update on DMA2 Stream 1/Channel 7. Timer/DMA register
   activation and the complete route still require physical validation.
 - PB9 may use a normal EXTI input or timer capture for GPS PPS. Phase 6 will choose based on timing requirements.
-- BMI270 SPI3 mode-0 transport is initialized at 656.25 kHz; interrupt routing
+- BMI270 SPI3 mode-0 transport is initialized at 5.25 MHz; interrupt routing
   and EXTI selection belong to the later sensor timing milestone.
 - ADC sample timing and scaling for PA4/PB0 are not yet specified.
 

@@ -17,6 +17,10 @@ static bool close_to(float actual, float expected, float tolerance)
 static imu_processing_config_t valid_config(void)
 {
     return (imu_processing_config_t){
+        .acceleration_filter = {
+            .type = ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS,
+            .cutoff_hz = 20.0F,
+        },
         .gyro_filter = {
             .type = GYRO_FILTER_FIRST_ORDER_LOW_PASS,
             .cutoff_hz = 80.0F,
@@ -144,6 +148,69 @@ static void pipeline_uses_timestamps_and_resets_large_gaps(void)
     assert(!imu_processing_pipeline_latest(&pipeline, &snapshot));
 }
 
+static void persisted_level_trim_is_applied_before_estimation(void)
+{
+    imu_processing_pipeline_t pipeline;
+    imu_processing_config_t config = valid_config();
+    const int32_t bias[3] = {0, 0, 0};
+    const imu_sample_snapshot_t sample = {
+        .acceleration_y = -857,
+        .acceleration_z = -16362,
+        .acquired_at_us = 1000U,
+        .sequence = 1U,
+        .valid = true,
+    };
+    attitude_snapshot_t snapshot;
+
+    config.level_roll_trim_degrees = 3.0F;
+    config.level_pitch_trim_degrees = 0.0F;
+    assert(imu_processing_pipeline_initialize(&pipeline, &config));
+    assert(imu_processing_pipeline_process(&pipeline, &sample,
+                                           IMU_FRESHNESS_FRESH, bias) ==
+           IMU_PROCESSING_UPDATED);
+    assert(imu_processing_pipeline_latest(&pipeline, &snapshot));
+    assert(close_to(snapshot.roll_degrees, 0.0F, 0.02F));
+    assert(close_to(snapshot.pitch_degrees, 0.0F, 0.02F));
+}
+
+static void acceleration_filter_suppresses_stationary_motor_vibration(void)
+{
+    imu_processing_pipeline_t pipeline;
+    const imu_processing_config_t config = valid_config();
+    const int32_t bias[3] = {0, 0, 0};
+    imu_sample_snapshot_t sample = {
+        .acceleration_z = -16384,
+        .acquired_at_us = 1000U,
+        .sequence = 1U,
+        .valid = true,
+    };
+    imu_processing_observation_t observation;
+    attitude_snapshot_t attitude;
+    size_t index;
+
+    assert(imu_processing_pipeline_initialize(&pipeline, &config));
+    assert(imu_processing_pipeline_process(&pipeline, &sample,
+                                           IMU_FRESHNESS_FRESH, bias) ==
+           IMU_PROCESSING_UPDATED);
+    for (index = 0U; index < 100U; index++) {
+        sample.sequence++;
+        sample.acquired_at_us += 1000U;
+        sample.acceleration_y = (index & 1U) == 0U ? -8192 : 8192;
+        assert(imu_processing_pipeline_process(&pipeline, &sample,
+                                               IMU_FRESHNESS_FRESH, bias) ==
+               IMU_PROCESSING_UPDATED);
+    }
+    assert(imu_processing_pipeline_latest_observation(&pipeline,
+                                                      &observation));
+    assert(observation.raw_acceleration[1] == 8192);
+    assert(fabsf(observation.unfiltered_accelerometer_attitude_degrees[0]) >
+           20.0F);
+    assert(fabsf(observation.filtered_accelerometer_attitude_degrees[0]) <
+           5.0F);
+    assert(imu_processing_pipeline_latest(&pipeline, &attitude));
+    assert(fabsf(attitude.roll_degrees) < 1.0F);
+}
+
 static void invalid_configuration_is_rejected(void)
 {
     imu_processing_pipeline_t pipeline;
@@ -165,6 +232,8 @@ int main(void)
     accelerometer_provides_level_and_tilt_reference();
     complementary_estimator_integrates_then_corrects();
     pipeline_uses_timestamps_and_resets_large_gaps();
+    persisted_level_trim_is_applied_before_estimation();
+    acceleration_filter_suppresses_stationary_motor_vibration();
     invalid_configuration_is_rejected();
     return 0;
 }

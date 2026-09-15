@@ -10,6 +10,7 @@ typedef enum {
     USB_JSON_COMMAND_HEALTH,
     USB_JSON_COMMAND_RECEIVER,
     USB_JSON_COMMAND_IMU,
+    USB_JSON_COMMAND_IMU_LEVEL_CALIBRATION_START,
     USB_JSON_COMMAND_CONTROL_TRACE_START,
     USB_JSON_COMMAND_CONTROL_TRACE_READ,
     USB_JSON_COMMAND_CONTROL_TRACE_STOP,
@@ -19,6 +20,10 @@ typedef enum {
     USB_JSON_COMMAND_CONFIG_READ,
     USB_JSON_COMMAND_CONFIG_WRITE,
     USB_JSON_COMMAND_CONFIG_RESET,
+    USB_JSON_COMMAND_STORAGE_STATUS,
+    USB_JSON_COMMAND_STORAGE_INITIALIZE,
+    USB_JSON_COMMAND_FLIGHT_LOG_LIST,
+    USB_JSON_COMMAND_FLIGHT_LOG_READ,
     USB_JSON_COMMAND_UNSUPPORTED,
     USB_JSON_COMMAND_INVALID,
 } usb_json_command_t;
@@ -49,15 +54,22 @@ typedef struct {
     uint64_t gyro_timing_us[USB_JSON_CONFIGURATION_GYRO_TIMING_COUNT];
     uint32_t gyro_threshold_millionths[
         USB_JSON_CONFIGURATION_GYRO_THRESHOLD_COUNT];
+    uint64_t level_sample_duration_us;
+    uint32_t level_threshold_millionths[3];
+    int32_t level_trim_millionths[2];
+    bool level_calibrated;
     uint32_t gyro_filter_cutoff_millionths;
+    uint32_t accelerometer_filter_cutoff_millionths;
     uint32_t accelerometer_correction_time_constant_millionths;
     uint32_t attitude_maximum_gap_us;
     uint8_t gyro_filter_type;
+    uint8_t accelerometer_filter_type;
     uint8_t attitude_estimator_type;
     uint32_t control_axis_millionths[3][3];
     uint32_t throttle_millionths[2];
     uint32_t attitude_gain_millionths[2];
     uint32_t rate_controller_maximum_gap_us;
+    uint32_t rate_controller_integral_activation_throttle_millionths;
     uint32_t rate_pid_millionths[3][5];
     uint8_t rate_controller_type;
     uint32_t curve_point_millionths
@@ -73,6 +85,8 @@ typedef struct {
     uint32_t request_id;
     uint32_t throttle_millionths;
     uint8_t motor;
+    uint32_t log_id;
+    uint32_t sector_offset;
     usb_json_trace_level_t trace_level;
     usb_json_configuration_t configuration;
 } usb_json_request_t;

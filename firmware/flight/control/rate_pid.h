@@ -34,6 +34,8 @@ bool rate_pid_update(rate_pid_t *pid,
                      float desired_rate,
                      float measured_rate,
                      float dt_seconds,
+                     bool integration_enabled,
                      rate_pid_output_t *output);
+void rate_pid_clear_integral(rate_pid_t *pid);
 
 #endif

@@ -6,9 +6,13 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.9 — bounded control-pipeline diagnostics — implemented in software
-and awaiting owner review. The live dashboard and trace transport have not yet
-been physically validated.
+Milestone 4.9 — preflight diagnostics and automatic SD-card blackbox — is
+implemented in software. The USB trace and first-flight 100 Hz raw-sector
+blackbox share one canonical flight-task capture boundary; SD writes proceed
+asynchronously in a background task. Hardware testing showed that the current
+single-sector writer cannot sustain 500 Hz, so 500 Hz remains a multi-block
+write optimization. Sustained 100 Hz recording and power-loss recovery still
+require bench validation before first flight.
 
 ## Last completed milestone
 
@@ -25,7 +29,12 @@ the receiver, mixer, authority gate, and DShot output path.
   PID, mixer, motor, lifecycle, freshness, and failsafe results without a new
   scheduler task or duplicate control calculation. A full ring drops new data
   and exposes a saturating loss counter; flight work never waits for USB.
-- Keeps trace assembly in the diagnostics-owned `control_trace_recorder`.
+- Extended trace schema 2 with raw mapped sensor counts, unfiltered and filtered
+  acceleration vectors and magnitudes, accelerometer-only angles, corrected and
+  filtered gyro rates, gyro-predicted attitude, and complementary-filter weight.
+  The CLI shows these stages together so a physical fault can be separated from
+  conversion, filtering, and fusion errors without adding another sensor read.
+- Keeps trace assembly in the diagnostics-owned `flight_diagnostics` boundary.
   Flight control exposes only an optional, stack-local output observation;
   there is no global per-cycle diagnostic state. The flight-control task and
   USB trace response path are split into short, named orchestration stages.
@@ -34,11 +43,57 @@ the receiver, mixer, authority gate, and DShot output path.
 - Added `./ofc device control --watch`, with a host-owned attitude horizon,
   Quad-X motor diagram, rate histories, PID table, status, buffer health, and
   optional JSON/CSV export.
-- All 50 native tests pass normally and under address/undefined-behavior
-  sanitizers, all 77 Python host-tool tests pass, and Debug and Release
-  firmware build with warnings as errors. The Debug image uses 60,152 bytes of
-  RAM (45.89%) and 183,924 bytes of application flash (20.05%). Physical trace
-  timing, signs, and control behavior remain explicitly unvalidated.
+- The first physical 100 Hz capture retained 1,033 ordered records and showed
+  shaped throttle at no more than 1.9% while collective shifting drove motor
+  commands to 100%. Replaced that policy with uniform correction scaling into
+  the available headroom: average motor power now cannot exceed the shaped
+  throttle, and low-throttle authority diminishes without airmode.
+- Added `./ofc device imu calibrate-level`. It collects a bounded stationary
+  sample window, rejects motion, implausible gravity, excessive variance, and
+  excessive mounting trim, then atomically persists roll/pitch trim in schema
+  8 of the unified flight configuration. Failed attempts preserve the prior
+  trim, and a generic motor interlock blocks arming while calibration is absent
+  or running.
+- Added a replaceable first-order acceleration-vector low-pass filter, set to
+  20 Hz by default. Filtering the vector before deriving roll and pitch rejects
+  high-frequency motor vibration without hiding the raw values from diagnostics.
+- Extended configuration, USB transport, and persistent storage to schema 9.
+  Existing 500-byte schema-8 records migrate with the new compiled defaults;
+  the current payload is 508 bytes inside the unchanged 536-byte record.
+- Added a configurable `integral_activation_throttle` of 20%. Below it, rate
+  integrals are cleared while proportional and derivative control remain live.
+  Mixer saturation also freezes integration until actuator headroom returns.
+- Added tester-proven SPI-mode SD initialization and a bounded DMA write path.
+  Automatic logs include exact firmware identity and a stable full
+  configuration snapshot plus raw/filtered IMU, estimator, control, PID,
+  mixer, motor, state, timing, and drop information. `./ofc storage` and
+  `./ofc flight-log` manage, download, and CRC-validate logs without removing
+  the card.
+- Raised the V1 BMI270 SPI3 clock from the conservative tester bring-up value
+  of 656.25 kHz to 5.25 MHz for both initialization and runtime reads. A live
+  disarmed baseline at the old clock measured an 862 microsecond maximum IMU
+  task and a 990 microsecond combined enabled 1 kHz worst-case budget, with two
+  missed IMU releases. At 5.25 MHz, the Release image measured a 592
+  microsecond maximum IMU task and a 746 microsecond combined budget, but still
+  accumulated three missed IMU releases over 44,132 reads. The faster bus is
+  retained. Temporary stage instrumentation measured acquisition at 559
+  microseconds, processing at 30/44 microseconds last/maximum, and housekeeping
+  at 4/14 microseconds. This isolated Bosch SensorAPI's 450-microsecond
+  advanced-power-save access delay. Runtime initialization now explicitly
+  disables advanced power saving after enabling both sensors and fails if that
+  transition fails. The same instrumented Release image then measured an
+  89/116 microsecond acquisition, a 126/147 microsecond complete IMU task, and
+  a 315 microsecond combined enabled 1 kHz worst-case budget (31.5%). After
+  removing the stage timers, the final flashed Release image measured a 148
+  microsecond maximum IMU task and a 302 microsecond combined budget (30.2%).
+  Its two startup missed-release records did not increase between 8,827 and
+  35,097 reads, with zero overruns and zero source errors. The runtime deadline
+  issue is resolved with substantial margin; normal scheduler task timing
+  remains.
+- All 53 native tests pass normally and under address/undefined-behavior
+  sanitizers, all 87 Python host-tool tests pass, and Debug and Release
+  firmware build with warnings as errors. The Debug image uses 88,600 bytes of
+  RAM (67.60%) and 220,464 bytes of application flash (24.03%).
 
 - Added a flat hardware-independent IMU processing pipeline after the existing
   sample publication and startup gyro calibration. It converts mapped counts
@@ -119,10 +174,11 @@ the receiver, mixer, authority gate, and DShot output path.
   sample snapshot containing mapped raw acceleration and gyro values, a
   microsecond acquisition-completion timestamp, a saturating 64-bit sequence,
   and validity. A failed read preserves the last good snapshot.
-- Defined the provisional V1 installation convention as PCB top forward and
-  component side up, mapping body forward/right/down to sensor +Y/+X/-Z. The
-  authoritative PCB confirms the unrotated package but has no explicit front
-  marker, so every sign remains subject to Milestone 4.3 physical validation.
+- Defined the V1 installation convention as USB-C facing aircraft left with
+  the component side up, mapping standard body forward/right/down axes to
+  sensor +X/-Y/-Z. The forward-axis swap was found during Milestone 4.3
+  physical inspection; every corrected sign still requires validation before
+  flight.
 - Added freshness classification: at most 2 ms is fresh, over 2 ms through
   10 ms is stale, and over 10 ms or clock rollback is lost. A recoverable IMU
   communication fault and transition-only logs cover persistent runtime
@@ -184,10 +240,11 @@ the receiver, mixer, authority gate, and DShot output path.
 - Replaced the open-loop receiver mixer input with the complete stabilized
   chain: shaped angle/rate setpoints, roll/pitch/yaw attitude stages, the
   three-axis rate PID, and a pure-sign props-in/props-out quad-X matrix.
-- Added proportional correction-span scaling and a common collective shift so
-  saturated outputs remain within `0.0..1.0` without independently clipping
-  away their relative corrections. Exact zero throttle still exits first,
-  resets controller history, and submits four exact zeros.
+- Added uniform correction scaling against both lower and upper throttle
+  headroom. Saturated outputs remain within `0.0..1.0`, preserve their relative
+  corrections, and retain the requested collective average instead of raising
+  it. Exact zero throttle still exits first, resets controller history, and
+  submits four exact zeros.
 - Added the IMU authority gate. Fresh new estimates may update motor output;
   duplicate or 2-10 ms stale data submits nothing and lets the motor layer hold
   its last complete accepted command; lost, future, invalid, or incoherent IMU

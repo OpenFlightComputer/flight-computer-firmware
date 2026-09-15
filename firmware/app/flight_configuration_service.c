@@ -1,23 +1,29 @@
 #include "flight_configuration_service.h"
 
+#include "bmi270_configuration.h"
 #include "motor_control.h"
 
 #include <stddef.h>
 
-#define BMI270_ACCELERATION_COUNTS_PER_G 16384.0F
 #define BMI270_GYROSCOPE_COUNTS_PER_DPS 16.384F
 
 static bool apply_imu_processing_configuration(
     imu_processing_pipeline_t *pipeline,
     const flight_configuration_t *configuration)
 {
-    if ((configuration->gyro_filter.type !=
+    if ((configuration->acceleration_filter.type !=
+         FLIGHT_ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS) ||
+        (configuration->gyro_filter.type !=
          FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS) ||
         (configuration->attitude_estimator.type !=
          FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY)) {
         return false;
     }
     const imu_processing_config_t processing = {
+        .acceleration_filter = {
+            .type = ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS,
+            .cutoff_hz = configuration->acceleration_filter.cutoff_hz,
+        },
         .gyro_filter = {
             .type = GYRO_FILTER_FIRST_ORDER_LOW_PASS,
             .cutoff_hz = configuration->gyro_filter.cutoff_hz,
@@ -29,11 +35,46 @@ static bool apply_imu_processing_configuration(
         },
         .maximum_gap_us =
             configuration->attitude_estimator.maximum_gap_us,
-        .acceleration_counts_per_g = BMI270_ACCELERATION_COUNTS_PER_G,
+        .acceleration_counts_per_g =
+            BMI270_ACCELERATION_COUNTS_PER_G,
         .gyroscope_counts_per_dps = BMI270_GYROSCOPE_COUNTS_PER_DPS,
+        .level_roll_trim_degrees =
+            configuration->level_calibration.calibrated
+                ? configuration->level_calibration.roll_trim_degrees
+                : 0.0F,
+        .level_pitch_trim_degrees =
+            configuration->level_calibration.calibrated
+                ? configuration->level_calibration.pitch_trim_degrees
+                : 0.0F,
     };
 
     return imu_processing_pipeline_initialize(pipeline, &processing);
+}
+
+static bool apply_level_calibration_configuration(
+    level_calibration_t *calibration,
+    const flight_configuration_t *configuration)
+{
+    const level_calibration_configuration_t *level =
+        &configuration->level_calibration;
+    const level_calibration_config_t config = {
+        .sample_duration_us = level->sample_duration_us,
+        .minimum_sample_count = 100U,
+        .maximum_rate_dps = configuration->gyro_calibration.maximum_rate_dps,
+        .maximum_acceleration_standard_deviation_g =
+            level->maximum_acceleration_standard_deviation_g,
+        .maximum_acceleration_magnitude_error_g =
+            level->maximum_acceleration_magnitude_error_g,
+        .maximum_trim_degrees = level->maximum_trim_degrees,
+        .acceleration_counts_per_g =
+            BMI270_ACCELERATION_COUNTS_PER_G,
+        .gyroscope_counts_per_dps = BMI270_GYROSCOPE_COUNTS_PER_DPS,
+    };
+
+    return level_calibration_initialize(calibration, &config,
+                                        level->calibrated,
+                                        level->roll_trim_degrees,
+                                        level->pitch_trim_degrees);
 }
 
 static bool storage_is_valid(const flight_configuration_storage_t *storage)
@@ -67,11 +108,15 @@ static bool apply_runtime(flight_configuration_service_t *service,
         !rate_controller_initialize(
             &rate_controller, &configuration->rate_controller) ||
         !apply_imu_processing_configuration(
-            service->imu_processing_pipeline, configuration)) {
+            service->imu_processing_pipeline, configuration) ||
+        !apply_level_calibration_configuration(
+            service->level_calibration, configuration)) {
         return false;
     }
     if (motor_control_apply_configuration(&configuration->motors) !=
-        MOTOR_CONTROL_CONFIGURATION_APPLY_OK) {
+            MOTOR_CONTROL_CONFIGURATION_APPLY_OK ||
+        !motor_control_set_external_arm_ready(
+            configuration->level_calibration.calibrated)) {
         return false;
     }
     service->prepared_control = prepared_control;
@@ -94,6 +139,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     receiver_failsafe_t *receiver_failsafe,
     receiver_service_t *receiver_service,
     imu_processing_pipeline_t *imu_processing_pipeline,
+    level_calibration_t *level_calibration,
     flight_configuration_clock_t clock)
 {
     flight_configuration_load_result_t load_result;
@@ -101,7 +147,8 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     if ((service == NULL) || !storage_is_valid(storage) ||
         (state_machine == NULL) || !state_machine->initialized ||
         (receiver_failsafe == NULL) || (receiver_service == NULL) ||
-        (imu_processing_pipeline == NULL) || (clock == NULL)) {
+        (imu_processing_pipeline == NULL) || (level_calibration == NULL) ||
+        (clock == NULL)) {
         return FLIGHT_CONFIGURATION_SERVICE_INVALID_ARGUMENT;
     }
 
@@ -111,6 +158,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
         .receiver_failsafe = receiver_failsafe,
         .receiver_service = receiver_service,
         .imu_processing_pipeline = imu_processing_pipeline,
+        .level_calibration = level_calibration,
         .clock = clock,
     };
     flight_configuration_defaults(&service->active);
@@ -134,7 +182,9 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
             &service->rate_controller,
             &service->active.rate_controller) ||
         !apply_imu_processing_configuration(
-            service->imu_processing_pipeline, &service->active)) {
+            service->imu_processing_pipeline, &service->active) ||
+        !apply_level_calibration_configuration(
+            service->level_calibration, &service->active)) {
         return FLIGHT_CONFIGURATION_SERVICE_APPLY_ERROR;
     }
     service->initialized = true;

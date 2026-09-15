@@ -26,6 +26,30 @@ static bool token_equals(const char *line,
            (memcmp(&line[token->start], value, value_length) == 0);
 }
 
+static bool parse_bool(const char *line,
+                       const jsmntok_t *token,
+                       bool *value)
+{
+    size_t length;
+
+    if ((line == NULL) || (token == NULL) || (value == NULL) ||
+        (token->type != JSMN_PRIMITIVE)) {
+        return false;
+    }
+    length = (size_t)(token->end - token->start);
+    if ((length == 4U) &&
+        (memcmp(&line[token->start], "true", length) == 0)) {
+        *value = true;
+        return true;
+    }
+    if ((length == 5U) &&
+        (memcmp(&line[token->start], "false", length) == 0)) {
+        *value = false;
+        return true;
+    }
+    return false;
+}
+
 static bool parse_uint32(const char *line,
                          const jsmntok_t *token,
                          uint32_t *value)
@@ -206,6 +230,36 @@ static bool parse_positive_millionths(const char *line,
         return false;
     }
     *value = (whole * USB_JSON_THROTTLE_SCALE) + fraction;
+    return true;
+}
+
+static bool parse_signed_decimal_millionths(const char *line,
+                                             const jsmntok_t *token,
+                                             int32_t *value)
+{
+    jsmntok_t magnitude;
+    uint32_t parsed;
+    bool negative;
+
+    if ((token == NULL) || (value == NULL) ||
+        (token->type != JSMN_PRIMITIVE) || (token->start >= token->end)) {
+        return false;
+    }
+    magnitude = *token;
+    negative = line[magnitude.start] == '-';
+    if (negative) {
+        magnitude.start++;
+    }
+    if (!parse_positive_millionths(line, &magnitude, &parsed) ||
+        ((!negative) && (parsed > (uint32_t)INT32_MAX)) ||
+        (negative && (parsed > ((uint32_t)INT32_MAX + 1U)))) {
+        return false;
+    }
+    if (negative && (parsed == ((uint32_t)INT32_MAX + 1U))) {
+        *value = INT32_MIN;
+    } else {
+        *value = negative ? -(int32_t)parsed : (int32_t)parsed;
+    }
     return true;
 }
 
@@ -442,7 +496,7 @@ static bool parse_control_configuration(
                    &configuration->attitude_gain_millionths[1]) &&
                (rate_controller != NULL) &&
                (rate_controller->type == JSMN_OBJECT) &&
-               (rate_controller->size == 10) &&
+               (rate_controller->size == 12) &&
                token_equals(
                    line,
                    object_member(line, tokens, token_count,
@@ -455,6 +509,13 @@ static bool parse_control_configuration(
                                  token_index(tokens, rate_controller),
                                  "maximum_gap_us"),
                    &configuration->rate_controller_maximum_gap_us);
+        valid = valid && parse_normalized_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, rate_controller),
+                          "integral_activation_throttle"),
+            &configuration
+                 ->rate_controller_integral_activation_throttle_millionths);
         if (!valid) {
             return false;
         }
@@ -506,7 +567,9 @@ static bool parse_configuration(const char *line,
     const jsmntok_t *imu;
     const jsmntok_t *control;
     const jsmntok_t *gyro_calibration;
+    const jsmntok_t *level_calibration;
     const jsmntok_t *gyro_filter;
+    const jsmntok_t *accelerometer_filter;
     const jsmntok_t *attitude_estimator;
     const jsmntok_t *layout;
     const jsmntok_t *directions;
@@ -529,11 +592,11 @@ static bool parse_configuration(const char *line,
     control = object_member(line, tokens, token_count,
                             token_index(tokens, object), "control");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 7U) || (motors == NULL) ||
+        (schema_value != 9U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
         (failsafe == NULL) ||
         (failsafe->type != JSMN_OBJECT) || (failsafe->size != 20) ||
-        (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 6) ||
+        (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 10) ||
         !parse_control_configuration(line, tokens, token_count, control,
                                      configuration)) {
         return false;
@@ -604,9 +667,65 @@ static bool parse_configuration(const char *line,
     }
     gyro_filter = object_member(line, tokens, token_count,
                                 token_index(tokens, imu), "gyro_filter");
+    accelerometer_filter = object_member(line, tokens, token_count,
+                                         token_index(tokens, imu),
+                                         "accelerometer_filter");
+    level_calibration = object_member(line, tokens, token_count,
+                                      token_index(tokens, imu),
+                                      "level_calibration");
     attitude_estimator = object_member(line, tokens, token_count,
                                        token_index(tokens, imu),
                                        "attitude_estimator");
+    if ((level_calibration == NULL) ||
+        (level_calibration->type != JSMN_OBJECT) ||
+        (level_calibration->size != 14) ||
+        !parse_uint64(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, level_calibration),
+                          "sample_duration_us"),
+            &configuration->level_sample_duration_us) ||
+        !parse_positive_millionths(
+            line,
+            object_member(
+                line, tokens, token_count,
+                token_index(tokens, level_calibration),
+                "maximum_acceleration_standard_deviation_g"),
+            &configuration->level_threshold_millionths[0]) ||
+        !parse_positive_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, level_calibration),
+                          "maximum_acceleration_magnitude_error_g"),
+            &configuration->level_threshold_millionths[1]) ||
+        !parse_positive_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, level_calibration),
+                          "maximum_trim_degrees"),
+            &configuration->level_threshold_millionths[2]) ||
+        !parse_signed_decimal_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, level_calibration),
+                          "roll_trim_degrees"),
+            &configuration->level_trim_millionths[0]) ||
+        !parse_signed_decimal_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, level_calibration),
+                          "pitch_trim_degrees"),
+            &configuration->level_trim_millionths[1])) {
+        return false;
+    }
+    if (!parse_bool(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, level_calibration),
+                          "calibrated"),
+            &configuration->level_calibrated)) {
+        return false;
+    }
     if ((gyro_filter == NULL) || (gyro_filter->type != JSMN_OBJECT) ||
         (gyro_filter->size != 4) ||
         !token_equals(
@@ -619,6 +738,20 @@ static bool parse_configuration(const char *line,
             object_member(line, tokens, token_count,
                           token_index(tokens, gyro_filter), "cutoff_hz"),
             &configuration->gyro_filter_cutoff_millionths) ||
+        (accelerometer_filter == NULL) ||
+        (accelerometer_filter->type != JSMN_OBJECT) ||
+        (accelerometer_filter->size != 4) ||
+        !token_equals(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, accelerometer_filter), "type"),
+            "FIRST_ORDER_LOW_PASS") ||
+        !parse_positive_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, accelerometer_filter),
+                          "cutoff_hz"),
+            &configuration->accelerometer_filter_cutoff_millionths) ||
         (attitude_estimator == NULL) ||
         (attitude_estimator->type != JSMN_OBJECT) ||
         (attitude_estimator->size != 6) ||
@@ -644,6 +777,7 @@ static bool parse_configuration(const char *line,
         return false;
     }
     configuration->gyro_filter_type = 0U;
+    configuration->accelerometer_filter_type = 0U;
     configuration->attitude_estimator_type = 0U;
     return (configuration->failsafe_control_millionths[3] >= 0) &&
            (configuration->failsafe_control_millionths[4] >= 0);
@@ -669,7 +803,7 @@ static bool format_signed_millionths(int32_t value,
                                      size_t capacity)
 {
     const bool negative = value < 0;
-    const uint32_t magnitude = negative ? (uint32_t)(-value)
+    const uint32_t magnitude = negative ? (uint32_t)(-(int64_t)value)
                                         : (uint32_t)value;
     const int written = snprintf(destination, capacity, "%s%lu.%06lu",
                                  negative ? "-" : "",
@@ -738,6 +872,8 @@ bool usb_json_parse_request(const char *line,
     const jsmntok_t *throttle;
     const jsmntok_t *configuration;
     const jsmntok_t *level;
+    const jsmntok_t *log_id;
+    const jsmntok_t *sector_offset;
     int token_count;
 
     if ((line == NULL) || (request == NULL) || (line_length == 0U)) {
@@ -748,6 +884,8 @@ bool usb_json_parse_request(const char *line,
     request->request_id = 0U;
     request->motor = 0U;
     request->throttle_millionths = 0U;
+    request->log_id = 0U;
+    request->sector_offset = 0U;
     request->configuration = (usb_json_configuration_t){0};
     jsmn_init(&parser);
     token_count = jsmn_parse(&parser,
@@ -768,6 +906,9 @@ bool usb_json_parse_request(const char *line,
     configuration = object_member(line, tokens, token_count, 0,
                                   "configuration");
     level = object_member(line, tokens, token_count, 0, "level");
+    log_id = object_member(line, tokens, token_count, 0, "log_id");
+    sector_offset = object_member(line, tokens, token_count, 0,
+                                  "sector_offset");
     if (!token_equals(line, type, "command") || (command == NULL) ||
         (command->type != JSMN_STRING) || (request_id == NULL) ||
         !parse_uint32(line, request_id, &request->request_id)) {
@@ -782,6 +923,9 @@ bool usb_json_parse_request(const char *line,
         request->command = USB_JSON_COMMAND_RECEIVER;
     } else if (token_equals(line, command, "imu")) {
         request->command = USB_JSON_COMMAND_IMU;
+    } else if (token_equals(line, command,
+                            "imu_level_calibration_start")) {
+        request->command = USB_JSON_COMMAND_IMU_LEVEL_CALIBRATION_START;
     } else if (token_equals(line, command, "control_trace_start")) {
         request->command = USB_JSON_COMMAND_CONTROL_TRACE_START;
     } else if (token_equals(line, command, "control_trace_read")) {
@@ -800,6 +944,14 @@ bool usb_json_parse_request(const char *line,
         request->command = USB_JSON_COMMAND_CONFIG_WRITE;
     } else if (token_equals(line, command, "config_reset")) {
         request->command = USB_JSON_COMMAND_CONFIG_RESET;
+    } else if (token_equals(line, command, "storage_status")) {
+        request->command = USB_JSON_COMMAND_STORAGE_STATUS;
+    } else if (token_equals(line, command, "storage_initialize")) {
+        request->command = USB_JSON_COMMAND_STORAGE_INITIALIZE;
+    } else if (token_equals(line, command, "flight_log_list")) {
+        request->command = USB_JSON_COMMAND_FLIGHT_LOG_LIST;
+    } else if (token_equals(line, command, "flight_log_read")) {
+        request->command = USB_JSON_COMMAND_FLIGHT_LOG_READ;
     } else {
         request->command = USB_JSON_COMMAND_UNSUPPORTED;
     }
@@ -839,8 +991,17 @@ bool usb_json_parse_request(const char *line,
         }
         return true;
     }
+    if (request->command == USB_JSON_COMMAND_FLIGHT_LOG_READ) {
+        return (tokens[0].size == 10) && (log_id != NULL) &&
+               parse_uint32(line, log_id, &request->log_id) &&
+               (request->log_id > 0U) && (sector_offset != NULL) &&
+               parse_uint32(line, sector_offset, &request->sector_offset) &&
+               (motor == NULL) && (throttle == NULL) &&
+               (configuration == NULL) && (level == NULL);
+    }
     return (tokens[0].size == 6) && (motor == NULL) &&
-           (throttle == NULL) && (configuration == NULL);
+           (throttle == NULL) && (configuration == NULL) &&
+           (log_id == NULL) && (sector_offset == NULL);
 }
 
 const char *usb_json_command_name(usb_json_command_t command)
@@ -854,6 +1015,8 @@ const char *usb_json_command_name(usb_json_command_t command)
         return "receiver";
     case USB_JSON_COMMAND_IMU:
         return "imu";
+    case USB_JSON_COMMAND_IMU_LEVEL_CALIBRATION_START:
+        return "imu_level_calibration_start";
     case USB_JSON_COMMAND_CONTROL_TRACE_START:
         return "control_trace_start";
     case USB_JSON_COMMAND_CONTROL_TRACE_READ:
@@ -872,6 +1035,14 @@ const char *usb_json_command_name(usb_json_command_t command)
         return "config_write";
     case USB_JSON_COMMAND_CONFIG_RESET:
         return "config_reset";
+    case USB_JSON_COMMAND_STORAGE_STATUS:
+        return "storage_status";
+    case USB_JSON_COMMAND_STORAGE_INITIALIZE:
+        return "storage_initialize";
+    case USB_JSON_COMMAND_FLIGHT_LOG_LIST:
+        return "flight_log_list";
+    case USB_JSON_COMMAND_FLIGHT_LOG_READ:
+        return "flight_log_read";
     case USB_JSON_COMMAND_UNSUPPORTED:
         return "unsupported";
     case USB_JSON_COMMAND_INVALID:
@@ -977,7 +1148,8 @@ bool usb_json_build_transition_response(usb_json_command_t command,
     int written;
 
     if (((command != USB_JSON_COMMAND_ARM) &&
-         (command != USB_JSON_COMMAND_DISARM)) ||
+         (command != USB_JSON_COMMAND_DISARM) &&
+         (command != USB_JSON_COMMAND_IMU_LEVEL_CALIBRATION_START)) ||
         (state == NULL) || (destination == NULL) || (capacity == 0U) ||
         (length == NULL) || (!accepted && (error == NULL)) ||
         (pending && !accepted)) {
@@ -1034,6 +1206,8 @@ bool usb_json_build_configuration_response(
     char timing[5][UINT64_DECIMAL_BUFFER_CAPACITY];
     char controls[5][16];
     char gyro_timing[2][UINT64_DECIMAL_BUFFER_CAPACITY];
+    char level_timing[UINT64_DECIMAL_BUFFER_CAPACITY];
+    char level_trim[2][16];
     char curves[USB_JSON_CONFIGURATION_CURVE_COUNT][300];
     size_t timing_length;
     const char *layout;
@@ -1049,6 +1223,7 @@ bool usb_json_build_configuration_response(
         (length == NULL) || (!accepted && (error == NULL)) ||
         (configuration->propeller_layout > 1U) ||
         (configuration->gyro_filter_type != 0U) ||
+        (configuration->accelerometer_filter_type != 0U) ||
         (configuration->attitude_estimator_type != 0U) ||
         (configuration->rate_controller_type != 0U)) {
         return false;
@@ -1091,6 +1266,17 @@ bool usb_json_build_configuration_response(
             return false;
         }
     }
+    if (!uint64_decimal_format(configuration->level_sample_duration_us,
+                               0U,
+                               level_timing,
+                               sizeof(level_timing),
+                               &timing_length) ||
+        !format_signed_millionths(configuration->level_trim_millionths[0],
+                                  level_trim[0], sizeof(level_trim[0])) ||
+        !format_signed_millionths(configuration->level_trim_millionths[1],
+                                  level_trim[1], sizeof(level_trim[1]))) {
+        return false;
+    }
 
     written = snprintf(
         destination, capacity,
@@ -1115,6 +1301,7 @@ bool usb_json_build_configuration_response(
         "\"pitch_gain_per_s\":%lu.%06lu},"
         "\"rate_controller\":{\"type\":\"PID\","
         "\"maximum_gap_us\":%lu,"
+        "\"integral_activation_throttle\":%lu.%06lu,"
         "\"roll\":{\"kp\":%lu.%06lu,\"ki\":%lu.%06lu,"
         "\"kd\":%lu.%06lu,\"integral_limit\":%lu.%06lu,"
         "\"output_limit\":%lu.%06lu},"
@@ -1134,7 +1321,15 @@ bool usb_json_build_configuration_response(
         "\"gyro_calibration\":{\"settling_duration_us\":%s,"
         "\"sample_duration_us\":%s,\"maximum_rate_dps\":%lu.%06lu,"
         "\"maximum_standard_deviation_dps\":%lu.%06lu},"
+        "\"level_calibration\":{\"calibrated\":%s,"
+        "\"sample_duration_us\":%s,"
+        "\"maximum_acceleration_standard_deviation_g\":%lu.%06lu,"
+        "\"maximum_acceleration_magnitude_error_g\":%lu.%06lu,"
+        "\"maximum_trim_degrees\":%lu.%06lu,"
+        "\"roll_trim_degrees\":%s,\"pitch_trim_degrees\":%s},"
         "\"gyro_filter\":{\"type\":\"FIRST_ORDER_LOW_PASS\","
+        "\"cutoff_hz\":%lu.%06lu},"
+        "\"accelerometer_filter\":{\"type\":\"FIRST_ORDER_LOW_PASS\","
         "\"cutoff_hz\":%lu.%06lu},\"attitude_estimator\":{"
         "\"type\":\"COMPLEMENTARY\","
         "\"accelerometer_correction_time_constant_s\":%lu.%06lu,"
@@ -1193,6 +1388,12 @@ bool usb_json_build_configuration_response(
         (unsigned long)(configuration->attitude_gain_millionths[1] %
                         1000000U),
         (unsigned long)configuration->rate_controller_maximum_gap_us,
+        (unsigned long)(configuration
+                            ->rate_controller_integral_activation_throttle_millionths /
+                        1000000U),
+        (unsigned long)(configuration
+                            ->rate_controller_integral_activation_throttle_millionths %
+                        1000000U),
         (unsigned long)(configuration->rate_pid_millionths[0][0] / 1000000U),
         (unsigned long)(configuration->rate_pid_millionths[0][0] % 1000000U),
         (unsigned long)(configuration->rate_pid_millionths[0][1] / 1000000U),
@@ -1234,9 +1435,28 @@ bool usb_json_build_configuration_response(
                         1000000U),
         (unsigned long)(configuration->gyro_threshold_millionths[1] %
                         1000000U),
+        configuration->level_calibrated ? "true" : "false",
+        level_timing,
+        (unsigned long)(configuration->level_threshold_millionths[0] /
+                        1000000U),
+        (unsigned long)(configuration->level_threshold_millionths[0] %
+                        1000000U),
+        (unsigned long)(configuration->level_threshold_millionths[1] /
+                        1000000U),
+        (unsigned long)(configuration->level_threshold_millionths[1] %
+                        1000000U),
+        (unsigned long)(configuration->level_threshold_millionths[2] /
+                        1000000U),
+        (unsigned long)(configuration->level_threshold_millionths[2] %
+                        1000000U),
+        level_trim[0], level_trim[1],
         (unsigned long)(configuration->gyro_filter_cutoff_millionths /
                         1000000U),
         (unsigned long)(configuration->gyro_filter_cutoff_millionths %
+                        1000000U),
+        (unsigned long)(configuration->accelerometer_filter_cutoff_millionths /
+                        1000000U),
+        (unsigned long)(configuration->accelerometer_filter_cutoff_millionths %
                         1000000U),
         (unsigned long)(configuration
                             ->accelerometer_correction_time_constant_millionths /

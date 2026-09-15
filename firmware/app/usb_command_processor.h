@@ -2,10 +2,12 @@
 #define OPENFLIGHTCOMPUTER_USB_COMMAND_PROCESSOR_H
 
 #include "fault.h"
+#include "blackbox.h"
 #include "control_trace.h"
 #include "flight_configuration_service.h"
 #include "imu_service.h"
 #include "gyro_calibration.h"
+#include "level_calibration.h"
 #include "imu_processing_pipeline.h"
 #include "receiver_inspection.h"
 #include "system_state.h"
@@ -60,10 +62,12 @@ typedef struct {
     receiver_inspection_provider_t receiver_inspection_provider;
     const imu_service_t *imu_service;
     const gyro_calibration_t *gyro_calibration;
+    level_calibration_t *level_calibration;
     const imu_processing_pipeline_t *imu_processing_pipeline;
     const task_registry_t *task_registry;
     flight_configuration_service_t *configuration_service;
     control_trace_t *control_trace;
+    blackbox_t *blackbox;
     const char *firmware_version;
     const char *build_id;
     char pending_response[USB_CDC_TRANSMIT_CAPACITY];
@@ -89,10 +93,12 @@ usb_command_init_result_t usb_command_processor_initialize(
     const receiver_inspection_provider_t *receiver_inspection_provider,
     const imu_service_t *imu_service,
     const gyro_calibration_t *gyro_calibration,
+    level_calibration_t *level_calibration,
     const imu_processing_pipeline_t *imu_processing_pipeline,
     const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
     control_trace_t *control_trace,
+    blackbox_t *blackbox,
     const char *firmware_version,
     const char *build_id);
 usb_command_process_result_t usb_command_processor_process_once(

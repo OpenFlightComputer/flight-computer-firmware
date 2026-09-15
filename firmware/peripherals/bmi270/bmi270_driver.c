@@ -1,12 +1,19 @@
 #include "bmi270_driver.h"
 
 #include "bmi270.h"
+#include "bmi270_configuration.h"
 
 #include <stddef.h>
 #include <string.h>
 
 #define BMI270_SPI_BUFFER_CAPACITY 64U
 #define BMI270_DRIVER_SENSOR_COUNT 2U
+
+#if BMI270_ACCELERATION_RANGE_G == 8U
+#define BMI270_ACCELERATION_RANGE_SETTING BMI2_ACC_RANGE_8G
+#else
+#error "Unsupported BMI270 accelerometer range"
+#endif
 
 static int8_t spi_read(uint8_t register_address,
                        uint8_t *data,
@@ -112,7 +119,7 @@ bmi270_driver_init_result_t bmi270_driver_initialize(
 
     configuration[0].type = BMI2_ACCEL;
     configuration[0].cfg.acc.odr = BMI2_ACC_ODR_1600HZ;
-    configuration[0].cfg.acc.range = BMI2_ACC_RANGE_2G;
+    configuration[0].cfg.acc.range = BMI270_ACCELERATION_RANGE_SETTING;
     configuration[0].cfg.acc.bwp = BMI2_ACC_NORMAL_AVG4;
     configuration[0].cfg.acc.filter_perf = BMI2_PERF_OPT_MODE;
     configuration[1].type = BMI2_GYRO;
@@ -135,6 +142,17 @@ bmi270_driver_init_result_t bmi270_driver_initialize(
                            &driver->device);
     if (driver->last_sensor_result != BMI2_OK) {
         return BMI270_DRIVER_INIT_ENABLE_ERROR;
+    }
+    /*
+     * Raw flight acquisition needs unrestricted register access. Bosch's
+     * SensorAPI otherwise inserts the advanced-power-save access delay after
+     * every sample read. A future sensor sleep state must explicitly re-enable
+     * APS when both sensors are disabled.
+     */
+    driver->last_sensor_result =
+        bmi2_set_adv_power_save(BMI2_DISABLE, &driver->device);
+    if (driver->last_sensor_result != BMI2_OK) {
+        return BMI270_DRIVER_INIT_POWER_MODE_ERROR;
     }
 
     driver->initialized = true;

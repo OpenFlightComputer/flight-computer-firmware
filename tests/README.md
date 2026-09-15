@@ -153,8 +153,14 @@ propagation. `flight_configuration_service_tests` covers source selection,
 disarmed-only whole-document replacement/reset, persistence ordering, and
 runtime application. `quad_x_mixer_tests` and `flight_control_tests` cover the
 stabilized mix equations, zero-throttle fast path, proportional saturation,
-collective shifting, IMU freshness gates, authority, submission, and explicit
+collective-preserving low/high-throttle headroom, the captured low-throttle
+bench regression, IMU freshness gates, authority, submission, and explicit
 receiver-loss failsafe entry.
+
+`level_calibration_tests` covers stationary trim calculation, unique-sample
+accounting, movement, gravity, variance, excessive-tilt, stale-input, and
+configuration failures. IMU pipeline tests verify that persisted mounting trim
+is applied before attitude estimation.
 
 The native `motor_mapping_tests` target verifies identity defaults, exhaustively
 classifies all 256 in-range assignments, rejects configuration unless the
@@ -212,3 +218,11 @@ IMU failsafe. Controller outputs now have receiver-path motor authority and
 still require physical validation.
 
 Hardware tests remain separate and must not be represented as passing host tests.
+
+The native `sd_card_csd_tests` reuses the tester-proven SDHC/SDSC capacity
+cases. The native `blackbox_tests` exercises explicit raw-storage
+initialization, automatic arm-to-disarm recording, queued-sector draining,
+sample/drop metadata, redundant index mounting, and configuration capture with
+an in-memory card. Python blackbox tests independently validate block CRCs,
+versioned metadata, sample decoding, corruption rejection, and log selection.
+These prove the storage state machine and format, not physical SPI/DMA timing.

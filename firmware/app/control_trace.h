@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #define CONTROL_TRACE_CAPACITY 64U
-#define CONTROL_TRACE_USB_RECORD_LIMIT 10U
+#define CONTROL_TRACE_USB_RECORD_LIMIT 5U
 
 typedef enum {
     CONTROL_TRACE_LEVEL_OFF = 0,
@@ -42,6 +42,7 @@ typedef struct {
     receiver_control_snapshot_t receiver;
     control_setpoint_t setpoint;
     attitude_snapshot_t attitude;
+    imu_processing_observation_t imu_observation;
     flight_control_desired_rates_t desired_rates;
     rate_controller_output_t rate_output;
     quad_x_mixer_output_t mixer_output;
@@ -70,6 +71,7 @@ typedef struct {
     float motor[4];
     float mixer_scale;
     float collective_shift;
+    imu_processing_observation_t imu_observation;
     bool receiver_valid;
     bool setpoint_valid;
     bool attitude_valid;

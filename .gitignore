@@ -17,6 +17,12 @@ compile_commands.json
 *.o
 *.a
 
+# Locally captured flight diagnostics
+/control-trace*.json
+/control-trace*.csv
+/flight-log-*.json
+/flight-log-*.ofcb
+
 # Editor and operating-system state
 .DS_Store
 .idea/

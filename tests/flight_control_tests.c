@@ -99,6 +99,7 @@ int main(void)
     const rate_controller_config_t rate_config = {
         .type = RATE_CONTROLLER_TYPE_PID,
         .maximum_gap_us = 10000U,
+        .integral_activation_throttle = 0.2F,
         .axis = {
             {.kp = 0.01F, .integral_limit = 0.2F, .output_limit = 1.0F},
             {.kp = 0.01F, .integral_limit = 0.2F, .output_limit = 1.0F},
@@ -162,15 +163,27 @@ int main(void)
     assert(close_to(rate_output.axis[0].total, 0.18F));
     assert(close_to(rate_output.axis[1].total, 0.01F));
     assert(close_to(rate_output.axis[2].total, 0.73F));
-    /* Props-in: FL=T+R-P+Y, with collective shift preserving deltas. */
-    assert(close_to(submitted_command.throttle[0], 1.0F));
+    /* Props-in signs are preserved while corrections fit throttle headroom. */
+    assert(submitted_command.throttle[0] > submitted_command.throttle[1]);
+    assert(submitted_command.throttle[3] > submitted_command.throttle[1]);
     assert(close_to(submitted_command.throttle[2], 0.0F));
+
+    /* Below the configured threshold, P/D remain active but I is cleared. */
+    decision.requested_control.throttle = 0.1F;
+    rate_controller.axis[0].integral = 0.1F;
+    attitude.acquired_at_us = 3000U;
+    attitude.source_sequence = 3U;
+    assert(flight_control_process_receiver(&control, &mixer, &decision,
+                                           &stabilization, &output, 44U) ==
+           FLIGHT_CONTROL_SUBMITTED);
+    assert(close_to(rate_controller.axis[0].integral, 0.0F));
+    decision = live_decision();
 
     stabilization.imu_freshness = IMU_FRESHNESS_STALE;
     assert(flight_control_process_receiver(&control, &mixer, &decision,
                                            &stabilization, &output, 44U) ==
            FLIGHT_CONTROL_WAITING_FOR_IMU);
-    assert(submit_count == 2U);
+    assert(submit_count == 3U);
 
     stabilization.imu_freshness = IMU_FRESHNESS_LOST;
     assert(flight_control_process_receiver(&control, &mixer, &decision,

@@ -103,6 +103,9 @@ static uint32_t record_validity_flags(const control_trace_record_t *record)
     if (record->mixer_output_valid) {
         flags |= (1U << 4U);
     }
+    if (record->imu_observation.valid) {
+        flags |= (1U << 5U);
+    }
 
     return flags;
 }
@@ -130,7 +133,11 @@ static bool format_record(const control_trace_record_t *record,
         "[%ld,%ld,%ld,%ld],[%ld,%ld,%ld,%ld],[%ld,%ld],"
         "[%ld,%ld,%ld],[%ld,%ld,%ld],"
         "[%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld],"
-        "[%ld,%ld,%ld,%ld],%ld,%ld,%u]",
+        "[%ld,%ld,%ld,%ld],%ld,%ld,%u,"
+        "[%ld,%ld,%ld],[%ld,%ld,%ld],"
+        "[%ld,%ld,%ld],[%ld,%ld,%ld],[%ld,%ld],"
+        "[%ld,%ld],[%ld,%ld],[%ld,%ld,%ld],"
+        "[%ld,%ld,%ld],[%ld,%ld],%ld]",
         sequence,
         timestamp,
         imu_sequence,
@@ -178,7 +185,54 @@ static bool format_record(const control_trace_record_t *record,
         (long)diagnostic_milli(record->motor[3]),
         (long)diagnostic_milli(record->mixer_scale),
         (long)diagnostic_milli(record->collective_shift),
-        record->mixer_saturated ? 1U : 0U);
+        record->mixer_saturated ? 1U : 0U,
+        (long)record->imu_observation.raw_acceleration[0],
+        (long)record->imu_observation.raw_acceleration[1],
+        (long)record->imu_observation.raw_acceleration[2],
+        (long)record->imu_observation.raw_gyroscope[0],
+        (long)record->imu_observation.raw_gyroscope[1],
+        (long)record->imu_observation.raw_gyroscope[2],
+        (long)diagnostic_milli(
+            record->imu_observation.unfiltered_acceleration_g[0]),
+        (long)diagnostic_milli(
+            record->imu_observation.unfiltered_acceleration_g[1]),
+        (long)diagnostic_milli(
+            record->imu_observation.unfiltered_acceleration_g[2]),
+        (long)diagnostic_milli(
+            record->imu_observation.filtered_acceleration_g[0]),
+        (long)diagnostic_milli(
+            record->imu_observation.filtered_acceleration_g[1]),
+        (long)diagnostic_milli(
+            record->imu_observation.filtered_acceleration_g[2]),
+        (long)diagnostic_milli(
+            record->imu_observation.unfiltered_acceleration_magnitude_g),
+        (long)diagnostic_milli(
+            record->imu_observation.filtered_acceleration_magnitude_g),
+        (long)diagnostic_milli(record->imu_observation
+                                   .unfiltered_accelerometer_attitude_degrees[0]),
+        (long)diagnostic_milli(record->imu_observation
+                                   .unfiltered_accelerometer_attitude_degrees[1]),
+        (long)diagnostic_milli(record->imu_observation
+                                   .filtered_accelerometer_attitude_degrees[0]),
+        (long)diagnostic_milli(record->imu_observation
+                                   .filtered_accelerometer_attitude_degrees[1]),
+        (long)diagnostic_milli(
+            record->imu_observation.corrected_gyroscope_dps[0]),
+        (long)diagnostic_milli(
+            record->imu_observation.corrected_gyroscope_dps[1]),
+        (long)diagnostic_milli(
+            record->imu_observation.corrected_gyroscope_dps[2]),
+        (long)diagnostic_milli(
+            record->imu_observation.filtered_gyroscope_dps[0]),
+        (long)diagnostic_milli(
+            record->imu_observation.filtered_gyroscope_dps[1]),
+        (long)diagnostic_milli(
+            record->imu_observation.filtered_gyroscope_dps[2]),
+        (long)diagnostic_milli(record->imu_observation
+                                   .gyro_predicted_attitude_degrees[0]),
+        (long)diagnostic_milli(record->imu_observation
+                                   .gyro_predicted_attitude_degrees[1]),
+        (long)diagnostic_milli(record->imu_observation.accelerometer_weight));
 
     return (result >= 0) && ((size_t)result < output_capacity);
 }
@@ -279,7 +333,7 @@ bool usb_control_trace_read_response_build(uint32_t request_id,
     writer_append_format(&writer,
                          "{\"type\":\"response\",\"request_id\":%lu,"
                          "\"command\":\"control_trace_read\",\"ok\":true,"
-                         "\"schema_version\":1,\"capture_id\":%s,"
+                         "\"schema_version\":2,\"capture_id\":%s,"
                          "\"level\":\"%s\",\"capturing\":%s,"
                          "\"first_sequence\":%s,\"next_sequence\":%s,"
                          "\"pending_records\":%lu,\"dropped_records\":%s,"
@@ -297,7 +351,7 @@ bool usb_control_trace_read_response_build(uint32_t request_id,
     }
 
     for (count = 0U; count < batch->record_count; ++count) {
-        char record[640];
+        char record[1024];
         size_t record_length;
         size_t required;
 

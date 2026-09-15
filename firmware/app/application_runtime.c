@@ -7,11 +7,13 @@
 #include "board_flight_configuration_storage.h"
 #include "board_imu.h"
 #include "board_receiver.h"
+#include "board_sd_card.h"
 #include "dshot_motor_backend.h"
 #include "fault_catalog.h"
 #include "firmware_identity.h"
 #include "imu_service.h"
 #include "gyro_calibration.h"
+#include "level_calibration.h"
 #include "logging.h"
 #include "motor_control.h"
 #include "motor_control_internal.h"
@@ -20,6 +22,7 @@
 #include "usb_cdc_transport.h"
 #include "usb_logging_backend.h"
 #include "status_indicator.h"
+#include "sd_card.h"
 
 #include <stddef.h>
 
@@ -29,6 +32,9 @@
 
 static dshot_motor_backend_t firmware_dshot_motor_backend;
 static bmi270_driver_t firmware_bmi270_driver;
+static sd_card_t firmware_sd_card;
+static uint8_t
+    firmware_blackbox_configuration[FLIGHT_CONFIGURATION_SNAPSHOT_CAPACITY];
 
 static void stop_with_fault(boot_status_t status,
                             fault_id_t fault_id,
@@ -188,6 +194,7 @@ static void initialize_motor_control(void)
             &firmware_receiver_failsafe,
             &firmware_receiver_service,
             &firmware_imu_processing_pipeline,
+            &firmware_level_calibration,
             time_us) != FLIGHT_CONFIGURATION_SERVICE_OK) {
         stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
                         FAULT_ID_MOTOR_INITIALIZATION,
@@ -209,6 +216,14 @@ static void initialize_motor_control(void)
                         FAULT_ID_MOTOR_INITIALIZATION,
                         true,
                         (uint32_t)result);
+    }
+    if (!motor_control_set_external_arm_ready(
+            firmware_flight_configuration_service.active
+                .level_calibration.calibrated)) {
+        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
+                        FAULT_ID_MOTOR_INITIALIZATION,
+                        false,
+                        0U);
     }
     LOG_INFO(LOG_MODULE_SYSTEM, "four-channel DShot300 output initialized");
 }
@@ -244,14 +259,14 @@ static bool initialize_imu(void)
         .context = &firmware_bmi270_driver,
     };
     /*
-     * V1 installation convention: PCB top is aircraft forward and the
-     * component side faces up. The package is unrotated in the authoritative
-     * PCB, giving body forward=+sensor Y, right=+sensor X, down=-sensor Z.
+     * V1 installation convention: USB-C faces aircraft left and the component
+     * side faces up. Standard body axes are forward/right/down, giving body
+     * forward=+sensor X, right=-sensor Y, and down=-sensor Z.
      * Milestone 4.3 must verify all signs physically before control use.
      */
     const imu_axis_mapping_t axis_mapping = {
-        .body_x = IMU_AXIS_POSITIVE_Y,
-        .body_y = IMU_AXIS_POSITIVE_X,
+        .body_x = IMU_AXIS_POSITIVE_X,
+        .body_y = IMU_AXIS_NEGATIVE_Y,
         .body_z = IMU_AXIS_NEGATIVE_Z,
     };
     const imu_freshness_config_t freshness_config = {
@@ -422,10 +437,12 @@ static bool initialize_usb(void)
             application_receiver_inspection_provider(),
             &firmware_imu_service,
             &firmware_gyro_calibration,
+            &firmware_level_calibration,
             &firmware_imu_processing_pipeline,
             &firmware_task_registry,
             &firmware_flight_configuration_service,
             &firmware_control_trace,
+            &firmware_blackbox,
             firmware_version,
             firmware_build_id) != USB_COMMAND_INIT_OK) {
         firmware_fault_last_result =
@@ -438,6 +455,44 @@ static bool initialize_usb(void)
     }
     LOG_INFO(LOG_MODULE_USB, "CDC JSON service initialized");
     return true;
+}
+
+static void initialize_blackbox(void)
+{
+    size_t configuration_length = 0U;
+    const sd_card_result_t card_result = sd_card_initialize(
+        &firmware_sd_card,
+        board_sd_card_spi_device(),
+        time_us,
+        board_sd_card_inserted());
+
+    if (!board_flight_configuration_snapshot_encode(
+            &firmware_flight_configuration_service.active,
+            firmware_blackbox_configuration,
+            sizeof(firmware_blackbox_configuration),
+            &configuration_length)) {
+        configuration_length = 0U;
+    }
+    blackbox_initialize(&firmware_blackbox,
+                        card_result == SD_CARD_RESULT_OK
+                            ? &firmware_sd_card
+                            : NULL,
+                        firmware_blackbox_configuration,
+                        configuration_length,
+                        firmware_version,
+                        firmware_build_id);
+    if (card_result == SD_CARD_RESULT_NO_MEDIA) {
+        LOG_WARN(LOG_MODULE_SYSTEM, "blackbox SD card not present");
+    } else if (card_result != SD_CARD_RESULT_OK) {
+        LOG_ERROR(LOG_MODULE_SYSTEM,
+                  "blackbox SD initialization failed result=%u",
+                  (unsigned int)card_result);
+    } else {
+        LOG_INFO(LOG_MODULE_SYSTEM,
+                 "blackbox SD ready sectors=%lu status=%s",
+                 (unsigned long)firmware_sd_card.sector_count,
+                 blackbox_status_name(firmware_blackbox.status));
+    }
 }
 
 static void initialize_scheduler(bool usb_available,
@@ -482,6 +537,7 @@ void application_runtime_initialize(void)
     initialize_board();
     imu_available = initialize_imu();
     initialize_motor_control();
+    initialize_blackbox();
     {
         const gyro_calibration_configuration_t *configuration =
             &firmware_flight_configuration_service.active.gyro_calibration;

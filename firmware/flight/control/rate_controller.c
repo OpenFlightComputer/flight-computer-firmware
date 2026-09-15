@@ -10,7 +10,10 @@ bool rate_controller_config_is_valid(const rate_controller_config_t *config)
 
     if ((config == NULL) || (config->type != RATE_CONTROLLER_TYPE_PID) ||
         (config->maximum_gap_us == 0U) ||
-        (config->maximum_gap_us > UINT32_C(1000000))) {
+        (config->maximum_gap_us > UINT32_C(1000000)) ||
+        !isfinite(config->integral_activation_throttle) ||
+        (config->integral_activation_throttle < 0.0F) ||
+        (config->integral_activation_throttle > 1.0F)) {
         return false;
     }
     for (axis = 0U; axis < RATE_CONTROLLER_AXIS_COUNT; axis++) {
@@ -56,6 +59,25 @@ void rate_controller_reset(rate_controller_t *controller)
     controller->previous_acquired_at_us = 0U;
     controller->previous_source_sequence = 0U;
     controller->sample_seeded = false;
+    controller->actuator_saturated = false;
+}
+
+void rate_controller_clear_integrals(rate_controller_t *controller)
+{
+    if ((controller == NULL) || !controller->initialized) {
+        return;
+    }
+    for (size_t axis = 0U; axis < RATE_CONTROLLER_AXIS_COUNT; axis++) {
+        rate_pid_clear_integral(&controller->axis[axis]);
+    }
+}
+
+void rate_controller_report_actuator_saturation(rate_controller_t *controller,
+                                                bool saturated)
+{
+    if ((controller != NULL) && controller->initialized) {
+        controller->actuator_saturated = saturated;
+    }
 }
 
 static bool inputs_are_finite(
@@ -102,6 +124,7 @@ rate_controller_result_t rate_controller_process(
     uint64_t acquired_at_us,
     uint64_t source_sequence,
     bool control_enabled,
+    bool integration_enabled,
     rate_controller_output_t *output)
 {
     uint64_t gap_us;
@@ -152,6 +175,8 @@ rate_controller_result_t rate_controller_process(
                              desired_rate_dps[axis],
                              measured_rate_dps[axis],
                              (float)gap_us / 1000000.0F,
+                             integration_enabled &&
+                                 !controller->actuator_saturated,
                              &output->axis[axis])) {
             rate_controller_reset(controller);
             return RATE_CONTROLLER_RESULT_INVALID_INPUT;

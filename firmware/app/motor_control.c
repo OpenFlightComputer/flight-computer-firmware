@@ -22,6 +22,7 @@ typedef struct {
     bool transfer_in_progress;
     bool stop_stream_started;
     bool arming_preparation_complete;
+    bool external_arm_ready;
     uint8_t direction_repetitions_remaining;
     bool direction_sequence_active;
     bool outputs_stopped;
@@ -297,6 +298,7 @@ motor_control_init_result_t motor_control_initialize(
     }
 
     control.outputs_stopped = true;
+    control.external_arm_ready = true;
     control.initialized = true;
     return MOTOR_CONTROL_INIT_OK;
 }
@@ -317,6 +319,9 @@ motor_control_arm_result_t motor_control_arm(motor_control_source_t source)
     }
     if (!motor_fault_state_allows_arm(control.fault_system)) {
         return MOTOR_CONTROL_ARM_BLOCKED_HEALTH;
+    }
+    if (!control.external_arm_ready) {
+        return MOTOR_CONTROL_ARM_BLOCKED_EXTERNAL_INTERLOCK;
     }
     if (!motor_control_ready_for_arm()) {
         return MOTOR_CONTROL_ARM_BLOCKED_PREPARATION;
@@ -676,6 +681,18 @@ motor_control_configuration_apply_result_t motor_control_apply_configuration(
 bool motor_control_is_initialized(void)
 {
     return control.initialized;
+}
+
+bool motor_control_set_external_arm_ready(bool ready)
+{
+    if (!control.initialized ||
+        (control.state_machine->current == SYSTEM_STATE_ARMED) ||
+        (control.state_machine->current == SYSTEM_STATE_FAILSAFE) ||
+        (control.pending_source != MOTOR_CONTROL_SOURCE_NONE)) {
+        return false;
+    }
+    control.external_arm_ready = ready;
+    return true;
 }
 
 bool motor_control_outputs_stopped(void)

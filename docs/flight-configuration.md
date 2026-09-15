@@ -11,13 +11,14 @@ validate, and write one complete snapshot.
 compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
 therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, and the
-reviewed receiver-failsafe values in that file. Schema 7 also carries the startup gyro-calibration policy, the selected gyro
-filter and cutoff, and the selected attitude estimator, correction time
+reviewed receiver-failsafe values in that file. Schema 9 also carries the startup gyro-calibration policy, the selected gyro
+and accelerometer filters and cutoffs, and the selected attitude estimator, correction time
 constant, and maximum accepted sample gap. It adds control-input deadbands,
 angle/rate limits, maximum throttle, four bounded control-point curves,
 roll/pitch attitude gains, and the three-axis rate-controller parameters. It
 removes the former open-loop mixer factors; PID output limits now bound the
-correction authority.
+correction authority. It also adds explicit level-calibration policy and the
+persisted roll/pitch mounting trim.
 
 The motor array always uses logical aircraft order:
 
@@ -60,19 +61,32 @@ Gyro-calibration fields are startup policy. A write persists them with the
 same complete document, and they take effect on the next boot; the bias itself
 is deliberately RAM-only and is measured again on every power-up or reset.
 
+Level calibration is explicit and separate from the startup gyro-bias pass.
+`./ofc device imu calibrate-level` collects stationary samples on the mounted,
+level aircraft and saves the measured roll/pitch reference only after all
+checks pass. The correction is subtracted from accelerometer attitude before
+the complementary estimator. Changing configuration resets estimator history.
+The calibration duration and movement/plausibility limits are configurable;
+the resulting `calibrated`, `roll_trim_degrees`, and `pitch_trim_degrees`
+fields are part of the same whole-document snapshot. Defaults are uncalibrated,
+and motor arming is blocked until a valid level calibration is active.
+
 ## Persistent storage
 
 Flight Computer V1 reserves STM32F405 sector 11 at `0x080E0000` through
 `0x080FFFFF`. The application linker region ends before it, so normal flashing
 does not overwrite settings. A programmer mass erase still clears the sector.
 
-The board layer stores a 488-byte versioned payload inside fixed 536-byte
+The board layer stores a 508-byte versioned payload inside fixed 536-byte
 append-only records. Each record has a format version, sequence, payload
 length, CRC32, and a commit word programmed last. The sector holds 244 full
 configuration records before an explicit reset is needed.
 
-The loader migrates the same-size schema-6 payload by ignoring its retired
-mixer-factor slots. It can also migrate the prior 480-byte schema-5 document, the 412-byte
+The loader migrates the 500-byte schema-8 payload by supplying the default
+accelerometer cutoff and integral-activation threshold. It also migrates the
+488-byte schema-6/schema-7 payload by ignoring its
+retired mixer-factor slots and marking level calibration incomplete. It can
+also migrate the prior 480-byte schema-5 document, the 412-byte
 schema-4 document, the 96-byte
 schema-3 document, the 84-byte schema-2 document, the earlier 88-byte schema-1
 document, and the eight-byte motor-direction payload. The storage layer still
@@ -113,6 +127,10 @@ The initial supported pipeline is intentionally small and explicit:
   "gyro_filter": {
     "type": "FIRST_ORDER_LOW_PASS",
     "cutoff_hz": 80.0
+  },
+  "accelerometer_filter": {
+    "type": "FIRST_ORDER_LOW_PASS",
+    "cutoff_hz": 20.0
   },
   "attitude_estimator": {
     "type": "COMPLEMENTARY",
@@ -163,12 +181,18 @@ enum, function-pointer dispatch, or coordinator object.
 
 ## Rate-controller configuration
 
-Schema 5 added one selected rate-controller type, a maximum accepted IMU sample
+The rate-controller configuration includes one selected controller type, a maximum accepted IMU sample
 gap, and independent roll, pitch, and yaw PID settings. Each axis stores `kp`,
 `ki`, `kd`, `integral_limit`, and `output_limit`. Limits are normalized mixer
 corrections in the range zero through one. The compiled gains are deliberately
 conservative starting values and have not yet been tuned or physically
 validated on the aircraft.
+
+Schema 9 adds `integral_activation_throttle`, initially `0.2`. Below that
+shaped throttle the I terms are cleared while P and D remain active. When the
+mixer reports saturation, integration is held on the following cycle until
+headroom returns. This prevents low-throttle and actuator-limited operation
+from accumulating a correction that is impossible to apply.
 
 The hardware-independent controller derives `dt` from consecutive IMU
 acquisition timestamps. Its derivative acts on measured gyro rate, so a
@@ -186,13 +210,16 @@ accepted command. Lost or incoherent IMU data enters the central failsafe.
 
 The mixer returns four exact zeros immediately when normalized throttle is
 exactly zero. Otherwise it applies a prepared pure-sign quad-X matrix to the
-three PID corrections. When their span is too large, it scales all corrections
-equally; it then shifts collective throttle just enough to fit `0.0..1.0`.
-This preserves correction ratios and avoids independently flattening motors at
-the limits. Schema 7 removes the obsolete open-loop mixer factors because the
-PID output limits already bound correction authority. The result still passes
-through the central motor lifecycle, source, health, freshness, mapping, and
-backend gates.
+three PID corrections. The initial non-airmode policy scales all corrections
+equally until they fit the lower and upper headroom around the requested
+throttle. It never shifts collective power, so the four-motor average cannot
+exceed the shaped throttle and stabilization authority deliberately approaches
+zero near either limit. The average is equal before the central stop threshold
+converts tiny values to exact zero. This preserves correction ratios without
+allowing a small throttle request to create a large collective command. Schema
+7 removes the obsolete open-loop mixer factors because the PID output limits
+already bound correction authority. The result still passes through the
+central motor lifecycle, source, health, freshness, mapping, and backend gates.
 
 Stage 2 receiver loss now enters the central `FAILSAFE` state immediately from
 the flight-control task. The motor task emits stop frames on its next release;

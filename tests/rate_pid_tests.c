@@ -23,14 +23,14 @@ int main(void)
     assert(rate_pid_config_is_valid(&config));
     assert(rate_pid_initialize(&pid, &config));
     assert(rate_pid_seed_measurement(&pid, 10.0F));
-    assert(rate_pid_update(&pid, 12.0F, 11.0F, 0.01F, &output));
+    assert(rate_pid_update(&pid, 12.0F, 11.0F, 0.01F, true, &output));
     assert(near(output.proportional, 0.1F));
     assert(near(output.derivative, -1.0F));
     assert(near(output.integral, 0.002F));
     assert(near(output.total, -0.5F));
 
     /* A setpoint step alone has no derivative kick. */
-    assert(rate_pid_update(&pid, 20.0F, 11.0F, 0.01F, &output));
+    assert(rate_pid_update(&pid, 20.0F, 11.0F, 0.01F, true, &output));
     assert(near(output.derivative, 0.0F));
 
     /* Positive error cannot wind the integral farther into saturation. */
@@ -43,7 +43,7 @@ int main(void)
     };
     assert(rate_pid_initialize(&pid, &config));
     assert(rate_pid_seed_measurement(&pid, 0.0F));
-    assert(rate_pid_update(&pid, 1.0F, 0.0F, 0.1F, &output));
+    assert(rate_pid_update(&pid, 1.0F, 0.0F, 0.1F, true, &output));
     assert(near(output.integral, 0.0F));
     assert(near(output.total, 0.3F));
 
@@ -56,8 +56,14 @@ int main(void)
     };
     assert(rate_pid_initialize(&pid, &config));
     assert(rate_pid_seed_measurement(&pid, 0.0F));
-    assert(rate_pid_update(&pid, 1.0F, 0.0F, 1.0F, &output));
+    assert(rate_pid_update(&pid, 1.0F, 0.0F, 1.0F, true, &output));
     assert(near(output.integral, 0.2F));
+
+    /* Flight-level gating may hold and explicitly clear the I term. */
+    assert(rate_pid_update(&pid, 1.0F, 0.0F, 0.1F, false, &output));
+    assert(near(output.integral, 0.2F));
+    rate_pid_clear_integral(&pid);
+    assert(near(pid.integral, 0.0F));
 
     rate_pid_reset(&pid);
     assert(!pid.measurement_seeded);

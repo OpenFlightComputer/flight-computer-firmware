@@ -14,7 +14,7 @@ def response() -> dict:
         "sequence": 7,
         "age_us": 250,
         "freshness": "FRESH",
-        "acceleration_raw": {"x": 16384, "y": -8192, "z": 0},
+        "acceleration_raw": {"x": 4096, "y": -2048, "z": 0},
         "gyroscope_raw": {"x": 16384, "y": -4096, "z": 0},
         "gyroscope_corrected_raw": {"x": 16380, "y": -4090, "z": -2},
         "calibration": {
@@ -23,6 +23,14 @@ def response() -> dict:
             "samples": 500,
             "restarts": 1,
             "bias_raw": {"x": 4, "y": -6, "z": 2},
+        },
+        "level_calibration": {
+            "state": "READY",
+            "progress_permille": 1000,
+            "samples": 500,
+            "calibrated": True,
+            "roll_trim_millidegrees": -3250,
+            "pitch_trim_millidegrees": 500,
         },
         "attitude": {
             "source_sequence": 7,
@@ -61,6 +69,8 @@ def test_sample_converts_independent_acceleration_and_gyro_scales():
     assert sample.attitude_roll_degrees == pytest.approx(1.25)
     assert sample.filtered_gyroscope_dps == pytest.approx((1.0, -2.0, 3.0))
     assert sample.calibration_bias_dps == pytest.approx((0.244140625, -0.3662109375, 0.1220703125))
+    assert sample.level_roll_trim_degrees == pytest.approx(-3.25)
+    assert sample.level_pitch_trim_degrees == pytest.approx(0.5)
 
 
 def test_unavailable_response_accepts_only_null_snapshot_fields():

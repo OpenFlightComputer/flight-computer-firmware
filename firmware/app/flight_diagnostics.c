@@ -1,8 +1,8 @@
-#include "control_trace_recorder.h"
+#include "flight_diagnostics.h"
 
 #include "application_state.h"
 
-void control_trace_recorder_record(
+void flight_diagnostics_capture(
     uint64_t now_us,
     const receiver_failsafe_decision_t *decision,
     const attitude_snapshot_t *attitude,
@@ -10,8 +10,14 @@ void control_trace_recorder_record(
     flight_control_result_t control_result)
 {
     control_trace_sample_t sample;
+    const bool usb_trace_enabled =
+        firmware_control_trace.level != CONTROL_TRACE_LEVEL_OFF;
+    const bool blackbox_interested =
+        (firmware_blackbox.status == BLACKBOX_STATUS_RECORDING) ||
+        (firmware_blackbox.status == BLACKBOX_STATUS_READY &&
+         firmware_system_state_machine.current == SYSTEM_STATE_ARMED);
 
-    if (firmware_control_trace.level == CONTROL_TRACE_LEVEL_OFF) {
+    if (!usb_trace_enabled && !blackbox_interested) {
         return;
     }
     sample = (control_trace_sample_t){
@@ -31,5 +37,16 @@ void control_trace_recorder_record(
         .mixer_output = output->mixer_output,
         .mixer_output_valid = output->mixer_output_valid,
     };
-    (void)control_trace_record(&firmware_control_trace, &sample);
+    if (!imu_processing_pipeline_latest_observation(
+            &firmware_imu_processing_pipeline, &sample.imu_observation) ||
+        (sample.imu_observation.source_sequence !=
+         sample.attitude.source_sequence)) {
+        sample.imu_observation = (imu_processing_observation_t){0};
+    }
+    if (usb_trace_enabled) {
+        (void)control_trace_record(&firmware_control_trace, &sample);
+    }
+    if (blackbox_interested) {
+        blackbox_capture(&firmware_blackbox, &sample);
+    }
 }

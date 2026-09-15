@@ -165,9 +165,12 @@ add_executable(flight_firmware
     app/application_state.c
     app/application_tasks.c
     app/board_flight_configuration_storage.c
+    app/blackbox.c
+    app/blackbox_storage_task.c
     app/control_trace.c
-    app/control_trace_recorder.c
+    app/flight_diagnostics.c
     app/usb_control_trace_response.c
+    app/usb_blackbox_response.c
     app/diagnostic_fast_task.c
     app/diagnostic_medium_task.c
     app/diagnostic_slow_task.c
@@ -219,9 +222,11 @@ add_executable(flight_firmware
     flight/estimation/accelerometer_attitude.c
     flight/estimation/attitude_estimator.c
     flight/estimation/imu_processing_pipeline.c
+    flight/sensors/acceleration_filter.c
     flight/sensors/gyro_filter.c
     flight/sensors/imu_sample.c
     flight/sensors/gyro_calibration.c
+    flight/sensors/level_calibration.c
     flight/receiver/receiver_freshness.c
     flight/receiver/receiver_failsafe.c
     flight/receiver/receiver_normalization.c
@@ -229,6 +234,8 @@ add_executable(flight_firmware
     peripherals/bmi270/bmi270_driver.c
     peripherals/dshot/dshot_encoder.c
     peripherals/dshot/dshot_timing.c
+    peripherals/sd_card/sd_card.c
+    peripherals/sd_card/sd_card_csd.c
     peripherals/crsf/crsf_decoder.c
     peripherals/crsf/crsf_parser.c
     peripherals/crsf/crsf_receiver_source.c
@@ -241,6 +248,7 @@ add_executable(flight_firmware
     hardware/boards/flightcomputer_v1/board_motor_output.c
     hardware/boards/flightcomputer_v1/board_persistent_storage.c
     hardware/boards/flightcomputer_v1/board_receiver.c
+    hardware/boards/flightcomputer_v1/board_sd_card.c
     hardware/boards/flightcomputer_v1/motor_output_map.c
     hardware/boards/flightcomputer_v1/rgb_led.c
     hardware/boards/flightcomputer_v1/time.c
@@ -271,6 +279,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/dshot"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/bmi270"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/crsf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/sd_card"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/usb"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
     "${CMAKE_BINARY_DIR}/generated"

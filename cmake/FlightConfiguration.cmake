@@ -25,8 +25,8 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 7)
-    message(FATAL_ERROR "Default configuration schema_version must be 7")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 9)
+    message(FATAL_ERROR "Default configuration schema_version must be 9")
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -84,6 +84,8 @@ else()
 endif()
 ofc_json_get(OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP
     control rate_controller maximum_gap_us)
+ofc_json_get(OFC_CONFIG_RATE_CONTROLLER_INTEGRAL_ACTIVATION_THROTTLE
+    control rate_controller integral_activation_throttle)
 foreach(axis IN ITEMS roll pitch yaw)
     string(TOUPPER "${axis}" axis_upper)
     foreach(parameter IN ITEMS kp ki kd integral_limit output_limit)
@@ -128,6 +130,24 @@ ofc_json_get(OFC_CONFIG_GYRO_SAMPLE imu gyro_calibration sample_duration_us)
 ofc_json_get(OFC_CONFIG_GYRO_MAXIMUM_RATE imu gyro_calibration maximum_rate_dps)
 ofc_json_get(OFC_CONFIG_GYRO_MAXIMUM_STANDARD_DEVIATION
     imu gyro_calibration maximum_standard_deviation_dps)
+ofc_json_get(OFC_CONFIG_LEVEL_CALIBRATED imu level_calibration calibrated)
+if(OFC_CONFIG_LEVEL_CALIBRATED)
+    set(OFC_CONFIG_LEVEL_CALIBRATED_VALUE true)
+else()
+    set(OFC_CONFIG_LEVEL_CALIBRATED_VALUE false)
+endif()
+ofc_json_get(OFC_CONFIG_LEVEL_SAMPLE_DURATION
+    imu level_calibration sample_duration_us)
+ofc_json_get(OFC_CONFIG_LEVEL_MAXIMUM_ACCELERATION_STANDARD_DEVIATION
+    imu level_calibration maximum_acceleration_standard_deviation_g)
+ofc_json_get(OFC_CONFIG_LEVEL_MAXIMUM_ACCELERATION_MAGNITUDE_ERROR
+    imu level_calibration maximum_acceleration_magnitude_error_g)
+ofc_json_get(OFC_CONFIG_LEVEL_MAXIMUM_TRIM
+    imu level_calibration maximum_trim_degrees)
+ofc_json_get(OFC_CONFIG_LEVEL_ROLL_TRIM
+    imu level_calibration roll_trim_degrees)
+ofc_json_get(OFC_CONFIG_LEVEL_PITCH_TRIM
+    imu level_calibration pitch_trim_degrees)
 ofc_json_get(gyro_filter_type imu gyro_filter type)
 if(gyro_filter_type STREQUAL "FIRST_ORDER_LOW_PASS")
     set(OFC_CONFIG_GYRO_FILTER_TYPE
@@ -136,6 +156,15 @@ else()
     message(FATAL_ERROR "Invalid gyro filter type: ${gyro_filter_type}")
 endif()
 ofc_json_get(OFC_CONFIG_GYRO_FILTER_CUTOFF imu gyro_filter cutoff_hz)
+ofc_json_get(acceleration_filter_type imu accelerometer_filter type)
+if(acceleration_filter_type STREQUAL "FIRST_ORDER_LOW_PASS")
+    set(OFC_CONFIG_ACCELERATION_FILTER_TYPE
+        "FLIGHT_ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS")
+else()
+    message(FATAL_ERROR "Invalid acceleration filter type: ${acceleration_filter_type}")
+endif()
+ofc_json_get(OFC_CONFIG_ACCELERATION_FILTER_CUTOFF
+    imu accelerometer_filter cutoff_hz)
 ofc_json_get(attitude_estimator_type imu attitude_estimator type)
 if(attitude_estimator_type STREQUAL "COMPLEMENTARY")
     set(OFC_CONFIG_ATTITUDE_ESTIMATOR_TYPE
@@ -170,7 +199,9 @@ if(OFC_CONFIG_CONTROL_ROLL_MAXIMUM_ANGLE LESS_EQUAL 0 OR
     message(FATAL_ERROR "Default control limits are invalid")
 endif()
 if(OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP LESS_EQUAL 0 OR
-   OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP GREATER 1000000)
+   OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP GREATER 1000000 OR
+   OFC_CONFIG_RATE_CONTROLLER_INTEGRAL_ACTIVATION_THROTTLE LESS 0 OR
+   OFC_CONFIG_RATE_CONTROLLER_INTEGRAL_ACTIVATION_THROTTLE GREATER 1)
     message(FATAL_ERROR "Default rate controller timing is invalid")
 endif()
 foreach(axis IN ITEMS ROLL PITCH)
@@ -202,6 +233,8 @@ if(NOT OFC_CONFIG_FAILSAFE_STALE LESS OFC_CONFIG_FAILSAFE_LOSS OR
 endif()
 if(OFC_CONFIG_GYRO_FILTER_CUTOFF LESS_EQUAL 0 OR
    OFC_CONFIG_GYRO_FILTER_CUTOFF GREATER 500 OR
+   OFC_CONFIG_ACCELERATION_FILTER_CUTOFF LESS_EQUAL 0 OR
+   OFC_CONFIG_ACCELERATION_FILTER_CUTOFF GREATER 500 OR
    OFC_CONFIG_ACCELEROMETER_CORRECTION_TIME_CONSTANT LESS_EQUAL 0 OR
    OFC_CONFIG_ACCELEROMETER_CORRECTION_TIME_CONSTANT GREATER 10 OR
    OFC_CONFIG_ATTITUDE_MAXIMUM_GAP LESS_EQUAL 0 OR
@@ -217,6 +250,20 @@ if(OFC_CONFIG_GYRO_SETTLING LESS 0 OR
    OFC_CONFIG_GYRO_MAXIMUM_STANDARD_DEVIATION LESS_EQUAL 0 OR
    OFC_CONFIG_GYRO_MAXIMUM_STANDARD_DEVIATION GREATER 2000)
     message(FATAL_ERROR "Default gyro calibration configuration is invalid")
+endif()
+if(OFC_CONFIG_LEVEL_SAMPLE_DURATION LESS_EQUAL 0 OR
+   OFC_CONFIG_LEVEL_SAMPLE_DURATION GREATER 10000000 OR
+   OFC_CONFIG_LEVEL_MAXIMUM_ACCELERATION_STANDARD_DEVIATION LESS_EQUAL 0 OR
+   OFC_CONFIG_LEVEL_MAXIMUM_ACCELERATION_STANDARD_DEVIATION GREATER 1 OR
+   OFC_CONFIG_LEVEL_MAXIMUM_ACCELERATION_MAGNITUDE_ERROR LESS_EQUAL 0 OR
+   OFC_CONFIG_LEVEL_MAXIMUM_ACCELERATION_MAGNITUDE_ERROR GREATER 1 OR
+   OFC_CONFIG_LEVEL_MAXIMUM_TRIM LESS_EQUAL 0 OR
+   OFC_CONFIG_LEVEL_MAXIMUM_TRIM GREATER 45 OR
+   OFC_CONFIG_LEVEL_ROLL_TRIM LESS -45 OR
+   OFC_CONFIG_LEVEL_ROLL_TRIM GREATER 45 OR
+   OFC_CONFIG_LEVEL_PITCH_TRIM LESS -45 OR
+   OFC_CONFIG_LEVEL_PITCH_TRIM GREATER 45)
+    message(FATAL_ERROR "Default level calibration configuration is invalid")
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")

@@ -14,6 +14,7 @@ const task_definition_t *diagnostic_fast_task_definition(void);
 const task_definition_t *diagnostic_medium_task_definition(void);
 const task_definition_t *diagnostic_slow_task_definition(void);
 const task_definition_t *usb_service_task_definition(void);
+const task_definition_t *blackbox_storage_task_definition(void);
 
 const receiver_inspection_provider_t *receiver_task_inspection_provider(void);
 

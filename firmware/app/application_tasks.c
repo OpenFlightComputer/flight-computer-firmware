@@ -43,6 +43,10 @@ task_registration_result_t application_tasks_register(
     if (result != TASK_REGISTRATION_OK) {
         return result;
     }
+    result = register_task(blackbox_storage_task_definition());
+    if (result != TASK_REGISTRATION_OK) {
+        return result;
+    }
     if (imu_service_available) {
         result = register_task(imu_task_definition());
         if (result != TASK_REGISTRATION_OK) {

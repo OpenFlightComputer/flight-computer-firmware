@@ -87,6 +87,11 @@ firmware link must not be recorded as proof that the flight image works.
   including the sign of all three gyroscope axes.
 - [ ] Confirm the displayed IMU task has no overruns or missed releases and the
   combined 1 kHz worst-case budget remains comfortably below 1 ms.
+  APS-disabled Release evidence: maximum IMU execution was 148 microseconds
+  and the combined budget was 302 microseconds (30.2%). The two records created
+  during startup did not increase from 8,827 through 35,097 reads; runtime had
+  zero overruns and zero source errors. The remaining check is to identify or
+  explicitly classify those startup-only missed releases.
 - [ ] Confirm `imu` inspection is rejected while `ARMED` and becomes available
   again after disarm.
 - [ ] Flash the Milestone 4.3a image and confirm
@@ -105,7 +110,7 @@ firmware link must not be recorded as proof that the flight image works.
   `firmware_high_rate_worst_case_budget_us` and
   `firmware_high_rate_worst_case_utilization_permille`. Confirm the measured
   combined budget remains comfortably below the 1 ms deadline.
-- [ ] Confirm SPI3 mode 0, the 656.25 kHz clock, PB3/PB4/PB5 AF6 routing, and
+- [ ] Confirm SPI3 mode 0, the 5.25 MHz clock, PB3/PB4/PB5 AF6 routing, and
   active-low PD2 chip select on the flight image. Tester evidence does not
   replace this flight-image validation.
 - [ ] Power the 4.3b image while the secured, propeller-free vehicle is still;
@@ -131,9 +136,9 @@ firmware link must not be recorded as proof that the flight image works.
   roll/pitch signs, desired and measured rate signs, PID correction signs, and
   the expected Quad-X motor responses for each stick and board movement.
 - [ ] Exercise mixer saturation and receiver failsafe in the control dashboard.
-  Confirm the trace continues through `FAILSAFE`, stops after disarm, reports
-  no unexplained sequence/reset behavior, and makes every dropped RAM record
-  visible.
+  Confirm the trace preserves the first terminal `FAILSAFE` sample and then
+  stops, reports no unexplained sequence/reset behavior, and makes every
+  dropped RAM record visible.
 - [ ] Measure the 1 kHz flight-control task and combined high-rate budget with
   tracing off, at `HIGH_RATE`, and during a short `FULL_RATE` capture. Confirm
   diagnostics do not introduce a task overrun or delay motor stop behavior.

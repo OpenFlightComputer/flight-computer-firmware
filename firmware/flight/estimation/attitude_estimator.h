@@ -19,6 +19,9 @@ typedef struct {
     attitude_estimator_config_t config;
     float roll_degrees;
     float pitch_degrees;
+    float predicted_roll_degrees;
+    float predicted_pitch_degrees;
+    float accelerometer_weight;
     bool estimate_seen;
     bool initialized;
 } attitude_estimator_t;

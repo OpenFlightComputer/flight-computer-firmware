@@ -7,6 +7,14 @@
 
 typedef struct spi_device spi_device_t;
 
+typedef enum {
+    SPI_DEVICE_ASYNC_COMPLETE = 0,
+    SPI_DEVICE_ASYNC_STARTED,
+    SPI_DEVICE_ASYNC_BUSY,
+    SPI_DEVICE_ASYNC_ERROR,
+    SPI_DEVICE_ASYNC_UNSUPPORTED,
+} spi_device_async_result_t;
+
 typedef struct {
     bool (*initialize)(spi_device_t *device);
     bool (*select)(spi_device_t *device);
@@ -15,6 +23,12 @@ typedef struct {
                      const uint8_t *transmit,
                      uint8_t *receive,
                      size_t length);
+    spi_device_async_result_t (*transfer_start)(spi_device_t *device,
+                                                const uint8_t *transmit,
+                                                uint8_t *receive,
+                                                size_t length);
+    spi_device_async_result_t (*transfer_poll)(spi_device_t *device);
+    bool (*set_frequency_hz)(spi_device_t *device, uint32_t frequency_hz);
     void (*delay_us)(spi_device_t *device, uint32_t duration_us);
 } spi_device_operations_t;
 
@@ -30,6 +44,13 @@ bool spi_device_transfer(spi_device_t *device,
                          const uint8_t *transmit,
                          uint8_t *receive,
                          size_t length);
+spi_device_async_result_t spi_device_transfer_start(
+    spi_device_t *device,
+    const uint8_t *transmit,
+    uint8_t *receive,
+    size_t length);
+spi_device_async_result_t spi_device_transfer_poll(spi_device_t *device);
+bool spi_device_set_frequency_hz(spi_device_t *device, uint32_t frequency_hz);
 void spi_device_delay_us(spi_device_t *device, uint32_t duration_us);
 
 #endif

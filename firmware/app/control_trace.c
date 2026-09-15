@@ -171,6 +171,7 @@ static void copy_record(control_trace_record_t *record,
         },
         .mixer_scale = sample->mixer_output.correction_scale,
         .collective_shift = sample->mixer_output.collective_shift,
+        .imu_observation = sample->imu_observation,
         .receiver_valid = sample->receiver.valid,
         .setpoint_valid = sample->setpoint.valid,
         .attitude_valid = sample->attitude.valid,
@@ -199,6 +200,7 @@ bool control_trace_record(control_trace_t *trace,
     uint32_t events;
     bool periodic;
     bool stop_after_record;
+    bool reserve_terminal_slot;
 
     if ((trace == NULL) || !trace->initialized ||
         (sample == NULL) || (trace->level == CONTROL_TRACE_LEVEL_OFF)) {
@@ -208,12 +210,14 @@ bool control_trace_record(control_trace_t *trace,
     periodic = periodic_sample_is_due(trace, sample->timestamp_us);
     stop_after_record = (sample->system_state == SYSTEM_STATE_FAULT) ||
                         (trace->armed_seen &&
-                         (sample->system_state == SYSTEM_STATE_DISARMED));
+                         ((sample->system_state == SYSTEM_STATE_DISARMED) ||
+                          (sample->system_state == SYSTEM_STATE_FAILSAFE)));
     if (!periodic && (events == 0U) && !stop_after_record) {
         return false;
     }
+    reserve_terminal_slot = !stop_after_record;
     if ((trace->producer_count - trace->consumer_count) >=
-        CONTROL_TRACE_CAPACITY) {
+        (CONTROL_TRACE_CAPACITY - (reserve_terminal_slot ? 1U : 0U))) {
         saturating_increment_u64(&trace->dropped_record_count);
         if (stop_after_record) {
             control_trace_stop(trace);

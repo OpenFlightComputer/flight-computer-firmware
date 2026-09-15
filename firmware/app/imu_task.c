@@ -3,7 +3,10 @@
 #include "application_state.h"
 #include "fault_catalog.h"
 #include "imu_service.h"
+#include "level_calibration.h"
 #include "logging.h"
+#include "motor_control.h"
+#include "time.h"
 
 #define IMU_TASK_PERIOD_US UINT32_C(1000)
 
@@ -103,6 +106,56 @@ static task_callback_result_t run_imu_task(void *context)
             &state.snapshot,
             state.freshness,
             calibration_bias);
+        if (firmware_level_calibration.state ==
+            LEVEL_CALIBRATION_COLLECTING) {
+            level_calibration_process(&firmware_level_calibration,
+                                      &state.snapshot,
+                                      state.freshness,
+                                      calibration_bias,
+                                      time_us());
+            if ((firmware_level_calibration.state !=
+                 LEVEL_CALIBRATION_COLLECTING) &&
+                (firmware_level_calibration.state !=
+                 LEVEL_CALIBRATION_RESULT_PENDING_PERSISTENCE)) {
+                (void)motor_control_set_external_arm_ready(
+                    firmware_flight_configuration_service.active
+                        .level_calibration.calibrated);
+                LOG_WARN(LOG_MODULE_IMU,
+                         "level calibration stopped state=%s",
+                         level_calibration_state_name(
+                             firmware_level_calibration.state));
+            }
+        }
+        if (firmware_level_calibration.state ==
+            LEVEL_CALIBRATION_RESULT_PENDING_PERSISTENCE) {
+            flight_configuration_t updated =
+                firmware_flight_configuration_service.active;
+
+            updated.level_calibration.calibrated = true;
+            updated.level_calibration.roll_trim_degrees =
+                firmware_level_calibration.roll_trim_degrees;
+            updated.level_calibration.pitch_trim_degrees =
+                firmware_level_calibration.pitch_trim_degrees;
+            if (flight_configuration_service_write(
+                    &firmware_flight_configuration_service,
+                    &updated) == FLIGHT_CONFIGURATION_SERVICE_OK) {
+                firmware_level_calibration.state = LEVEL_CALIBRATION_READY;
+                LOG_INFO(LOG_MODULE_IMU,
+                         "level calibration saved roll_mdeg=%ld pitch_mdeg=%ld",
+                         (long)(firmware_level_calibration.roll_trim_degrees *
+                                1000.0F),
+                         (long)(firmware_level_calibration.pitch_trim_degrees *
+                                1000.0F));
+            } else {
+                firmware_level_calibration.state =
+                    LEVEL_CALIBRATION_FAILED_STORAGE;
+                (void)motor_control_set_external_arm_ready(
+                    firmware_flight_configuration_service.active
+                        .level_calibration.calibrated);
+                LOG_ERROR(LOG_MODULE_IMU,
+                          "level calibration persistence failed");
+            }
+        }
     }
 
     update_communication_fault(service, state.freshness);

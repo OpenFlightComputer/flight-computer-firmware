@@ -11,6 +11,7 @@
 
 #define RATE_CONTROLLER_JSON \
     "\"rate_controller\":{\"type\":\"PID\",\"maximum_gap_us\":10000," \
+    "\"integral_activation_throttle\":0.2," \
     "\"roll\":{\"kp\":0.002,\"ki\":0.001,\"kd\":0.00001," \
     "\"integral_limit\":0.15,\"output_limit\":0.30}," \
     "\"pitch\":{\"kp\":0.002,\"ki\":0.001,\"kd\":0.00001," \
@@ -20,6 +21,13 @@
 #define ATTITUDE_CONTROLLER_JSON \
     "\"attitude_controller\":{\"roll_gain_per_s\":4.0," \
     "\"pitch_gain_per_s\":4.0},"
+#define LEVEL_CALIBRATION_JSON \
+    "\"level_calibration\":{\"calibrated\":false," \
+    "\"sample_duration_us\":500000," \
+    "\"maximum_acceleration_standard_deviation_g\":0.02," \
+    "\"maximum_acceleration_magnitude_error_g\":0.15," \
+    "\"maximum_trim_degrees\":10.0,\"roll_trim_degrees\":0.0," \
+    "\"pitch_trim_degrees\":0.0},"
 
 #define INPUT_CAPACITY 4U
 
@@ -48,9 +56,77 @@ static bool receiver_inspection_read_result;
 static uint32_t receiver_inspection_read_count;
 static imu_service_t imu_service;
 static gyro_calibration_t gyro_calibration;
+static level_calibration_t level_calibration;
 static imu_processing_pipeline_t imu_processing_pipeline;
 static task_registry_t task_registry;
 static control_trace_t control_trace;
+static blackbox_t blackbox;
+
+bool board_flight_configuration_snapshot_encode(
+    const flight_configuration_t *configuration,
+    uint8_t *destination,
+    size_t capacity,
+    size_t *length)
+{
+    assert(configuration != NULL);
+    assert(destination != NULL);
+    assert(capacity >= 1U);
+    destination[0] = (uint8_t)configuration->schema_version;
+    *length = 1U;
+    return true;
+}
+
+bool blackbox_set_configuration(blackbox_t *instance,
+                                const uint8_t *configuration,
+                                size_t configuration_length)
+{
+    assert(instance == &blackbox);
+    assert(configuration != NULL);
+    assert(configuration_length <= sizeof(instance->configuration));
+    memcpy(instance->configuration, configuration, configuration_length);
+    instance->configuration_length = configuration_length;
+    return true;
+}
+
+bool blackbox_storage_initialize(blackbox_t *instance)
+{
+    (void)instance;
+    return false;
+}
+
+size_t blackbox_log_count(const blackbox_t *instance)
+{
+    (void)instance;
+    return 0U;
+}
+
+bool blackbox_log_information(const blackbox_t *instance,
+                              size_t index,
+                              blackbox_log_information_t *information)
+{
+    (void)instance;
+    (void)index;
+    (void)information;
+    return false;
+}
+
+bool blackbox_read_log_sector(blackbox_t *instance,
+                              uint32_t log_id,
+                              uint32_t sector_offset,
+                              uint8_t destination[SD_CARD_SECTOR_SIZE])
+{
+    (void)instance;
+    (void)log_id;
+    (void)sector_offset;
+    (void)destination;
+    return false;
+}
+
+const char *blackbox_status_name(blackbox_status_t status)
+{
+    (void)status;
+    return "NO_MEDIA";
+}
 
 static imu_source_result_t fake_imu_read(void *context,
                                          imu_raw_sample_t *sample)
@@ -114,6 +190,17 @@ motor_control_disarm_result_t motor_control_disarm(void)
 motor_control_source_t motor_control_active_source(void)
 {
     return active_motor_source;
+}
+
+motor_control_source_t motor_control_pending_source(void)
+{
+    return MOTOR_CONTROL_SOURCE_NONE;
+}
+
+bool motor_control_set_external_arm_ready(bool ready)
+{
+    motor_ready_for_arm = ready;
+    return true;
 }
 
 const char *motor_control_source_name(motor_control_source_t source)
@@ -247,6 +334,10 @@ static void reset_fakes(void)
     captured_response[0] = '\0';
     captured_length = 0U;
     write_count = 0U;
+    blackbox = (blackbox_t){
+        .status = BLACKBOX_STATUS_NO_MEDIA,
+        .initialized = true,
+    };
     current_time_us = UINT64_C(123456);
     motor_submit_result = MOTOR_CONTROL_SUBMIT_ACCEPTED;
     motor_arm_result = MOTOR_CONTROL_ARM_ACCEPTED;
@@ -259,7 +350,7 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 7U,
+            .schema_version = 9U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
@@ -311,6 +402,7 @@ static void reset_fakes(void)
             .rate_controller = {
                 .type = RATE_CONTROLLER_TYPE_PID,
                 .maximum_gap_us = 10000U,
+                .integral_activation_throttle = 0.2F,
                 .axis = {
                     {.kp = 0.002F, .ki = 0.001F, .kd = 0.00001F,
                      .integral_limit = 0.15F, .output_limit = 0.30F},
@@ -344,6 +436,10 @@ static void reset_fakes(void)
             .gyro_filter = {
                 .type = FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS,
                 .cutoff_hz = 80.0F,
+            },
+            .acceleration_filter = {
+                .type = FLIGHT_ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS,
+                .cutoff_hz = 20.0F,
             },
             .attitude_estimator = {
                 .type = FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY,
@@ -401,6 +497,21 @@ static void reset_fakes(void)
                                                &calibration_config,
                                                current_time_us));
         }
+        assert(level_calibration_initialize(
+            &level_calibration,
+            &(level_calibration_config_t){
+                .sample_duration_us = UINT64_C(500000),
+                .minimum_sample_count = 100U,
+                .maximum_rate_dps = 3.0F,
+                .maximum_acceleration_standard_deviation_g = 0.02F,
+                .maximum_acceleration_magnitude_error_g = 0.15F,
+                .maximum_trim_degrees = 10.0F,
+                .acceleration_counts_per_g = 16384.0F,
+                .gyroscope_counts_per_dps = 16.384F,
+            },
+            false,
+            0.0F,
+            0.0F));
         task_registry_initialize(&task_registry);
         assert(task_registry_register(&task_registry, &definition) ==
                TASK_REGISTRATION_OK);
@@ -434,10 +545,12 @@ static void initialize_system(usb_command_processor_t *processor,
                                             &receiver_provider,
                                             &imu_service,
                                             &gyro_calibration,
+                                            &level_calibration,
                                             &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
                                             &control_trace,
+                                            &blackbox,
                                             "0.1.0",
                                             "test-build") ==
            USB_COMMAND_INIT_OK);
@@ -799,7 +912,7 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":7,"
+        "\"config_write\",\"configuration\":{\"schema_version\":9,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},"
@@ -825,8 +938,12 @@ static void complete_configuration_commands_replace_singular_commands(void)
         "\"recovery_throttle_maximum\":0.05},\"imu\":{"
         "\"gyro_calibration\":{\"settling_duration_us\":100000,"
         "\"sample_duration_us\":500000,\"maximum_rate_dps\":5.0,"
-        "\"maximum_standard_deviation_dps\":0.5},\"gyro_filter\":{"
+        "\"maximum_standard_deviation_dps\":0.5},"
+        LEVEL_CALIBRATION_JSON
+        "\"gyro_filter\":{"
         "\"type\":\"FIRST_ORDER_LOW_PASS\",\"cutoff_hz\":80.0},"
+        "\"accelerometer_filter\":{"
+        "\"type\":\"FIRST_ORDER_LOW_PASS\",\"cutoff_hz\":20.0},"
         "\"attitude_estimator\":{\"type\":\"COMPLEMENTARY\","
         "\"accelerometer_correction_time_constant_s\":0.5,"
         "\"maximum_gap_us\":10000}}}}");
@@ -853,6 +970,38 @@ static void complete_configuration_commands_replace_singular_commands(void)
     assert(processor.statistics.configuration_count == 4U);
     assert(processor.statistics.configuration_accepted_count == 4U);
     assert(processor.statistics.configuration_rejected_count == 0U);
+}
+
+static void level_calibration_start_is_disarmed_and_exclusive(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+    queue_input("{\"type\":\"command\",\"request_id\":64,"
+                "\"command\":\"imu_level_calibration_start\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"ok\":true") != NULL);
+    assert(level_calibration.state == LEVEL_CALIBRATION_COLLECTING);
+    assert(!motor_ready_for_arm);
+
+    queue_input("{\"type\":\"command\",\"request_id\":65,"
+                "\"command\":\"imu_level_calibration_start\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "calibration_busy") != NULL);
+
+    level_calibration.state = LEVEL_CALIBRATION_UNCALIBRATED;
+    state_machine.current = SYSTEM_STATE_ARMED;
+    queue_input("{\"type\":\"command\",\"request_id\":66,"
+                "\"command\":\"imu_level_calibration_start\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "state_rejected") != NULL);
 }
 
 static void asynchronous_arm_is_reported_as_pending(void)
@@ -936,10 +1085,12 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &receiver_provider,
                                             &imu_service,
                                             &gyro_calibration,
+                                            &level_calibration,
                                             &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
                                             &control_trace,
+                                            &blackbox,
                                             "0.1.0", "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_initialize(&processor, &state_machine,
@@ -948,10 +1099,12 @@ static void initialization_and_invalid_state_are_checked(void)
                                             &receiver_provider,
                                             &imu_service,
                                             &gyro_calibration,
+                                            &level_calibration,
                                             &imu_processing_pipeline,
                                             &task_registry,
                                             &configuration_service,
                                             &control_trace,
+                                            &blackbox,
                                             NULL, "test-build") ==
            USB_COMMAND_INIT_INVALID_ARGUMENT);
     assert(usb_command_processor_process_once(&processor) ==
@@ -971,6 +1124,16 @@ static void control_trace_read_is_transactional_and_start_is_disarmed_only(void)
         .imu_freshness = IMU_FRESHNESS_FRESH,
         .control_result = FLIGHT_CONTROL_IDLE,
         .rate_result = RATE_CONTROLLER_RESULT_DISABLED,
+        .imu_observation = {
+            .raw_acceleration = {11, -22, -16384},
+            .raw_gyroscope = {3, -4, 5},
+            .unfiltered_acceleration_g = {0.001F, -0.002F, -1.0F},
+            .filtered_acceleration_g = {0.0F, -0.001F, -1.0F},
+            .unfiltered_acceleration_magnitude_g = 1.001F,
+            .filtered_acceleration_magnitude_g = 1.0F,
+            .source_sequence = 1U,
+            .valid = true,
+        },
     };
 
     reset_fakes();
@@ -993,6 +1156,8 @@ static void control_trace_read_is_transactional_and_start_is_disarmed_only(void)
            USB_COMMAND_PROCESS_RESPONSE_PENDING);
     assert(control_trace_pending_count(&control_trace) == 1U);
     assert(strstr(captured_response, "\"records\":[[") != NULL);
+    assert(strstr(captured_response, "\"schema_version\":2") != NULL);
+    assert(strstr(captured_response, "[11,-22,-16384]") != NULL);
     assert(usb_command_processor_process_once(&processor) ==
            USB_COMMAND_PROCESS_RESPONSE_PENDING);
     assert(control_trace_pending_count(&control_trace) == 1U);
@@ -1017,6 +1182,44 @@ static void control_trace_read_is_transactional_and_start_is_disarmed_only(void)
     assert(control_trace.level == CONTROL_TRACE_LEVEL_OFF);
 }
 
+static void blackbox_management_is_disarmed_only(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+    blackbox.maximum_queue_depth = 7U;
+    blackbox.completed_sector_write_count = 4U;
+    blackbox.total_sector_write_time_us = 10000U;
+    blackbox.maximum_sector_write_time_us = 4000U;
+    queue_input("{\"type\":\"command\",\"request_id\":80,"
+                "\"command\":\"storage_status\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"command\":\"storage_status\"") !=
+           NULL);
+    assert(strstr(captured_response, "\"status\":\"NO_MEDIA\"") != NULL);
+    assert(strstr(captured_response, "\"sample_interval_us\":10000") !=
+           NULL);
+    assert(strstr(captured_response, "\"maximum_queue_depth\":7") !=
+           NULL);
+    assert(strstr(captured_response, "\"average_sector_write_us\":2500") !=
+           NULL);
+    assert(strstr(captured_response, "\"maximum_sector_write_us\":4000") !=
+           NULL);
+
+    state_machine.current = SYSTEM_STATE_ARMED;
+    queue_input("{\"type\":\"command\",\"request_id\":81,"
+                "\"command\":\"flight_log_list\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"error\":\"state_rejected\"") !=
+           NULL);
+}
+
 int main(void)
 {
     status_and_health_report_current_summary();
@@ -1028,9 +1231,11 @@ int main(void)
     motor_preparation_rejects_arm_before_the_state_machine();
     motor_test_is_bounded_and_uses_the_motor_gate();
     complete_configuration_commands_replace_singular_commands();
+    level_calibration_start_is_disarmed_and_exclusive();
     asynchronous_arm_is_reported_as_pending();
     invalid_unsupported_and_busy_responses_are_bounded();
     control_trace_read_is_transactional_and_start_is_disarmed_only();
+    blackbox_management_is_disarmed_only();
     initialization_and_invalid_state_are_checked();
     return 0;
 }

@@ -86,11 +86,27 @@ target_compile_options(gyro_calibration_tests PRIVATE
 )
 add_test(NAME gyro_calibration COMMAND gyro_calibration_tests)
 
+add_executable(level_calibration_tests
+    level_calibration_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/level_calibration.c"
+)
+target_include_directories(level_calibration_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+target_link_libraries(level_calibration_tests PRIVATE m)
+target_compile_options(level_calibration_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME level_calibration COMMAND level_calibration_tests)
+
 add_executable(imu_processing_pipeline_tests
     imu_processing_pipeline_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/imu_processing_pipeline.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/acceleration_filter.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
 )
 target_include_directories(imu_processing_pipeline_tests PRIVATE
@@ -498,6 +514,7 @@ add_executable(board_flight_configuration_storage_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/acceleration_filter.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
 )
 
@@ -510,6 +527,8 @@ target_include_directories(board_flight_configuration_storage_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/sd_card"
     "${CMAKE_BINARY_DIR}/generated"
 )
 
@@ -539,7 +558,9 @@ add_executable(flight_configuration_service_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/imu_processing_pipeline.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/acceleration_filter.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/level_calibration.c"
 )
 target_include_directories(flight_configuration_service_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
@@ -549,6 +570,7 @@ target_include_directories(flight_configuration_service_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/bmi270"
     "${CMAKE_BINARY_DIR}/generated"
 )
 target_compile_options(flight_configuration_service_tests PRIVATE
@@ -942,8 +964,10 @@ add_test(NAME usb_receiver_response COMMAND usb_receiver_response_tests)
 add_executable(usb_imu_response_tests
     usb_imu_response_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_imu_response.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/imu_sample.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_calibration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/level_calibration.c"
 )
 
 target_include_directories(usb_imu_response_tests PRIVATE
@@ -953,7 +977,7 @@ target_include_directories(usb_imu_response_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
 
-target_link_libraries(usb_imu_response_tests PRIVATE firmware_common)
+target_link_libraries(usb_imu_response_tests PRIVATE firmware_common m)
 
 target_compile_options(usb_imu_response_tests PRIVATE
     -Wall
@@ -975,13 +999,16 @@ add_executable(usb_command_processor_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_command_processor.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/control_trace.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_control_trace_response.c"
+    "${PROJECT_SOURCE_DIR}/firmware/app/usb_blackbox_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_health_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_imu_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/usb_receiver_response.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/imu_service.c"
     "${PROJECT_SOURCE_DIR}/firmware/app/task.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/imu_sample.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_calibration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/level_calibration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_freshness.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
@@ -998,10 +1025,12 @@ target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/sd_card"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
 )
 
-target_link_libraries(usb_command_processor_tests PRIVATE firmware_common)
+target_link_libraries(usb_command_processor_tests PRIVATE firmware_common m)
 
 target_compile_options(usb_command_processor_tests PRIVATE
     -Wall
@@ -1011,3 +1040,39 @@ target_compile_options(usb_command_processor_tests PRIVATE
 )
 
 add_test(NAME usb_command_processor COMMAND usb_command_processor_tests)
+
+add_executable(sd_card_csd_tests
+    sd_card_csd_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/sd_card/sd_card_csd.c"
+)
+
+target_include_directories(sd_card_csd_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/sd_card"
+)
+
+target_link_libraries(sd_card_csd_tests PRIVATE firmware_common)
+target_compile_options(sd_card_csd_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME sd_card_csd COMMAND sd_card_csd_tests)
+
+add_executable(blackbox_tests
+    blackbox_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/app/blackbox.c"
+)
+target_include_directories(blackbox_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/app"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+    "${PROJECT_SOURCE_DIR}/firmware/hardware"
+    "${PROJECT_SOURCE_DIR}/firmware/peripherals/sd_card"
+)
+target_link_libraries(blackbox_tests PRIVATE firmware_common m)
+target_compile_options(blackbox_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME blackbox COMMAND blackbox_tests)

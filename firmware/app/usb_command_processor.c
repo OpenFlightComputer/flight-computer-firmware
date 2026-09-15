@@ -1,6 +1,8 @@
 #include "usb_command_processor.h"
 
 #include "usb_control_trace_response.h"
+#include "usb_blackbox_response.h"
+#include "board_flight_configuration_storage.h"
 #include "health.h"
 #include "logging.h"
 #include "motor_control.h"
@@ -190,6 +192,74 @@ static bool build_error(usb_command_processor_t *processor,
         &processor->pending_response_length);
 }
 
+static void refresh_blackbox_configuration(
+    usb_command_processor_t *processor,
+    const flight_configuration_t *configuration)
+{
+    uint8_t snapshot[FLIGHT_CONFIGURATION_SNAPSHOT_CAPACITY];
+    size_t length = 0U;
+    if (board_flight_configuration_snapshot_encode(
+            configuration, snapshot, sizeof(snapshot), &length)) {
+        (void)blackbox_set_configuration(processor->blackbox,
+                                         snapshot, length);
+    }
+}
+
+static bool blackbox_state_allowed(const usb_command_processor_t *processor)
+{
+    return processor->state_machine->current == SYSTEM_STATE_DISARMED;
+}
+
+static bool build_blackbox_response(usb_command_processor_t *processor,
+                                    const usb_json_request_t *request)
+{
+    uint8_t sector[SD_CARD_SECTOR_SIZE];
+    if (!blackbox_state_allowed(processor)) {
+        return build_error(processor, true, request->request_id,
+                           "state_rejected");
+    }
+    switch (request->command) {
+    case USB_JSON_COMMAND_STORAGE_STATUS:
+        return usb_blackbox_status_response_build(
+            request->request_id, processor->blackbox,
+            processor->pending_response, sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    case USB_JSON_COMMAND_STORAGE_INITIALIZE: {
+        const bool accepted = blackbox_storage_initialize(processor->blackbox);
+        return usb_blackbox_initialize_response_build(
+            request->request_id, accepted, processor->blackbox,
+            accepted ? NULL : "storage_initialize_failed",
+            processor->pending_response, sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    }
+    case USB_JSON_COMMAND_FLIGHT_LOG_LIST:
+        if ((processor->blackbox->status != BLACKBOX_STATUS_READY) &&
+            (processor->blackbox->status != BLACKBOX_STATUS_UNINITIALIZED)) {
+            return build_error(processor, true, request->request_id,
+                               "storage_unavailable");
+        }
+        return usb_blackbox_log_list_response_build(
+            request->request_id, processor->blackbox,
+            processor->pending_response, sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    case USB_JSON_COMMAND_FLIGHT_LOG_READ:
+        if (!blackbox_read_log_sector(processor->blackbox,
+                                      request->log_id,
+                                      request->sector_offset,
+                                      sector)) {
+            return build_error(processor, true, request->request_id,
+                               "log_sector_unavailable");
+        }
+        return usb_blackbox_log_read_response_build(
+            request->request_id, request->log_id, request->sector_offset,
+            sector, processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    default:
+        return false;
+    }
+}
+
 static const char *motor_test_error(motor_control_submit_result_t result)
 {
     switch (result) {
@@ -292,6 +362,21 @@ static void build_imu_diagnostics(
                                            processor->clock());
     diagnostics->calibration_ready = gyro_calibration_bias(
         processor->gyro_calibration, diagnostics->calibration_bias);
+    diagnostics->level_calibration_state =
+        processor->level_calibration->state;
+    diagnostics->level_calibration_sample_count =
+        processor->level_calibration->sample_count;
+    diagnostics->level_calibration_progress_permille =
+        level_calibration_progress_permille(processor->level_calibration,
+                                             processor->clock());
+    diagnostics->level_calibrated = processor->configuration_service->active
+                                        .level_calibration.calibrated;
+    diagnostics->level_roll_trim_degrees =
+        processor->configuration_service->active.level_calibration
+            .roll_trim_degrees;
+    diagnostics->level_pitch_trim_degrees =
+        processor->configuration_service->active.level_calibration
+            .pitch_trim_degrees;
     diagnostics->processing_statistics =
         processor->imu_processing_pipeline->statistics;
     diagnostics->attitude = processor->imu_processing_pipeline->latest;
@@ -392,9 +477,39 @@ static void configuration_to_usb(
                             .maximum_standard_deviation_dps * 1000000.0F) +
                        0.5F),
         },
+        .level_sample_duration_us =
+            configuration->level_calibration.sample_duration_us,
+        .level_threshold_millionths = {
+            (uint32_t)(configuration->level_calibration
+                           .maximum_acceleration_standard_deviation_g *
+                           1000000.0F + 0.5F),
+            (uint32_t)(configuration->level_calibration
+                           .maximum_acceleration_magnitude_error_g *
+                           1000000.0F + 0.5F),
+            (uint32_t)(configuration->level_calibration
+                           .maximum_trim_degrees * 1000000.0F + 0.5F),
+        },
+        .level_trim_millionths = {
+            (int32_t)(configuration->level_calibration.roll_trim_degrees *
+                          1000000.0F +
+                      (configuration->level_calibration.roll_trim_degrees >=
+                               0.0F
+                           ? 0.5F
+                           : -0.5F)),
+            (int32_t)(configuration->level_calibration.pitch_trim_degrees *
+                          1000000.0F +
+                      (configuration->level_calibration.pitch_trim_degrees >=
+                               0.0F
+                           ? 0.5F
+                           : -0.5F)),
+        },
+        .level_calibrated = configuration->level_calibration.calibrated,
         .gyro_filter_cutoff_millionths =
             (uint32_t)((configuration->gyro_filter.cutoff_hz * 1000000.0F) +
                        0.5F),
+        .accelerometer_filter_cutoff_millionths =
+            (uint32_t)((configuration->acceleration_filter.cutoff_hz *
+                        1000000.0F) + 0.5F),
         .accelerometer_correction_time_constant_millionths =
             (uint32_t)((configuration->attitude_estimator
                             .accelerometer_correction_time_constant_s *
@@ -402,6 +517,8 @@ static void configuration_to_usb(
         .attitude_maximum_gap_us =
             configuration->attitude_estimator.maximum_gap_us,
         .gyro_filter_type = (uint8_t)configuration->gyro_filter.type,
+        .accelerometer_filter_type =
+            (uint8_t)configuration->acceleration_filter.type,
         .attitude_estimator_type =
             (uint8_t)configuration->attitude_estimator.type,
         .control_axis_millionths = {
@@ -439,6 +556,9 @@ static void configuration_to_usb(
         },
         .rate_controller_maximum_gap_us =
             configuration->rate_controller.maximum_gap_us,
+        .rate_controller_integral_activation_throttle_millionths =
+            (uint32_t)(configuration->rate_controller
+                           .integral_activation_throttle * 1000000.0F + 0.5F),
         .rate_controller_type =
             (uint8_t)configuration->rate_controller.type,
         .attitude_gain_millionths = {
@@ -524,10 +644,31 @@ static void configuration_from_usb(
             .maximum_standard_deviation_dps =
                 (float)usb->gyro_threshold_millionths[1] / 1000000.0F,
         },
+        .level_calibration = {
+            .sample_duration_us = usb->level_sample_duration_us,
+            .maximum_acceleration_standard_deviation_g =
+                (float)usb->level_threshold_millionths[0] / 1000000.0F,
+            .maximum_acceleration_magnitude_error_g =
+                (float)usb->level_threshold_millionths[1] / 1000000.0F,
+            .maximum_trim_degrees =
+                (float)usb->level_threshold_millionths[2] / 1000000.0F,
+            .roll_trim_degrees =
+                (float)usb->level_trim_millionths[0] / 1000000.0F,
+            .pitch_trim_degrees =
+                (float)usb->level_trim_millionths[1] / 1000000.0F,
+            .calibrated = usb->level_calibrated,
+        },
         .gyro_filter = {
             .type = (flight_gyro_filter_type_t)usb->gyro_filter_type,
             .cutoff_hz =
                 (float)usb->gyro_filter_cutoff_millionths / 1000000.0F,
+        },
+        .acceleration_filter = {
+            .type = (flight_acceleration_filter_type_t)
+                usb->accelerometer_filter_type,
+            .cutoff_hz =
+                (float)usb->accelerometer_filter_cutoff_millionths /
+                1000000.0F,
         },
         .attitude_estimator = {
             .type = (flight_attitude_estimator_type_t)
@@ -573,6 +714,10 @@ static void configuration_from_usb(
         .rate_controller = {
             .type = (rate_controller_type_t)usb->rate_controller_type,
             .maximum_gap_us = usb->rate_controller_maximum_gap_us,
+            .integral_activation_throttle =
+                (float)usb
+                    ->rate_controller_integral_activation_throttle_millionths /
+                1000000.0F,
         },
         .roll_attitude_controller = {
             .gain_per_s =
@@ -670,6 +815,7 @@ static bool build_configuration_response(
     configuration_to_usb(&configuration, &usb_configuration);
 
     if (accepted) {
+        refresh_blackbox_configuration(processor, &configuration);
         saturating_increment(&processor->statistics.configuration_accepted_count);
     } else {
         saturating_increment(&processor->statistics.configuration_rejected_count);
@@ -757,6 +903,36 @@ static bool build_command_response(usb_command_processor_t *processor,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
     }
+    case USB_JSON_COMMAND_IMU_LEVEL_CALIBRATION_START: {
+        bool accepted = false;
+        const char *error = "state_rejected";
+
+        if ((processor->state_machine->current == SYSTEM_STATE_DISARMED) &&
+            (motor_control_pending_source() == MOTOR_CONTROL_SOURCE_NONE) &&
+            motor_control_set_external_arm_ready(false)) {
+            if (level_calibration_start(processor->level_calibration,
+                                        processor->clock())) {
+                accepted = true;
+                error = NULL;
+                LOG_INFO(LOG_MODULE_IMU, "level calibration started");
+            } else {
+                (void)motor_control_set_external_arm_ready(
+                    processor->configuration_service->active
+                        .level_calibration.calibrated);
+                error = "calibration_busy";
+            }
+        }
+        return usb_json_build_transition_response(
+            request->command,
+            request->request_id,
+            accepted,
+            false,
+            system_state_name(processor->state_machine->current),
+            error,
+            processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    }
     case USB_JSON_COMMAND_CONTROL_TRACE_START:
     case USB_JSON_COMMAND_CONTROL_TRACE_READ:
     case USB_JSON_COMMAND_CONTROL_TRACE_STOP:
@@ -779,6 +955,9 @@ static bool build_command_response(usb_command_processor_t *processor,
                 error = "health_rejected";
             } else if (arm_result == MOTOR_CONTROL_ARM_BLOCKED_PREPARATION) {
                 error = "motor_not_ready";
+            } else if (arm_result ==
+                       MOTOR_CONTROL_ARM_BLOCKED_EXTERNAL_INTERLOCK) {
+                error = "calibration_required";
             } else if (arm_result == MOTOR_CONTROL_ARM_INVALID_SOURCE) {
                 error = "control_source_rejected";
             }
@@ -832,6 +1011,11 @@ static bool build_command_response(usb_command_processor_t *processor,
     case USB_JSON_COMMAND_CONFIG_WRITE:
     case USB_JSON_COMMAND_CONFIG_RESET:
         return build_configuration_response(processor, request);
+    case USB_JSON_COMMAND_STORAGE_STATUS:
+    case USB_JSON_COMMAND_STORAGE_INITIALIZE:
+    case USB_JSON_COMMAND_FLIGHT_LOG_LIST:
+    case USB_JSON_COMMAND_FLIGHT_LOG_READ:
+        return build_blackbox_response(processor, request);
     case USB_JSON_COMMAND_UNSUPPORTED:
     case USB_JSON_COMMAND_INVALID:
         break;
@@ -848,10 +1032,12 @@ usb_command_init_result_t usb_command_processor_initialize(
     const receiver_inspection_provider_t *receiver_inspection_provider,
     const imu_service_t *imu_service,
     const gyro_calibration_t *gyro_calibration,
+    level_calibration_t *level_calibration,
     const imu_processing_pipeline_t *imu_processing_pipeline,
     const task_registry_t *task_registry,
     flight_configuration_service_t *configuration_service,
     control_trace_t *control_trace,
+    blackbox_t *blackbox,
     const char *firmware_version,
     const char *build_id)
 {
@@ -862,11 +1048,13 @@ usb_command_init_result_t usb_command_processor_initialize(
         (receiver_inspection_provider->read == NULL) ||
         (imu_service == NULL) || (gyro_calibration == NULL) ||
         !gyro_calibration->initialized ||
+        (level_calibration == NULL) || !level_calibration->initialized ||
         (imu_processing_pipeline == NULL) ||
         !imu_processing_pipeline->initialized ||
         (task_registry == NULL) ||
         (configuration_service == NULL) || !configuration_service->initialized ||
         (control_trace == NULL) || !control_trace->initialized ||
+        (blackbox == NULL) || !blackbox->initialized ||
         (firmware_version == NULL) || (build_id == NULL)) {
         return USB_COMMAND_INIT_INVALID_ARGUMENT;
     }
@@ -878,10 +1066,12 @@ usb_command_init_result_t usb_command_processor_initialize(
         .receiver_inspection_provider = *receiver_inspection_provider,
         .imu_service = imu_service,
         .gyro_calibration = gyro_calibration,
+        .level_calibration = level_calibration,
         .imu_processing_pipeline = imu_processing_pipeline,
         .task_registry = task_registry,
         .configuration_service = configuration_service,
         .control_trace = control_trace,
+        .blackbox = blackbox,
         .firmware_version = firmware_version,
         .build_id = build_id,
         .initialized = true,
@@ -906,6 +1096,8 @@ usb_command_process_result_t usb_command_processor_process_once(
         (processor->clock == NULL) ||
         (processor->receiver_inspection_provider.read == NULL) ||
         (processor->imu_service == NULL) ||
+        (processor->level_calibration == NULL) ||
+        !processor->level_calibration->initialized ||
         (processor->task_registry == NULL) ||
         (processor->configuration_service == NULL) ||
         !processor->configuration_service->initialized ||

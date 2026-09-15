@@ -3,6 +3,7 @@
 
 #include "imu_service.h"
 #include "gyro_calibration.h"
+#include "level_calibration.h"
 #include "imu_processing_pipeline.h"
 
 #include <stdbool.h>
@@ -27,6 +28,12 @@ typedef struct {
     uint32_t calibration_restart_count;
     uint32_t calibration_progress_permille;
     bool calibration_ready;
+    level_calibration_state_t level_calibration_state;
+    uint32_t level_calibration_sample_count;
+    uint32_t level_calibration_progress_permille;
+    float level_roll_trim_degrees;
+    float level_pitch_trim_degrees;
+    bool level_calibrated;
     attitude_snapshot_t attitude;
     imu_processing_statistics_t processing_statistics;
 } usb_imu_diagnostics_t;

@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 9,
   "motors": {
     "propeller_layout": "PROPS_IN",
     "directions": [
@@ -56,6 +56,7 @@
     "rate_controller": {
       "type": "PID",
       "maximum_gap_us": 10000,
+      "integral_activation_throttle": 0.2,
       "roll": {
         "kp": 0.002,
         "ki": 0.001,
@@ -92,6 +93,15 @@
     "recovery_throttle_maximum": 0.05
   },
   "imu": {
+    "level_calibration": {
+      "calibrated": false,
+      "sample_duration_us": 500000,
+      "maximum_acceleration_standard_deviation_g": 0.02,
+      "maximum_acceleration_magnitude_error_g": 0.15,
+      "maximum_trim_degrees": 10.0,
+      "roll_trim_degrees": 0.0,
+      "pitch_trim_degrees": 0.0
+    },
     "gyro_calibration": {
       "settling_duration_us": 100000,
       "sample_duration_us": 500000,
@@ -101,6 +111,10 @@
     "gyro_filter": {
       "type": "FIRST_ORDER_LOW_PASS",
       "cutoff_hz": 80.0
+    },
+    "accelerometer_filter": {
+      "type": "FIRST_ORDER_LOW_PASS",
+      "cutoff_hz": 20.0
     },
     "attitude_estimator": {
       "type": "COMPLEMENTARY",

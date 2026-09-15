@@ -1,0 +1,8 @@
+#ifndef OPENFLIGHTCOMPUTER_BMI270_CONFIGURATION_H
+#define OPENFLIGHTCOMPUTER_BMI270_CONFIGURATION_H
+
+/* Keep the programmed range and every raw-count conversion coupled. */
+#define BMI270_ACCELERATION_RANGE_G 8U
+#define BMI270_ACCELERATION_COUNTS_PER_G 4096.0F
+
+#endif

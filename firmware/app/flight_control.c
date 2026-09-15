@@ -185,6 +185,10 @@ flight_control_result_t flight_control_process_receiver(
         return enter_control_failsafe(
             stabilization, FLIGHT_CONTROL_IMU_FAILSAFE_ENTERED);
     }
+    if (setpoint.throttle < stabilization->rate_controller->config
+                                .integral_activation_throttle) {
+        rate_controller_clear_integrals(stabilization->rate_controller);
+    }
     rate_result = rate_controller_process(
         stabilization->rate_controller,
         stabilization->desired_rates->desired_rate_dps,
@@ -192,6 +196,8 @@ flight_control_result_t flight_control_process_receiver(
         stabilization->attitude->acquired_at_us,
         stabilization->attitude->source_sequence,
         true,
+        setpoint.throttle >= stabilization->rate_controller->config
+                                 .integral_activation_throttle,
         stabilization->rate_output);
     if (stabilization->rate_result != NULL) {
         *stabilization->rate_result = (uint32_t)rate_result;
@@ -219,6 +225,8 @@ flight_control_result_t flight_control_process_receiver(
         return enter_control_failsafe(
             stabilization, FLIGHT_CONTROL_CONTROL_FAILSAFE_ENTERED);
     }
+    rate_controller_report_actuator_saturation(
+        stabilization->rate_controller, mixer_output.saturated);
     if (output != NULL) {
         output->setpoint = setpoint;
         output->mixer_output = mixer_output;

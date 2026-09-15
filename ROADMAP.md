@@ -159,7 +159,10 @@ Planned milestones:
    implemented in software.
 8. Replace open-loop receiver mixing with the stabilized control path and a
    fail-closed IMU gate — implemented in software; physical validation remains.
-9. Propeller-free sign, correction, saturation, loss, and recovery validation.
+9. Propeller-free sign, correction, saturation, loss, and recovery validation,
+   supported by a 100 Hz automatic microSD blackbox — implemented in software;
+   validate zero-drop recording at 100 Hz before first flight. The original
+   500 Hz target requires batched SD multi-block writes and remains deferred.
 10. Constrained first-hover preparation and test.
 
 After the control behavior has been physically validated, perform a
@@ -193,7 +196,7 @@ in Phase 3.
 | 2 | ELRS/CRSF receiver input, normalization, freshness, and diagnostics |
 | 3 | Open-loop receiver-to-motor integration and first controlled physical response |
 | 4 | BMI270-based estimation and stabilized flight, followed by optional BMP388 use |
-| 5 | Non-blocking structured microSD flight-data logging |
+| 5 | Post-flight blackbox evolution: retention policy, richer events, compression, and optional filesystem/export improvements |
 | 6 | Optional external peripherals such as GPS |
 | 7 | Evidence-driven Flight Computer V2 review |
 

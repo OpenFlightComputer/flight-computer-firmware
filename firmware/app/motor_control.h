@@ -28,6 +28,7 @@ typedef enum {
     MOTOR_CONTROL_ARM_BLOCKED_STATE,
     MOTOR_CONTROL_ARM_BLOCKED_HEALTH,
     MOTOR_CONTROL_ARM_BLOCKED_PREPARATION,
+    MOTOR_CONTROL_ARM_BLOCKED_EXTERNAL_INTERLOCK,
     MOTOR_CONTROL_ARM_TRANSITION_ERROR,
 } motor_control_arm_result_t;
 
@@ -118,6 +119,7 @@ motor_control_configuration_apply_result_t motor_control_apply_configuration(
 bool motor_control_is_initialized(void);
 bool motor_control_outputs_stopped(void);
 bool motor_control_ready_for_arm(void);
+bool motor_control_set_external_arm_ready(bool ready);
 motor_control_source_t motor_control_active_source(void);
 motor_control_source_t motor_control_pending_source(void);
 const char *motor_control_source_name(motor_control_source_t source);

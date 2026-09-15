@@ -6,9 +6,11 @@ import csv
 import json
 import math
 from collections import deque
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from rich.columns import Columns
 from rich.console import Group
@@ -18,8 +20,9 @@ from rich.table import Table
 from openflightcomputer.protocol import ProtocolError
 
 
-RECORD_FIELD_COUNT = 23
-TRACE_SCHEMA_VERSION = 1
+RECORD_FIELD_COUNT = 34
+TRACE_SCHEMA_VERSION = 2
+TRACE_FILE_VERSION = 1
 AXES = ("Roll", "Pitch", "Yaw")
 SYSTEM_STATES = ("BOOT", "INITIALIZING", "DISARMED", "ARMED", "FAILSAFE", "FAULT")
 CONTROL_SOURCES = ("NONE", "USB_TEST", "RECEIVER")
@@ -59,6 +62,12 @@ def _scaled_vector(value: Any, count: int, scale: int, name: str) -> tuple[float
     return tuple(item / scale for item in value)
 
 
+def _raw_vector(value: Any, count: int, name: str) -> tuple[int, ...]:
+    if not isinstance(value, list) or len(value) != count or any(type(item) is not int for item in value):
+        raise ProtocolError(f"control trace {name} must contain {count} integers")
+    return tuple(value)
+
+
 @dataclass(frozen=True)
 class ControlTraceRecord:
     sequence: int
@@ -84,6 +93,17 @@ class ControlTraceRecord:
     mixer_scale: float
     collective_shift: float
     mixer_saturated: bool
+    raw_acceleration: tuple[int, ...]
+    raw_gyroscope: tuple[int, ...]
+    unfiltered_acceleration: tuple[float, ...]
+    filtered_acceleration: tuple[float, ...]
+    acceleration_magnitude: tuple[float, ...]
+    unfiltered_accelerometer_attitude: tuple[float, ...]
+    filtered_accelerometer_attitude: tuple[float, ...]
+    corrected_gyroscope: tuple[float, ...]
+    filtered_gyroscope: tuple[float, ...]
+    gyro_predicted_attitude: tuple[float, ...]
+    accelerometer_weight: float
 
     @classmethod
     def from_wire(cls, value: Any, scale: int) -> "ControlTraceRecord":
@@ -116,6 +136,17 @@ class ControlTraceRecord:
             mixer_scale=_integer(value[20], "mixer scale", minimum=-0x80000000) / scale,
             collective_shift=_integer(value[21], "collective shift", minimum=-0x80000000) / scale,
             mixer_saturated=bool(value[22]),
+            raw_acceleration=_raw_vector(value[23], 3, "raw acceleration"),
+            raw_gyroscope=_raw_vector(value[24], 3, "raw gyroscope"),
+            unfiltered_acceleration=_scaled_vector(value[25], 3, scale, "unfiltered acceleration"),
+            filtered_acceleration=_scaled_vector(value[26], 3, scale, "filtered acceleration"),
+            acceleration_magnitude=_scaled_vector(value[27], 2, scale, "acceleration magnitude"),
+            unfiltered_accelerometer_attitude=_scaled_vector(value[28], 2, scale, "unfiltered accelerometer attitude"),
+            filtered_accelerometer_attitude=_scaled_vector(value[29], 2, scale, "filtered accelerometer attitude"),
+            corrected_gyroscope=_scaled_vector(value[30], 3, scale, "corrected gyroscope"),
+            filtered_gyroscope=_scaled_vector(value[31], 3, scale, "filtered gyroscope"),
+            gyro_predicted_attitude=_scaled_vector(value[32], 2, scale, "gyro-predicted attitude"),
+            accelerometer_weight=_integer(value[33], "accelerometer weight", minimum=-0x80000000) / scale,
         )
 
 
@@ -151,6 +182,46 @@ class ControlTraceBatch:
             pending_records=_integer(response.get("pending_records"), "pending records"),
             dropped_records=_integer(response.get("dropped_records"), "dropped records"),
             records=tuple(ControlTraceRecord.from_wire(record, scale) for record in wire_records),
+        )
+
+
+@dataclass(frozen=True)
+class ControlTraceMetadata:
+    trace_id: str
+    created_at: str
+    firmware_version: str
+    build_id: str
+    configuration_source: str
+    configuration_schema_version: int | None
+    configuration: dict[str, Any]
+    capture_id: int
+    capture_level: str
+    dropped_records: int
+
+    @classmethod
+    def create(
+        cls,
+        status: dict[str, Any],
+        configuration_response: dict[str, Any],
+        view: "ControlTraceView",
+    ) -> "ControlTraceMetadata":
+        configuration = configuration_response.get("configuration")
+        if not isinstance(configuration, dict):
+            configuration = {}
+        schema_version = configuration.get("schema_version")
+        if type(schema_version) is not int:
+            schema_version = None
+        return cls(
+            trace_id=uuid4().hex[:8],
+            created_at=datetime.now(timezone.utc).isoformat(),
+            firmware_version=str(status.get("firmware_version", "unknown")),
+            build_id=str(status.get("build_id", "unknown")),
+            configuration_source=str(configuration_response.get("source", "unknown")),
+            configuration_schema_version=schema_version,
+            configuration=configuration,
+            capture_id=view.capture_id,
+            capture_level=view.level,
+            dropped_records=view.dropped_records,
         )
 
 
@@ -198,6 +269,7 @@ class ControlTraceView:
         return Group(
             self._status_table(),
             Columns([self._attitude_panel(), self._motor_panel()], equal=True),
+            self._imu_pipeline_table(),
             self._rate_table(),
             "Move the flight computer and transmitter; press Ctrl-C to stop.",
         )
@@ -267,16 +339,96 @@ class ControlTraceView:
             )
         return table
 
+    def _imu_pipeline_table(self) -> Table:
+        table = Table(title="IMU processing pipeline")
+        for heading in ("Signal", "X / roll", "Y / pitch", "Z", "Magnitude / weight"):
+            table.add_column(heading, justify="right" if heading != "Signal" else "left")
+        if self.latest is None:
+            return table
+        record = self.latest
+        table.add_row(
+            "Raw counts",
+            str(record.raw_acceleration[0]), str(record.raw_acceleration[1]),
+            str(record.raw_acceleration[2]), "accelerometer",
+        )
+        table.add_row(
+            "Accel unfiltered (g)",
+            f"{record.unfiltered_acceleration[0]:+.3f}",
+            f"{record.unfiltered_acceleration[1]:+.3f}",
+            f"{record.unfiltered_acceleration[2]:+.3f}",
+            f"{record.acceleration_magnitude[0]:.3f} g",
+        )
+        table.add_row(
+            "Accel filtered (g)",
+            f"{record.filtered_acceleration[0]:+.3f}",
+            f"{record.filtered_acceleration[1]:+.3f}",
+            f"{record.filtered_acceleration[2]:+.3f}",
+            f"{record.acceleration_magnitude[1]:.3f} g",
+        )
+        table.add_row(
+            "Accel attitude (raw / filtered)",
+            f"{record.unfiltered_accelerometer_attitude[0]:+.1f}° / "
+            f"{record.filtered_accelerometer_attitude[0]:+.1f}°",
+            f"{record.unfiltered_accelerometer_attitude[1]:+.1f}° / "
+            f"{record.filtered_accelerometer_attitude[1]:+.1f}°",
+            "—", f"weight {record.accelerometer_weight:.3f}",
+        )
+        table.add_row(
+            "Gyro corrected / filtered (dps)",
+            f"{record.corrected_gyroscope[0]:+.1f} / {record.filtered_gyroscope[0]:+.1f}",
+            f"{record.corrected_gyroscope[1]:+.1f} / {record.filtered_gyroscope[1]:+.1f}",
+            f"{record.corrected_gyroscope[2]:+.1f} / {record.filtered_gyroscope[2]:+.1f}",
+            "—",
+        )
+        table.add_row(
+            "Gyro-predicted attitude",
+            f"{record.gyro_predicted_attitude[0]:+.1f}°",
+            f"{record.gyro_predicted_attitude[1]:+.1f}°",
+            "—", "before accel correction",
+        )
+        return table
 
-def export_trace(path: Path, records: list[ControlTraceRecord]) -> None:
+
+def _versioned_trace_path(path: Path, trace_id: str) -> Path:
+    suffix = path.suffix or ".json"
+    stem = path.stem if path.suffix else path.name
+    return path.with_name(
+        f"{stem}-v{TRACE_FILE_VERSION}-{trace_id}{suffix}"
+    )
+
+
+def export_trace(
+    path: Path,
+    records: list[ControlTraceRecord],
+    metadata: ControlTraceMetadata,
+) -> Path:
+    path = _versioned_trace_path(path, metadata.trace_id)
+    if path.exists():
+        raise FileExistsError(f"refusing to overwrite existing trace: {path}")
     rows = [asdict(record) for record in records]
     if path.suffix.lower() == ".csv":
         if not rows:
             path.write_text("", encoding="utf-8")
-            return
+            return path
+        common = {
+            "trace_file_version": TRACE_FILE_VERSION,
+            "trace_schema_version": TRACE_SCHEMA_VERSION,
+            **asdict(metadata),
+        }
         with path.open("w", encoding="utf-8", newline="") as output:
-            writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+            fieldnames = [*common.keys(), *rows[0].keys()]
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows({key: json.dumps(value) if isinstance(value, tuple) else value for key, value in row.items()} for row in rows)
-        return
-    path.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+            writer.writerows({
+                key: json.dumps(value) if isinstance(value, (dict, tuple)) else value
+                for key, value in {**common, **row}.items()
+            } for row in rows)
+        return path
+    document = {
+        "trace_file_version": TRACE_FILE_VERSION,
+        "trace_schema_version": TRACE_SCHEMA_VERSION,
+        "metadata": asdict(metadata),
+        "records": rows,
+    }
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    return path

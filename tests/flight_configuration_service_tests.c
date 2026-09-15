@@ -23,6 +23,8 @@ static receiver_failsafe_config_t applied_failsafe;
 static uint32_t motor_apply_count;
 static uint32_t freshness_apply_count;
 static uint32_t failsafe_apply_count;
+static bool external_arm_ready;
+static uint32_t external_arm_ready_count;
 static uint64_t now_us;
 
 motor_control_source_t motor_control_pending_source(void)
@@ -36,6 +38,13 @@ motor_control_configuration_apply_result_t motor_control_apply_configuration(
     motor_apply_count++;
     applied_motors = *configuration;
     return motor_apply_result;
+}
+
+bool motor_control_set_external_arm_ready(bool ready)
+{
+    external_arm_ready = ready;
+    external_arm_ready_count++;
+    return true;
 }
 
 bool receiver_service_update_freshness_config(
@@ -135,6 +144,7 @@ int main(void)
     receiver_failsafe_t failsafe = {0};
     receiver_service_t receiver_service = {.initialized = true};
     imu_processing_pipeline_t imu_processing_pipeline = {0};
+    level_calibration_t level_calibration = {0};
     flight_configuration_service_t service;
     flight_configuration_t configuration;
     flight_configuration_t read_back;
@@ -147,6 +157,7 @@ int main(void)
                &failsafe,
                &receiver_service,
                &imu_processing_pipeline,
+               &level_calibration,
                fake_clock) == FLIGHT_CONFIGURATION_SERVICE_OK);
     assert(storage.load_count == 1U);
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_DEFAULT);
@@ -154,6 +165,8 @@ int main(void)
     assert(service.prepared_control.initialized);
     assert(service.prepared_mixer.initialized);
     assert(service.rate_controller.initialized);
+    assert(level_calibration.initialized);
+    assert(level_calibration.state == LEVEL_CALIBRATION_UNCALIBRATED);
 
     configuration = service.active;
     configuration.propeller_layout = PROPELLER_LAYOUT_PROPS_OUT;
@@ -164,6 +177,9 @@ int main(void)
         .accelerometer_correction_time_constant_s = 0.75F;
     configuration.control.roll.curve.points[1].output = 0.25F;
     configuration.roll_attitude_controller.gain_per_s = 5.0F;
+    configuration.level_calibration.calibrated = true;
+    configuration.level_calibration.roll_trim_degrees = 2.0F;
+    configuration.level_calibration.pitch_trim_degrees = -1.0F;
     now_us = 123U;
     assert(flight_configuration_service_write(&service, &configuration) ==
            FLIGHT_CONFIGURATION_SERVICE_OK);
@@ -184,6 +200,11 @@ int main(void)
            0.5F);
     assert(service.prepared_mixer.coefficient[0][2] == -1.0F);
     assert(service.active.roll_attitude_controller.gain_per_s == 5.0F);
+    assert(level_calibration.state == LEVEL_CALIBRATION_READY);
+    assert(level_calibration.roll_trim_degrees == 2.0F);
+    assert(level_calibration.pitch_trim_degrees == -1.0F);
+    assert(external_arm_ready);
+    assert(external_arm_ready_count == 1U);
 
     state_machine.current = SYSTEM_STATE_ARMED;
     assert(flight_configuration_service_write(&service, &configuration) ==
@@ -206,6 +227,9 @@ int main(void)
     assert(imu_processing_pipeline.statistics.processed_sample_count == 0U);
     assert(service.prepared_control.roll.curve.segments[0].coefficient[1] ==
            0.7F);
+    assert(level_calibration.state == LEVEL_CALIBRATION_UNCALIBRATED);
+    assert(!external_arm_ready);
+    assert(external_arm_ready_count == 2U);
 
     assert(flight_configuration_service_read(
         &service, &read_back, &source));
@@ -231,6 +255,7 @@ int main(void)
                &failsafe,
                &receiver_service,
                &imu_processing_pipeline,
+               &level_calibration,
                fake_clock) == FLIGHT_CONFIGURATION_SERVICE_STORAGE_ERROR);
     return 0;
 }

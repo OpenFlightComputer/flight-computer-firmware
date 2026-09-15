@@ -10,9 +10,9 @@
 #define IMU_SPI_TRANSFER_TIMEOUT_MS UINT32_C(20)
 
 _Static_assert(
-    (FLIGHTCOMPUTER_V1_APB1_PERIPHERAL_CLOCK_FREQUENCY_HZ / 64U) ==
+    (FLIGHTCOMPUTER_V1_APB1_PERIPHERAL_CLOCK_FREQUENCY_HZ / 8U) ==
         FLIGHTCOMPUTER_V1_IMU_SPI_FREQUENCY_HZ,
-    "SPI3 prescaler must produce the tester-proven BMI270 clock");
+    "SPI3 prescaler must produce the selected BMI270 clock");
 
 typedef struct {
     SPI_HandleTypeDef handle;
@@ -60,7 +60,7 @@ static bool initialize(spi_device_t *device)
     context->handle.Init.CLKPolarity = SPI_POLARITY_LOW;
     context->handle.Init.CLKPhase = SPI_PHASE_1EDGE;
     context->handle.Init.NSS = SPI_NSS_SOFT;
-    context->handle.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+    context->handle.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
     context->handle.Init.FirstBit = SPI_FIRSTBIT_MSB;
     context->handle.Init.TIMode = SPI_TIMODE_DISABLE;
     context->handle.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;

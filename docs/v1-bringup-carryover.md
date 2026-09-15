@@ -55,8 +55,11 @@ all timestamped diagnostics.
 
 ### Phase 4 — sensors
 
-- BMI270: SPI3 on PB3/PB4/PB5 AF6, PD2 chip select, about 656.25 kHz from the
-  42 MHz APB1 clock with prescaler 64, mode 0, MSB first. Accepted configuration
+- BMI270: SPI3 on PB3/PB4/PB5 AF6, PD2 chip select, originally proven at about
+  656.25 kHz from the 42 MHz APB1 clock with prescaler 64, mode 0, MSB first.
+  The flight image now uses the same proven routing and mode at 5.25 MHz with
+  prescaler 8 after on-board task timing showed the bring-up clock consumed
+  nearly the entire 1 kHz budget. Accepted configuration
   was accelerometer 100 Hz, +/-2 g, normal averaging 4 and gyroscope 100 Hz,
   +/-2000 degrees/s. PB6/PC12 interrupt use remains to be designed.
 - BMP388: I2C2 on PB10/PB11 AF4 open-drain, address `0x76`, 100 kHz. Accepted

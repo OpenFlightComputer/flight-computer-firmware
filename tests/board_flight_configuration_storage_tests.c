@@ -6,7 +6,9 @@
 #include <stdint.h>
 #include <string.h>
 
-#define EXPECTED_PAYLOAD_LENGTH 488U
+#define EXPECTED_PAYLOAD_LENGTH 508U
+#define SCHEMA_EIGHT_PAYLOAD_LENGTH 500U
+#define SCHEMA_SEVEN_PAYLOAD_LENGTH 488U
 #define PREVIOUS_PAYLOAD_LENGTH 480U
 #define SCHEMA_FOUR_PAYLOAD_LENGTH 412U
 #define OLDER_PAYLOAD_LENGTH 96U
@@ -14,6 +16,8 @@
 #define EARLIEST_PAYLOAD_LENGTH 88U
 
 static board_persistent_storage_read_result_t read_result;
+static board_persistent_storage_read_result_t schema_eight_read_result;
+static board_persistent_storage_read_result_t schema_seven_read_result;
 static board_persistent_storage_read_result_t previous_read_result;
 static board_persistent_storage_read_result_t schema_four_read_result;
 static board_persistent_storage_read_result_t older_read_result;
@@ -23,6 +27,8 @@ static board_persistent_storage_read_result_t legacy_read_result;
 static board_persistent_storage_write_result_t write_result;
 static board_persistent_storage_clear_result_t clear_result;
 static uint8_t payload[EXPECTED_PAYLOAD_LENGTH];
+static uint8_t schema_eight_payload[SCHEMA_EIGHT_PAYLOAD_LENGTH];
+static uint8_t schema_seven_payload[SCHEMA_SEVEN_PAYLOAD_LENGTH];
 static uint8_t previous_payload[PREVIOUS_PAYLOAD_LENGTH];
 static uint8_t schema_four_payload[SCHEMA_FOUR_PAYLOAD_LENGTH];
 static uint8_t older_payload[OLDER_PAYLOAD_LENGTH];
@@ -43,6 +49,16 @@ board_persistent_storage_read_result_t board_persistent_storage_read(
             memcpy(destination, payload, length);
         }
         return read_result;
+    }
+    if ((length == sizeof(schema_seven_payload)) &&
+        (schema_seven_read_result == BOARD_PERSISTENT_STORAGE_READ_OK)) {
+        memcpy(destination, schema_seven_payload, length);
+        return schema_seven_read_result;
+    }
+    if ((length == sizeof(schema_eight_payload)) &&
+        (schema_eight_read_result == BOARD_PERSISTENT_STORAGE_READ_OK)) {
+        memcpy(destination, schema_eight_payload, length);
+        return schema_eight_read_result;
     }
     if ((length == sizeof(previous_payload)) &&
         (previous_read_result == BOARD_PERSISTENT_STORAGE_READ_OK)) {
@@ -68,6 +84,12 @@ board_persistent_storage_read_result_t board_persistent_storage_read(
         (earliest_read_result == BOARD_PERSISTENT_STORAGE_READ_OK)) {
         memcpy(destination, earliest_payload, length);
         return earliest_read_result;
+    }
+    if (length == sizeof(schema_seven_payload)) {
+        return schema_seven_read_result;
+    }
+    if (length == sizeof(schema_eight_payload)) {
+        return schema_eight_read_result;
     }
     if (length == sizeof(previous_payload)) {
         return previous_read_result;
@@ -116,6 +138,8 @@ int main(void)
     flight_configuration_t loaded;
 
     read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
+    schema_eight_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
+    schema_seven_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     previous_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     schema_four_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     older_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
@@ -134,6 +158,8 @@ int main(void)
     original.control.yaw.maximum_rate_dps = 140.0F;
     original.gyro_calibration.maximum_rate_dps = 4.0F;
     original.gyro_filter.cutoff_hz = 90.0F;
+    original.acceleration_filter.cutoff_hz = 25.0F;
+    original.rate_controller.integral_activation_throttle = 0.25F;
     assert(storage.save(storage.context, &original) ==
            FLIGHT_CONFIGURATION_SAVE_OK);
     assert(write_length == EXPECTED_PAYLOAD_LENGTH);
@@ -147,25 +173,53 @@ int main(void)
     assert(loaded.receiver_failsafe.stage_one_throttle == 0.05F);
     assert(loaded.gyro_calibration.maximum_rate_dps == 4.0F);
     assert(loaded.gyro_filter.cutoff_hz == 90.0F);
+    assert(loaded.acceleration_filter.cutoff_hz == 25.0F);
+    assert(loaded.rate_controller.integral_activation_throttle == 0.25F);
     assert(loaded.attitude_estimator.maximum_gap_us == 10000U);
     assert(loaded.control.roll.curve.point_count == 3U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.control.throttle.curve.point_count == 2U);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
 
-    /* Schema 6 used the same binary payload but exposed obsolete factors. */
+    /* Schema 8 occupied the first 500 bytes and receives schema 9 defaults. */
     {
-        const uint32_t schema_six = 6U;
+        const uint32_t prior_version = 7U;
+        const uint32_t schema_eight = 8U;
 
-        memcpy(payload + sizeof(uint32_t), &schema_six, sizeof(schema_six));
+        memcpy(schema_eight_payload, payload, sizeof(schema_eight_payload));
+        memcpy(schema_eight_payload, &prior_version, sizeof(prior_version));
+        memcpy(schema_eight_payload + sizeof(uint32_t), &schema_eight,
+               sizeof(schema_eight));
+        read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+        schema_eight_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 7U);
+        assert(loaded.schema_version == 9U);
+        assert(loaded.acceleration_filter.cutoff_hz == 20.0F);
+        assert(loaded.rate_controller.integral_activation_throttle == 0.2F);
+    }
+
+    /* Schemas 6 and 7 used the prior 488-byte binary payload. */
+    {
+        const uint32_t prior_version = 6U;
+        const uint32_t schema_six = 6U;
+
+        memcpy(schema_seven_payload, payload, sizeof(schema_seven_payload));
+        memcpy(schema_seven_payload, &prior_version, sizeof(prior_version));
+        memcpy(schema_seven_payload + sizeof(uint32_t), &schema_six,
+               sizeof(schema_six));
+        read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+        schema_eight_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+        schema_seven_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
+        assert(storage.load(storage.context, &loaded) ==
+               FLIGHT_CONFIGURATION_LOAD_OK);
+        assert(loaded.schema_version == 9U);
+        assert(!loaded.level_calibration.calibrated);
         assert(loaded.control.yaw.maximum_rate_dps == 140.0F);
     }
 
     /* Schema 5 occupied the unchanged 480-byte prefix of schema 6. */
-    memcpy(previous_payload, payload, sizeof(previous_payload));
+    memcpy(previous_payload, schema_seven_payload, sizeof(previous_payload));
     {
         const uint32_t previous_version = 5U;
         const uint32_t previous_schema = 5U;
@@ -175,10 +229,11 @@ int main(void)
                sizeof(previous_schema));
     }
     read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
+    schema_seven_read_result = BOARD_PERSISTENT_STORAGE_READ_ERROR;
     previous_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_OK);
-    assert(loaded.schema_version == 7U);
+    assert(loaded.schema_version == 9U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
     assert(loaded.roll_attitude_controller.gain_per_s == 4.0F);
@@ -199,7 +254,7 @@ int main(void)
     schema_four_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_OK);
-    assert(loaded.schema_version == 7U);
+    assert(loaded.schema_version == 9U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
     assert(loaded.roll_attitude_controller.gain_per_s == 4.0F);
@@ -243,7 +298,7 @@ int main(void)
         older_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 7U);
+        assert(loaded.schema_version == 9U);
         assert(loaded.gyro_filter.cutoff_hz == 90.0F);
         assert(loaded.control.throttle.maximum == 1.0F);
     }
@@ -282,7 +337,7 @@ int main(void)
         oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 7U);
+        assert(loaded.schema_version == 9U);
         assert(loaded.propeller_layout == PROPELLER_LAYOUT_PROPS_OUT);
         assert(loaded.motors.direction[1] == MOTOR_DIRECTION_REVERSED);
         assert(loaded.gyro_calibration.sample_duration_us == 600000U);
@@ -320,7 +375,7 @@ int main(void)
         earliest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 7U);
+        assert(loaded.schema_version == 9U);
         assert(loaded.gyro_filter.cutoff_hz == 80.0F);
     }
 
@@ -346,7 +401,7 @@ int main(void)
 
     legacy_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
-    payload[0] = 7U;
+    payload[0] = 99U;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_ERROR);
     assert(storage.clear(storage.context) == FLIGHT_CONFIGURATION_CLEAR_OK);

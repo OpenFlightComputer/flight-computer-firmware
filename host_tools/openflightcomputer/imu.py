@@ -11,7 +11,7 @@ from rich.table import Table
 from openflightcomputer.protocol import ProtocolError
 
 
-ACCELERATION_COUNTS_PER_G = 16384.0
+ACCELERATION_COUNTS_PER_G = 4096.0
 GYROSCOPE_COUNTS_PER_DEGREE_PER_SECOND = 16.384
 GYROSCOPE_DISPLAY_LIMIT_DPS = 250.0
 
@@ -63,6 +63,12 @@ class ImuSample:
     calibration_samples: int
     calibration_restarts: int
     calibration_bias_raw: tuple[int, int, int] | None
+    level_calibration_state: str
+    level_calibration_progress_permille: int
+    level_calibration_samples: int
+    level_calibrated: bool
+    level_roll_trim_degrees: float
+    level_pitch_trim_degrees: float
     attitude_roll_degrees: float | None
     attitude_pitch_degrees: float | None
     filtered_gyroscope_dps: tuple[float, float, float] | None
@@ -92,10 +98,18 @@ class ImuSample:
         service = _required_object(response, "service")
         high_rate = _required_object(response, "high_rate")
         calibration = _required_object(response, "calibration")
+        level_calibration = _required_object(response, "level_calibration")
         processing = _required_object(response, "processing")
         calibration_state = calibration.get("state")
         if calibration_state not in {"SETTLING", "COLLECTING", "READY"}:
             raise ProtocolError("IMU calibration state is invalid")
+        level_calibration_state = level_calibration.get("state")
+        if level_calibration_state not in {
+            "UNCALIBRATED", "READY", "COLLECTING", "SAVING",
+            "FAILED_INPUT", "FAILED_MOVEMENT", "FAILED_ACCELERATION",
+            "FAILED_VARIANCE", "FAILED_TRIM", "FAILED_STORAGE",
+        }:
+            raise ProtocolError("IMU level calibration state is invalid")
 
         sequence = age_us = None
         acceleration = gyroscope = corrected_gyroscope = calibration_bias = None
@@ -193,6 +207,22 @@ class ImuSample:
                 calibration, "restarts", minimum=0, maximum=0xFFFFFFFF
             ),
             calibration_bias_raw=calibration_bias,
+            level_calibration_state=level_calibration_state,
+            level_calibration_progress_permille=_required_int(
+                level_calibration, "progress_permille", minimum=0, maximum=1000
+            ),
+            level_calibration_samples=_required_int(
+                level_calibration, "samples", minimum=0, maximum=0xFFFFFFFF
+            ),
+            level_calibrated=_required_bool(level_calibration, "calibrated"),
+            level_roll_trim_degrees=_required_int(
+                level_calibration, "roll_trim_millidegrees",
+                minimum=-45000, maximum=45000,
+            ) / 1000.0,
+            level_pitch_trim_degrees=_required_int(
+                level_calibration, "pitch_trim_millidegrees",
+                minimum=-45000, maximum=45000,
+            ) / 1000.0,
             attitude_roll_degrees=attitude_roll,
             attitude_pitch_degrees=attitude_pitch,
             filtered_gyroscope_dps=filtered_gyroscope,
@@ -320,6 +350,19 @@ class ImuView:
             "Gyro bias X / Y / Z",
             " / ".join(f"{value:+.3f} °/s" for value in sample.calibration_bias_dps)
             if sample and sample.calibration_bias_dps else "—",
+        )
+        table.add_row(
+            "Level calibration",
+            (f"{sample.level_calibration_state} "
+             f"({sample.level_calibration_progress_permille / 10:.1f}%, "
+             f"{sample.level_calibration_samples} samples)")
+            if sample else "—",
+        )
+        table.add_row(
+            "Persisted roll / pitch trim",
+            (f"{sample.level_roll_trim_degrees:+.3f}° / "
+             f"{sample.level_pitch_trim_degrees:+.3f}°")
+            if sample and sample.level_calibrated else "Not calibrated",
         )
         table.add_row(
             "Estimated roll / pitch",

@@ -1,6 +1,7 @@
 #include "flight_configuration.h"
 
 #include "flight_configuration_defaults.h"
+#include "acceleration_filter.h"
 #include "attitude_estimator.h"
 #include "gyro_filter.h"
 
@@ -83,6 +84,8 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
         .rate_controller = {
             .type = OFC_DEFAULT_RATE_CONTROLLER_TYPE,
             .maximum_gap_us = OFC_DEFAULT_RATE_CONTROLLER_MAXIMUM_GAP_US,
+            .integral_activation_throttle =
+                OFC_DEFAULT_RATE_CONTROLLER_INTEGRAL_ACTIVATION_THROTTLE,
             .axis = {
                 {
                     .kp = OFC_DEFAULT_RATE_PID_ROLL_KP,
@@ -137,9 +140,25 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
             .maximum_standard_deviation_dps =
                 OFC_DEFAULT_GYRO_CALIBRATION_MAXIMUM_STANDARD_DEVIATION_DPS,
         },
+        .level_calibration = {
+            .sample_duration_us = OFC_DEFAULT_LEVEL_SAMPLE_DURATION_US,
+            .maximum_acceleration_standard_deviation_g =
+                OFC_DEFAULT_LEVEL_MAXIMUM_ACCELERATION_STANDARD_DEVIATION_G,
+            .maximum_acceleration_magnitude_error_g =
+                OFC_DEFAULT_LEVEL_MAXIMUM_ACCELERATION_MAGNITUDE_ERROR_G,
+            .maximum_trim_degrees =
+                OFC_DEFAULT_LEVEL_MAXIMUM_TRIM_DEGREES,
+            .roll_trim_degrees = OFC_DEFAULT_LEVEL_ROLL_TRIM_DEGREES,
+            .pitch_trim_degrees = OFC_DEFAULT_LEVEL_PITCH_TRIM_DEGREES,
+            .calibrated = OFC_DEFAULT_LEVEL_CALIBRATED,
+        },
         .gyro_filter = {
             .type = OFC_DEFAULT_GYRO_FILTER_TYPE,
             .cutoff_hz = OFC_DEFAULT_GYRO_FILTER_CUTOFF_HZ,
+        },
+        .acceleration_filter = {
+            .type = OFC_DEFAULT_ACCELERATION_FILTER_TYPE,
+            .cutoff_hz = OFC_DEFAULT_ACCELERATION_FILTER_CUTOFF_HZ,
         },
         .attitude_estimator = {
             .type = OFC_DEFAULT_ATTITUDE_ESTIMATOR_TYPE,
@@ -199,12 +218,46 @@ bool flight_configuration_is_valid(
                 .maximum_standard_deviation_dps > 0.0F) &&
            (configuration->gyro_calibration
                 .maximum_standard_deviation_dps <= 2000.0F) &&
+           (configuration->level_calibration.sample_duration_us > 0U) &&
+           (configuration->level_calibration.sample_duration_us <=
+            UINT64_C(10000000)) &&
+           (configuration->level_calibration
+                .maximum_acceleration_standard_deviation_g > 0.0F) &&
+           (configuration->level_calibration
+                .maximum_acceleration_standard_deviation_g <= 1.0F) &&
+           (configuration->level_calibration
+                .maximum_acceleration_magnitude_error_g > 0.0F) &&
+           (configuration->level_calibration
+                .maximum_acceleration_magnitude_error_g <= 1.0F) &&
+           (configuration->level_calibration.maximum_trim_degrees > 0.0F) &&
+           (configuration->level_calibration.maximum_trim_degrees <= 45.0F) &&
+           (configuration->level_calibration.roll_trim_degrees >= -45.0F) &&
+           (configuration->level_calibration.roll_trim_degrees <= 45.0F) &&
+           (configuration->level_calibration.pitch_trim_degrees >= -45.0F) &&
+           (configuration->level_calibration.pitch_trim_degrees <= 45.0F) &&
+           (!configuration->level_calibration.calibrated ||
+            ((configuration->level_calibration.roll_trim_degrees >=
+              -configuration->level_calibration.maximum_trim_degrees) &&
+             (configuration->level_calibration.roll_trim_degrees <=
+              configuration->level_calibration.maximum_trim_degrees) &&
+             (configuration->level_calibration.pitch_trim_degrees >=
+              -configuration->level_calibration.maximum_trim_degrees) &&
+             (configuration->level_calibration.pitch_trim_degrees <=
+              configuration->level_calibration.maximum_trim_degrees))) &&
            (configuration->gyro_filter.type ==
             FLIGHT_GYRO_FILTER_FIRST_ORDER_LOW_PASS) &&
            gyro_filter_config_is_valid(&(gyro_filter_config_t){
                .type = GYRO_FILTER_FIRST_ORDER_LOW_PASS,
                .cutoff_hz = configuration->gyro_filter.cutoff_hz,
            }) &&
+           (configuration->acceleration_filter.type ==
+            FLIGHT_ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS) &&
+           acceleration_filter_config_is_valid(
+               &(acceleration_filter_config_t){
+                   .type = ACCELERATION_FILTER_FIRST_ORDER_LOW_PASS,
+                   .cutoff_hz =
+                       configuration->acceleration_filter.cutoff_hz,
+               }) &&
            (configuration->attitude_estimator.type ==
             FLIGHT_ATTITUDE_ESTIMATOR_COMPLEMENTARY) &&
            attitude_estimator_config_is_valid(

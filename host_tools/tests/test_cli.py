@@ -18,6 +18,7 @@ from openflightcomputer.cli import build_parser
         ["device", "receiver"],
         ["device", "receiver", "--watch", "--interval", "0.2"],
         ["device", "imu"],
+        ["device", "imu", "calibrate-level"],
         ["device", "imu", "--watch", "--interval", "0.2"],
         ["device", "control"],
         ["device", "control", "--watch", "--level", "full", "--output", "trace.csv"],
@@ -27,6 +28,11 @@ from openflightcomputer.cli import build_parser
         ["config", "read", "--output", "quad.json"],
         ["config", "write", "config/default-flight-configuration.json"],
         ["config", "reset"],
+        ["storage", "status"],
+        ["storage", "initialize", "--yes"],
+        ["flight-log", "list"],
+        ["flight-log", "download", "latest"],
+        ["flight-log", "decode", "config/default-flight-configuration.json"],
         ["smoke", "--no-flash"],
     ],
 )
@@ -80,6 +86,61 @@ def test_device_arm_waits_for_pending_direction_preparation(
     response = json.loads(capsys.readouterr().out)
     assert response["state"] == "ARMED"
     assert response["pending"] is False
+
+
+def test_level_calibration_command_starts_polls_and_reports_saved(
+    monkeypatch, capsys
+):
+    requests = []
+    states = iter(("COLLECTING", "READY"))
+
+    class FakeConnectionContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exception_type, exception, traceback):
+            return False
+
+    class FakeClient:
+        def __init__(self, connection):
+            assert connection is not None
+
+        def request(self, command, **options):
+            requests.append(command)
+            if command == "imu_level_calibration_start":
+                return {"type": "response", "command": command, "ok": True}
+            return {"level_state": next(states)}
+
+    class FakeView:
+        def __init__(self):
+            self.sample = None
+
+        def update(self, response):
+            self.sample = SimpleNamespace(
+                level_calibration_state=response["level_state"]
+            )
+
+        def render(self):
+            return "calibrated"
+
+    monkeypatch.setattr(cli, "wait_for_flight_port", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        cli,
+        "UsbCdcConnection",
+        SimpleNamespace(open=lambda port: FakeConnectionContext()),
+    )
+    monkeypatch.setattr(cli, "JsonProtocolClient", FakeClient)
+    monkeypatch.setattr(cli, "ImuView", FakeView)
+    monkeypatch.setattr(cli.time, "sleep", lambda duration: None)
+
+    assert cli._device_imu(SimpleNamespace(
+        port=None, timeout=1.0, interval=0.1,
+        imu_action="calibrate-level", watch=False,
+    )) == 0
+    assert requests == [
+        "imu_level_calibration_start", "imu", "imu",
+    ]
+    assert "Level calibration saved." in capsys.readouterr().out
 
 
 def test_configuration_read_can_export_portable_json(
@@ -179,6 +240,7 @@ def test_configuration_write_sends_file_as_one_document(
 
 def test_control_watch_starts_reads_and_stops_trace(monkeypatch):
     requests = []
+    exports = []
 
     class FakeConnectionContext:
         def __enter__(self):
@@ -196,7 +258,7 @@ def test_control_watch_starts_reads_and_stops_trace(monkeypatch):
             if command == "control_trace_read":
                 return {
                     "type": "response", "command": command,
-                    "schema_version": 1, "capture_id": 1, "level": "OFF",
+                        "schema_version": 2, "capture_id": 1, "level": "OFF",
                     "capturing": False, "pending_records": 0,
                     "dropped_records": 0, "scale": 1000, "records": [],
                 }
@@ -225,6 +287,13 @@ def test_control_watch_starts_reads_and_stops_trace(monkeypatch):
     )
     monkeypatch.setattr(cli, "JsonProtocolClient", FakeClient)
     monkeypatch.setattr(cli, "Live", FakeLive)
+    monkeypatch.setattr(
+        cli,
+        "export_trace",
+        lambda path, records, metadata: exports.append(
+            (path, list(records), metadata)
+        ) or path,
+    )
 
     result = cli._device_control(SimpleNamespace(
         port=None, timeout=1.0, watch=True, level="high", interval=0.1,
@@ -232,7 +301,89 @@ def test_control_watch_starts_reads_and_stops_trace(monkeypatch):
     ))
     assert result == 0
     assert requests == [
+        ("status", None),
+        ("config_read", None),
         ("control_trace_start", {"level": "HIGH_RATE"}),
         ("control_trace_read", None),
         ("control_trace_stop", None),
+        ("control_trace_read", None),
     ]
+    assert len(exports) == 1
+    assert str(exports[0][0]) == "control-trace.json"
+
+
+def test_control_watch_ctrl_c_stops_drains_and_exports(monkeypatch):
+    requests = []
+    exports = []
+    trace_reads = 0
+
+    class FakeConnectionContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exception_type, exception, traceback):
+            return False
+
+    class FakeClient:
+        def __init__(self, connection):
+            assert connection is not None
+
+        def request(self, command, **options):
+            nonlocal trace_reads
+            requests.append((command, options.get("parameters")))
+            if command != "control_trace_read":
+                return {"type": "response", "command": command, "ok": True}
+            trace_reads += 1
+            if trace_reads == 2:
+                raise KeyboardInterrupt
+            return {
+                "type": "response", "command": command,
+                "schema_version": 2, "capture_id": 7,
+                "level": "HIGH_RATE" if trace_reads == 1 else "OFF",
+                "capturing": trace_reads == 1,
+                "pending_records": 0,
+                "dropped_records": 0, "scale": 1000, "records": [],
+            }
+
+    class FakeLive:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exception_type, exception, traceback):
+            return False
+
+        def update(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(
+        cli, "wait_for_flight_port",
+        lambda *args, **kwargs: SimpleNamespace(device="test-port"),
+    )
+    monkeypatch.setattr(
+        cli, "UsbCdcConnection",
+        SimpleNamespace(open=lambda port: FakeConnectionContext()),
+    )
+    monkeypatch.setattr(cli, "JsonProtocolClient", FakeClient)
+    monkeypatch.setattr(cli, "Live", FakeLive)
+    monkeypatch.setattr(cli.time, "sleep", lambda interval: None)
+    monkeypatch.setattr(
+        cli,
+        "export_trace",
+        lambda path, records, metadata: exports.append(
+            (path, list(records), metadata)
+        ) or path,
+    )
+
+    result = cli._device_control(SimpleNamespace(
+        port=None, timeout=1.0, watch=True, level="high", interval=0.1,
+        output=None,
+    ))
+
+    assert result == 130
+    assert ("control_trace_stop", None) in requests
+    assert trace_reads == 3
+    assert len(exports) == 1
+    assert str(exports[0][0]) == "control-trace.json"

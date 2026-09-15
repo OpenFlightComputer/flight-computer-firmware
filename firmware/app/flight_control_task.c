@@ -1,7 +1,7 @@
 #include "application_task_definitions.h"
 
 #include "application_state.h"
-#include "control_trace_recorder.h"
+#include "flight_diagnostics.h"
 #include "fault_catalog.h"
 #include "flight_control.h"
 #include "logging.h"
@@ -207,17 +207,13 @@ static task_callback_result_t run_flight_control_task(void *context)
 
     if (decision.recovery_ready) {
         result = recover_receiver_control();
-        firmware_flight_control_submit_last_result = (uint32_t)result;
-        control_trace_recorder_record(
-            now_us, &decision, &attitude, &output, result);
-        return TASK_CALLBACK_CONTINUE;
+    } else {
+        stabilization = read_stabilization_inputs(&attitude, &imu_state);
+        result = execute_receiver_control(
+            &decision, &stabilization, &output, now_us);
     }
-
-    stabilization = read_stabilization_inputs(&attitude, &imu_state);
-    result = execute_receiver_control(
-        &decision, &stabilization, &output, now_us);
     firmware_flight_control_submit_last_result = (uint32_t)result;
-    control_trace_recorder_record(
+    flight_diagnostics_capture(
         now_us, &decision, &attitude, &output, result);
     return TASK_CALLBACK_CONTINUE;
 }

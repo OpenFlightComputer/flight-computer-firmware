@@ -24,6 +24,44 @@ static float clamp_throttle(float value)
     return value;
 }
 
+static bool corrections_are_valid(const float correction[3])
+{
+    size_t axis;
+
+    if (correction == NULL) {
+        return false;
+    }
+    for (axis = 0U; axis < 3U; axis++) {
+        if (!correction_is_valid(correction[axis])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static float correction_scale_for_headroom(float throttle,
+                                           float minimum_delta,
+                                           float maximum_delta)
+{
+    float scale = 1.0F;
+
+    if (minimum_delta < 0.0F) {
+        const float lower_scale = throttle / -minimum_delta;
+
+        if (lower_scale < scale) {
+            scale = lower_scale;
+        }
+    }
+    if (maximum_delta > 0.0F) {
+        const float upper_scale = (1.0F - throttle) / maximum_delta;
+
+        if (upper_scale < scale) {
+            scale = upper_scale;
+        }
+    }
+    return scale;
+}
+
 bool quad_x_mixer_prepare(propeller_layout_t layout,
                           prepared_quad_x_mixer_t *prepared)
 {
@@ -55,10 +93,7 @@ bool quad_x_mixer_apply_prepared(const prepared_quad_x_mixer_t *prepared,
     float delta[MOTOR_COMMAND_MOTOR_COUNT];
     float minimum_delta;
     float maximum_delta;
-    float minimum;
-    float maximum;
     float scale = 1.0F;
-    float shift = 0.0F;
     size_t motor;
     size_t axis;
 
@@ -72,12 +107,12 @@ bool quad_x_mixer_apply_prepared(const prepared_quad_x_mixer_t *prepared,
         return motor_command_create(&output->command, throttles,
                                     timestamp_us) == MOTOR_COMMAND_CREATE_OK;
     }
+    if (!corrections_are_valid(correction)) {
+        return false;
+    }
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         delta[motor] = 0.0F;
         for (axis = 0U; axis < 3U; axis++) {
-            if (!correction_is_valid(correction[axis])) {
-                return false;
-            }
             delta[motor] += correction[axis] *
                             prepared->coefficient[motor][axis];
         }
@@ -92,34 +127,14 @@ bool quad_x_mixer_apply_prepared(const prepared_quad_x_mixer_t *prepared,
             maximum_delta = delta[motor];
         }
     }
-    if ((maximum_delta - minimum_delta) > 1.0F) {
-        scale = 1.0F / (maximum_delta - minimum_delta);
-        for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
-            delta[motor] *= scale;
-        }
-    }
-    minimum = throttle + delta[0];
-    maximum = minimum;
-    for (motor = 1U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
-        const float value = throttle + delta[motor];
-        if (value < minimum) {
-            minimum = value;
-        }
-        if (value > maximum) {
-            maximum = value;
-        }
-    }
-    if (minimum < 0.0F) {
-        shift = -minimum;
-    } else if (maximum > 1.0F) {
-        shift = 1.0F - maximum;
-    }
+    scale = correction_scale_for_headroom(
+        throttle, minimum_delta, maximum_delta);
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
-        throttles[motor] = clamp_throttle(throttle + delta[motor] + shift);
+        throttles[motor] = clamp_throttle(throttle + (delta[motor] * scale));
     }
     output->correction_scale = scale;
-    output->collective_shift = shift;
-    output->saturated = (scale < 1.0F) || (shift != 0.0F);
+    output->collective_shift = 0.0F;
+    output->saturated = scale < 1.0F;
     return motor_command_create(&output->command, throttles, timestamp_us) ==
            MOTOR_COMMAND_CREATE_OK;
 }

@@ -69,7 +69,7 @@ static void available_snapshot_is_complete(void)
             .continuity_reset_count = 4U,
         },
     };
-    char response[1536];
+    char response[2048];
     size_t length;
 
     assert(usb_imu_response_build(&diagnostics, 42U, response,

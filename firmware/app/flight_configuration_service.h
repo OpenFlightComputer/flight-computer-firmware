@@ -4,6 +4,7 @@
 #include "flight_configuration_storage.h"
 #include "control_input_shaping.h"
 #include "imu_processing_pipeline.h"
+#include "level_calibration.h"
 #include "receiver_failsafe.h"
 #include "receiver_service.h"
 #include "system_state.h"
@@ -33,6 +34,7 @@ typedef struct {
     receiver_failsafe_t *receiver_failsafe;
     receiver_service_t *receiver_service;
     imu_processing_pipeline_t *imu_processing_pipeline;
+    level_calibration_t *level_calibration;
     rate_controller_t rate_controller;
     prepared_control_input_shaping_t prepared_control;
     prepared_quad_x_mixer_t prepared_mixer;
@@ -48,6 +50,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
     receiver_failsafe_t *receiver_failsafe,
     receiver_service_t *receiver_service,
     imu_processing_pipeline_t *imu_processing_pipeline,
+    level_calibration_t *level_calibration,
     flight_configuration_clock_t clock);
 flight_configuration_service_result_t flight_configuration_service_write(
     flight_configuration_service_t *service,

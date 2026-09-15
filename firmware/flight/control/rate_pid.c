@@ -52,6 +52,13 @@ void rate_pid_reset(rate_pid_t *pid)
     pid->measurement_seeded = false;
 }
 
+void rate_pid_clear_integral(rate_pid_t *pid)
+{
+    if ((pid != NULL) && pid->initialized) {
+        pid->integral = 0.0F;
+    }
+}
+
 bool rate_pid_seed_measurement(rate_pid_t *pid, float measurement)
 {
     if ((pid == NULL) || !pid->initialized || !isfinite(measurement)) {
@@ -66,6 +73,7 @@ bool rate_pid_update(rate_pid_t *pid,
                      float desired_rate,
                      float measured_rate,
                      float dt_seconds,
+                     bool integration_enabled,
                      rate_pid_output_t *output)
 {
     float error;
@@ -92,9 +100,11 @@ bool rate_pid_update(rate_pid_t *pid,
         !isfinite(output->derivative)) {
         return false;
     }
-    candidate_integral = clamp(pid->integral +
-                                   (pid->config.ki * error * dt_seconds),
-                               pid->config.integral_limit);
+    candidate_integral = integration_enabled
+                             ? clamp(pid->integral +
+                                         (pid->config.ki * error * dt_seconds),
+                                     pid->config.integral_limit)
+                             : pid->integral;
     candidate_total = output->proportional + candidate_integral +
                       output->derivative;
     if (!isfinite(candidate_integral) || !isfinite(candidate_total)) {
@@ -103,7 +113,7 @@ bool rate_pid_update(rate_pid_t *pid,
     drives_further_into_saturation =
         ((candidate_total > pid->config.output_limit) && (error > 0.0F)) ||
         ((candidate_total < -pid->config.output_limit) && (error < 0.0F));
-    if (!drives_further_into_saturation) {
+    if (integration_enabled && !drives_further_into_saturation) {
         pid->integral = candidate_integral;
     }
     output->integral = pid->integral;

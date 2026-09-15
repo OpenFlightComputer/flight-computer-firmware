@@ -6,7 +6,9 @@
 #include <stdint.h>
 #include <string.h>
 
-#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(6)
+#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(8)
+#define SCHEMA_EIGHT_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(7)
+#define SCHEMA_SEVEN_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(6)
 #define PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(5)
 #define SCHEMA_FOUR_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(4)
 #define OLDER_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(3)
@@ -26,7 +28,7 @@ typedef struct {
     uint32_t version;
     uint32_t schema_version;
     uint32_t timing_us[5];
-    float reserved_mixer_factors[3];
+    float level_thresholds[3];
     float failsafe_controls[5];
     uint32_t gyro_timing_us[2];
     float gyro_thresholds_dps[2];
@@ -36,16 +38,33 @@ typedef struct {
     uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
     uint8_t gyro_filter_type;
     uint8_t attitude_estimator_type;
-    uint8_t reserved[1];
+    uint8_t level_calibrated;
     float control_axis_parameters[3][3];
     float throttle_parameters[2];
     control_curve_payload_t control_curves[4];
     uint32_t rate_controller_maximum_gap_us;
     uint8_t rate_controller_type;
-    uint8_t rate_controller_reserved[3];
+    uint8_t acceleration_filter_type;
+    uint8_t rate_controller_reserved[2];
     float rate_pid_parameters[RATE_CONTROLLER_AXIS_COUNT][5];
     float attitude_angle_gain_per_s[2];
+    uint32_t level_sample_duration_us;
+    float level_trim_degrees[2];
+    float acceleration_filter_cutoff_hz;
+    float integral_activation_throttle;
 } flight_configuration_payload_t;
+
+typedef struct {
+    uint32_t version;
+    uint32_t schema_version;
+    uint8_t remaining_payload[492];
+} schema_eight_flight_configuration_payload_t;
+
+typedef struct {
+    uint32_t version;
+    uint32_t schema_version;
+    uint8_t remaining_payload[480];
+} schema_seven_flight_configuration_payload_t;
 
 typedef struct {
     uint32_t version;
@@ -137,13 +156,20 @@ typedef struct {
     uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
 } legacy_motor_configuration_payload_t;
 
-_Static_assert(sizeof(flight_configuration_payload_t) == 488U,
+_Static_assert(sizeof(flight_configuration_payload_t) == 508U,
                "Flight configuration payload format changed");
+_Static_assert(sizeof(schema_eight_flight_configuration_payload_t) == 500U,
+               "Schema 8 flight configuration payload format changed");
+_Static_assert(sizeof(schema_seven_flight_configuration_payload_t) == 488U,
+               "Schema 7 flight configuration payload format changed");
 _Static_assert(sizeof(previous_flight_configuration_payload_t) == 480U,
                "Previous flight configuration payload format changed");
 _Static_assert(offsetof(flight_configuration_payload_t,
                         attitude_angle_gain_per_s) == 480U,
                "Schema 5 payload is no longer a schema 6 prefix");
+_Static_assert(offsetof(flight_configuration_payload_t,
+                        level_sample_duration_us) == 488U,
+               "Schema 7 payload is no longer a schema 8 prefix");
 _Static_assert(sizeof(schema_four_flight_configuration_payload_t) == 412U,
                "Schema 4 flight configuration payload format changed");
 _Static_assert(sizeof(older_flight_configuration_payload_t) == 96U,
@@ -183,6 +209,13 @@ static void encode(const flight_configuration_t *configuration,
             configuration->receiver_failsafe.stage_one_throttle,
             configuration->receiver_failsafe.recovery_throttle_maximum,
         },
+        .level_thresholds = {
+            configuration->level_calibration
+                .maximum_acceleration_standard_deviation_g,
+            configuration->level_calibration
+                .maximum_acceleration_magnitude_error_g,
+            configuration->level_calibration.maximum_trim_degrees,
+        },
         .propeller_layout = (uint8_t)configuration->propeller_layout,
         .gyro_timing_us = {
             (uint32_t)configuration->gyro_calibration.settling_duration_us,
@@ -202,6 +235,9 @@ static void encode(const flight_configuration_t *configuration,
         .gyro_filter_type = (uint8_t)configuration->gyro_filter.type,
         .attitude_estimator_type =
             (uint8_t)configuration->attitude_estimator.type,
+        .level_calibrated = configuration->level_calibration.calibrated
+                                ? UINT8_C(1)
+                                : UINT8_C(0),
         .control_axis_parameters = {
             {configuration->control.roll.deadband,
              configuration->control.roll.maximum_angle_degrees,
@@ -221,10 +257,22 @@ static void encode(const flight_configuration_t *configuration,
             configuration->rate_controller.maximum_gap_us,
         .rate_controller_type =
             (uint8_t)configuration->rate_controller.type,
+        .acceleration_filter_type =
+            (uint8_t)configuration->acceleration_filter.type,
         .attitude_angle_gain_per_s = {
             configuration->roll_attitude_controller.gain_per_s,
             configuration->pitch_attitude_controller.gain_per_s,
         },
+        .level_sample_duration_us =
+            (uint32_t)configuration->level_calibration.sample_duration_us,
+        .level_trim_degrees = {
+            configuration->level_calibration.roll_trim_degrees,
+            configuration->level_calibration.pitch_trim_degrees,
+        },
+        .acceleration_filter_cutoff_hz =
+            configuration->acceleration_filter.cutoff_hz,
+        .integral_activation_throttle =
+            configuration->rate_controller.integral_activation_throttle,
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         payload->directions[motor] =
@@ -256,6 +304,25 @@ static void encode(const flight_configuration_t *configuration,
     }
 }
 
+bool board_flight_configuration_snapshot_encode(
+    const flight_configuration_t *configuration,
+    uint8_t *destination,
+    size_t capacity,
+    size_t *length)
+{
+    flight_configuration_payload_t payload;
+
+    if ((configuration == NULL) || (destination == NULL) ||
+        (capacity < sizeof(payload)) || (length == NULL) ||
+        !flight_configuration_is_valid(configuration)) {
+        return false;
+    }
+    encode(configuration, &payload);
+    memcpy(destination, &payload, sizeof(payload));
+    *length = sizeof(payload);
+    return true;
+}
+
 static bool decode(const flight_configuration_payload_t *payload,
                    flight_configuration_t *configuration)
 {
@@ -266,8 +333,7 @@ static bool decode(const flight_configuration_payload_t *payload,
     size_t motor;
 
     if ((payload->version != FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
-        ((payload->schema_version != 6U) &&
-         (payload->schema_version != 7U))) {
+        (payload->schema_version != 9U)) {
         return false;
     }
     flight_configuration_defaults(&defaults);
@@ -293,9 +359,25 @@ static bool decode(const flight_configuration_payload_t *payload,
             .maximum_standard_deviation_dps =
                 payload->gyro_thresholds_dps[1],
         },
+        .level_calibration = {
+            .sample_duration_us = payload->level_sample_duration_us,
+            .maximum_acceleration_standard_deviation_g =
+                payload->level_thresholds[0],
+            .maximum_acceleration_magnitude_error_g =
+                payload->level_thresholds[1],
+            .maximum_trim_degrees = payload->level_thresholds[2],
+            .roll_trim_degrees = payload->level_trim_degrees[0],
+            .pitch_trim_degrees = payload->level_trim_degrees[1],
+            .calibrated = payload->level_calibrated != 0U,
+        },
         .gyro_filter = {
             .type = (flight_gyro_filter_type_t)payload->gyro_filter_type,
             .cutoff_hz = payload->processing_parameters[0],
+        },
+        .acceleration_filter = {
+            .type = (flight_acceleration_filter_type_t)
+                payload->acceleration_filter_type,
+            .cutoff_hz = payload->acceleration_filter_cutoff_hz,
         },
         .attitude_estimator = {
             .type = (flight_attitude_estimator_type_t)
@@ -331,6 +413,8 @@ static bool decode(const flight_configuration_payload_t *payload,
         .rate_controller = {
             .type = (rate_controller_type_t)payload->rate_controller_type,
             .maximum_gap_us = payload->rate_controller_maximum_gap_us,
+            .integral_activation_throttle =
+                payload->integral_activation_throttle,
         },
         .roll_attitude_controller = {
             .gain_per_s = payload->attitude_angle_gain_per_s[0],
@@ -376,25 +460,91 @@ static bool decode(const flight_configuration_payload_t *payload,
     return flight_configuration_is_valid(configuration);
 }
 
+static bool decode_schema_eight(
+    const schema_eight_flight_configuration_payload_t *payload,
+    flight_configuration_t *configuration)
+{
+    flight_configuration_payload_t upgraded = {0};
+    flight_configuration_t defaults;
+
+    if ((payload->version !=
+         SCHEMA_EIGHT_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+        (payload->schema_version != 8U)) {
+        return false;
+    }
+    flight_configuration_defaults(&defaults);
+    (void)memcpy(&upgraded, payload, sizeof(*payload));
+    upgraded.version = FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
+    upgraded.schema_version = defaults.schema_version;
+    upgraded.acceleration_filter_cutoff_hz =
+        defaults.acceleration_filter.cutoff_hz;
+    upgraded.integral_activation_throttle =
+        defaults.rate_controller.integral_activation_throttle;
+    return decode(&upgraded, configuration);
+}
+
+static bool decode_schema_seven(
+    const schema_seven_flight_configuration_payload_t *payload,
+    flight_configuration_t *configuration);
+
 static bool decode_previous(
     const previous_flight_configuration_payload_t *payload,
     flight_configuration_t *configuration)
 {
-    flight_configuration_payload_t upgraded;
+    schema_seven_flight_configuration_payload_t upgraded;
+    float attitude_angle_gain_per_s[2];
     flight_configuration_t defaults;
     if ((payload->version != PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
         (payload->schema_version != 5U)) {
         return false;
     }
     flight_configuration_defaults(&defaults);
-    upgraded = (flight_configuration_payload_t){0};
+    upgraded = (schema_seven_flight_configuration_payload_t){0};
+    (void)memcpy(&upgraded, payload, sizeof(*payload));
+    upgraded.version = SCHEMA_SEVEN_FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
+    upgraded.schema_version = 7U;
+    attitude_angle_gain_per_s[0] =
+        defaults.roll_attitude_controller.gain_per_s;
+    attitude_angle_gain_per_s[1] =
+        defaults.pitch_attitude_controller.gain_per_s;
+    (void)memcpy(&upgraded.remaining_payload[472],
+                 attitude_angle_gain_per_s,
+                 sizeof(attitude_angle_gain_per_s));
+    return decode_schema_seven(&upgraded, configuration);
+}
+
+static bool decode_schema_seven(
+    const schema_seven_flight_configuration_payload_t *payload,
+    flight_configuration_t *configuration)
+{
+    flight_configuration_payload_t upgraded = {0};
+    flight_configuration_t defaults;
+
+    if ((payload->version !=
+         SCHEMA_SEVEN_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+        ((payload->schema_version != 6U) &&
+         (payload->schema_version != 7U))) {
+        return false;
+    }
+    flight_configuration_defaults(&defaults);
     (void)memcpy(&upgraded, payload, sizeof(*payload));
     upgraded.version = FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
     upgraded.schema_version = defaults.schema_version;
-    upgraded.attitude_angle_gain_per_s[0] =
-        defaults.roll_attitude_controller.gain_per_s;
-    upgraded.attitude_angle_gain_per_s[1] =
-        defaults.pitch_attitude_controller.gain_per_s;
+    upgraded.level_thresholds[0] = defaults.level_calibration
+                                       .maximum_acceleration_standard_deviation_g;
+    upgraded.level_thresholds[1] = defaults.level_calibration
+                                       .maximum_acceleration_magnitude_error_g;
+    upgraded.level_thresholds[2] =
+        defaults.level_calibration.maximum_trim_degrees;
+    upgraded.level_calibrated = UINT8_C(0);
+    upgraded.level_sample_duration_us =
+        (uint32_t)defaults.level_calibration.sample_duration_us;
+    upgraded.level_trim_degrees[0] = 0.0F;
+    upgraded.level_trim_degrees[1] = 0.0F;
+    upgraded.acceleration_filter_cutoff_hz =
+        defaults.acceleration_filter.cutoff_hz;
+    upgraded.integral_activation_throttle =
+        defaults.rate_controller.integral_activation_throttle;
     return decode(&upgraded, configuration);
 }
 
@@ -572,6 +722,26 @@ static flight_configuration_load_result_t load_configuration(
         return decode(&payload, configuration)
                    ? FLIGHT_CONFIGURATION_LOAD_OK
                    : FLIGHT_CONFIGURATION_LOAD_ERROR;
+    }
+    {
+        schema_eight_flight_configuration_payload_t schema_eight;
+
+        if ((board_persistent_storage_read(&schema_eight,
+                                           sizeof(schema_eight)) ==
+             BOARD_PERSISTENT_STORAGE_READ_OK) &&
+            decode_schema_eight(&schema_eight, configuration)) {
+            return FLIGHT_CONFIGURATION_LOAD_OK;
+        }
+    }
+    {
+        schema_seven_flight_configuration_payload_t schema_seven;
+
+        if ((board_persistent_storage_read(&schema_seven,
+                                           sizeof(schema_seven)) ==
+             BOARD_PERSISTENT_STORAGE_READ_OK) &&
+            decode_schema_seven(&schema_seven, configuration)) {
+            return FLIGHT_CONFIGURATION_LOAD_OK;
+        }
     }
     {
         previous_flight_configuration_payload_t previous;
