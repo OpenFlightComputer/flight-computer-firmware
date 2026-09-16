@@ -168,7 +168,8 @@ Planned milestones:
    Automatic task-context UART/DMA recovery for receiver startup noise is
    implemented; cold-power-order recovery still requires physical validation.
 10. Constrained first-hover preparation and test. The initial always-selected
-    Easy mode adds configurable armed idle, launch-attitude capture followed by
+    Easy mode adds configurable armed idle, launch-attitude capture and an
+    explicit first-nonzero-throttle freeze followed by
     a bounded transition to level, and pre-arm blackbox coverage. Physical
     propeller-free validation remains before the next lift-off.
 

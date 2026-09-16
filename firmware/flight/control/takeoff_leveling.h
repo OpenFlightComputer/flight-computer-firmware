@@ -6,9 +6,11 @@
 
 typedef enum {
     TAKEOFF_LEVELING_DISABLED = 0,
-    TAKEOFF_LEVELING_CAPTURING,
-    TAKEOFF_LEVELING_ACTIVE,
-    TAKEOFF_LEVELING_COMPLETE,
+    TAKEOFF_LEVELING_CAPTURING = 1,
+    TAKEOFF_LEVELING_ACTIVE = 2,
+    TAKEOFF_LEVELING_COMPLETE = 3,
+    /* Appended to preserve the numeric meaning stored in blackbox format 2. */
+    TAKEOFF_LEVELING_FROZEN = 4,
 } takeoff_leveling_state_t;
 
 typedef struct {

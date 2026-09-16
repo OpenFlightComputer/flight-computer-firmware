@@ -30,13 +30,16 @@ the receiver, mixer, authority gate, and DShot output path.
   commands a complete stop. Above zero, the pilot throttle is rescaled into
   the available idle-to-full output range and mixer correction scaling honors
   the idle floor.
-- Added a bounded takeoff-leveling state machine. Before activation it captures
-  the difference between the measured launch attitude and pilot angle request.
-  At activation it freezes that offset, then removes it at the configured rate
-  using IMU acquisition timestamps. This permits launch from a non-level rock
-  without treating that surface as the permanent level reference. Receiver
-  Stage 1 bypasses the launch offset and continues to request configured level
-  fallback values.
+- Added a bounded takeoff-leveling state machine. At zero shaped throttle it
+  captures the difference between measured launch attitude and pilot request.
+  The first nonzero throttle freezes that reference for the arm session; the
+  configured activation threshold starts removing it at the configured rate
+  using IMU acquisition timestamps. This separation was required after hop
+  logs showed that motion below the activation threshold could otherwise make
+  the target follow the aircraft, or capture an already-forward attitude.
+  Receiver Stage 1 bypasses the launch offset and continues to request
+  configured level fallback values. Existing blackbox state numbers remain
+  stable; the new frozen state is appended as value 4.
 - Blackbox format 2 adds effective roll/pitch targets, motor baseline, takeoff
   state, and level-calibration state. Recording begins during startup, uses
   10 Hz during steady disarmed operation and 100 Hz during initialization,

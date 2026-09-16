@@ -117,9 +117,15 @@ bool takeoff_leveling_apply(takeoff_leveling_t *leveling,
         leveling->launch_pitch_offset_degrees =
             measured_pitch_degrees - pilot_pitch_degrees;
         leveling->last_sample_at_us = sample_at_us;
-        if (throttle >= easy_mode_activation_throttle(config)) {
-            leveling->state = TAKEOFF_LEVELING_ACTIVE;
+        if (throttle > 0.0F) {
+            leveling->state = TAKEOFF_LEVELING_FROZEN;
         }
+    }
+
+    if ((leveling->state == TAKEOFF_LEVELING_FROZEN) &&
+        (throttle >= easy_mode_activation_throttle(config))) {
+        leveling->state = TAKEOFF_LEVELING_ACTIVE;
+        leveling->last_sample_at_us = sample_at_us;
     } else if ((leveling->state == TAKEOFF_LEVELING_ACTIVE) &&
                (throttle > 0.0F) &&
                (sample_at_us > leveling->last_sample_at_us)) {

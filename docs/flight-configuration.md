@@ -38,9 +38,13 @@ minimum output while receiver control is armed, while an exact zero throttle
 stick still resets the rate controller and commands that equal idle value to
 all motors. Disarming remains the only operation that commands a full motor
 stop. `stabilization_activation_throttle` selects when the launch attitude is
-frozen and begins moving toward level. `takeoff_leveling_rate_dps` bounds that
-movement; disabling `takeoff_leveling_enabled` bypasses the launch-offset
-transition without changing the rest of angle mode.
+allowed to begin moving toward level. The launch attitude is captured while
+the shaped throttle is exactly zero, then frozen on its first nonzero value for
+the remainder of that arm session. This prevents motion during spool-up from
+silently redefining the launch reference even when throttle remains below the
+activation threshold. `takeoff_leveling_rate_dps` bounds the transition;
+disabling `takeoff_leveling_enabled` bypasses the launch-offset transition
+without changing the rest of angle mode.
 
 For the physically verified props-in layout, positive yaw correction raises
 the counter-clockwise M2/M3 pair and lowers the clockwise M1/M4 pair. The

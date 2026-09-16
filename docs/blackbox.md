@@ -57,6 +57,11 @@ versioned blocks:
    takeoff-leveling/calibration states, timestamps, validity, and event flags;
 4. footer with end time, captured/dropped counts, and final state.
 
+The numeric takeoff-leveling states are stable within format 2: `0` disabled,
+`1` capturing at zero throttle, `2` actively transitioning toward level, `3`
+complete, and `4` frozen after the first nonzero throttle but still below the
+configured transition threshold.
+
 `storage initialize` writes only the two blackbox index sectors. It does not
 format a filesystem or require firmware to be copied to the card, but it makes
 previous raw blackbox logs unreachable and therefore requires explicit host
