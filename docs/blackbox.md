@@ -8,6 +8,18 @@ pre-arm attitude, and the complete arm transition are retained. Receiver-loss
 `FAILSAFE` remains in the same log. A fault closes the log immediately; a
 normal disarm retains a one-second 100 Hz tail before closing it.
 
+Blackbox capture is disabled while a USB CDC host is configured. If USB
+enumerates after a pre-arm recording has already started, the current log is
+closed through the normal queued writer and no new log starts until USB is
+disconnected. Bench diagnostics can therefore use the control trace, while
+completed standalone logs remain listable and downloadable. Flight Computer
+V1 cannot reliably sense physical VBUS, so this policy deliberately uses the
+actual CDC configured state rather than the defective PA9 VBUS divider.
+Standalone pre-arm capture begins after a two-second USB-enumeration grace
+period, or immediately if the vehicle reaches `ARMED`, `FAILSAFE`, or `FAULT`.
+This prevents ordinary USB-powered boots from consuming one log-index slot
+before the host has had time to enumerate.
+
 ## Real-time boundary
 
 The 1 kHz flight task calls `flight_diagnostics_capture()` once. The call
@@ -68,6 +80,9 @@ preserves the exact versioned on-card bytes; decoding validates every block
 CRC before producing JSON. The host decoder accepts both the prior version-1
 sample layout and the current version-2 layout. The SD card therefore remains
 installed in the aircraft for normal retrieval.
+
+Connecting USB closes any active pre-arm or standalone recording. Wait for
+`storage status` to report `READY` before listing or downloading logs.
 
 `storage status` reports the current and maximum queue depth, completed sector
 writes, and average/maximum sector-write latency in addition to captured and

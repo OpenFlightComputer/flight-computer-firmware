@@ -223,7 +223,13 @@ sensor inputs, and control authority must be designed from flight evidence; it
 is not required for first flight and is not part of the current deterministic
 lifecycle state machine.
 
-Simulation, GUI configuration, autonomous navigation, computer vision, a bootloader, and any RTOS migration are later evidence-driven work rather than part of the current foundation.
+Simulation, GUI configuration, autonomous navigation, computer vision, and any
+RTOS migration are later evidence-driven work rather than part of the current
+foundation. Add a disarmed-only, authenticated/recoverable USB firmware-update
+path so routine releases do not require physical SWD access. Retain SWD as the
+recovery path for a corrupt updater or interrupted boot-critical update; assess
+the STM32F405 ROM USB DFU entry path versus a small project-owned bootloader
+before assigning flash layout and update-image compatibility rules.
 
 The manufacturing acceptance run provides implementation evidence that future
 milestones must carry over deliberately: BMI270 SPI3 and BMP388 I2C2 settings,

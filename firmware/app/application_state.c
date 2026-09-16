@@ -13,6 +13,7 @@ volatile uint32_t firmware_usb_initialization_result = UINT32_MAX;
 volatile uint32_t firmware_logging_drain_last_result = UINT32_MAX;
 volatile uint32_t firmware_usb_command_last_result = UINT32_MAX;
 volatile uint32_t firmware_usb_service_task_executions;
+volatile bool firmware_usb_connected;
 volatile uint32_t firmware_motor_control_initialization_result = UINT32_MAX;
 volatile uint32_t firmware_motor_control_sync_last_result = UINT32_MAX;
 volatile uint32_t firmware_motor_control_task_executions;

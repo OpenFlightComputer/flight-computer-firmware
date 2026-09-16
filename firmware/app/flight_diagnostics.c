@@ -2,6 +2,8 @@
 
 #include "application_state.h"
 
+#define BLACKBOX_USB_ENUMERATION_GRACE_US UINT64_C(2000000)
+
 void flight_diagnostics_capture(
     uint64_t now_us,
     const receiver_failsafe_decision_t *decision,
@@ -12,12 +14,21 @@ void flight_diagnostics_capture(
     control_trace_sample_t sample;
     const bool usb_trace_enabled =
         firmware_control_trace.level != CONTROL_TRACE_LEVEL_OFF;
-    const bool blackbox_interested = blackbox_capture_due(
-        &firmware_blackbox,
-        now_us,
-        firmware_system_state_machine.current);
+    const bool blackbox_start_allowed =
+        (now_us >= BLACKBOX_USB_ENUMERATION_GRACE_US) ||
+        (firmware_system_state_machine.current == SYSTEM_STATE_ARMED) ||
+        (firmware_system_state_machine.current == SYSTEM_STATE_FAILSAFE) ||
+        (firmware_system_state_machine.current == SYSTEM_STATE_FAULT);
+    const bool blackbox_must_finish =
+        firmware_usb_connected &&
+        (firmware_blackbox.status == BLACKBOX_STATUS_RECORDING);
+    const bool blackbox_interested =
+        !firmware_usb_connected && blackbox_start_allowed &&
+        blackbox_capture_due(&firmware_blackbox,
+                             now_us,
+                             firmware_system_state_machine.current);
 
-    if (!usb_trace_enabled && !blackbox_interested) {
+    if (!usb_trace_enabled && !blackbox_interested && !blackbox_must_finish) {
         return;
     }
     sample = (control_trace_sample_t){
@@ -54,7 +65,9 @@ void flight_diagnostics_capture(
     if (usb_trace_enabled) {
         (void)control_trace_record(&firmware_control_trace, &sample);
     }
-    if (blackbox_interested) {
+    if (blackbox_must_finish) {
+        blackbox_finish_recording(&firmware_blackbox, &sample);
+    } else if (blackbox_interested) {
         blackbox_capture(&firmware_blackbox, &sample);
     }
 }

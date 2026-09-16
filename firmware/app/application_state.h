@@ -56,4 +56,5 @@ extern volatile bool firmware_receiver_stage_two_latched;
 extern volatile bool firmware_receiver_recovery_ready;
 extern volatile uint32_t firmware_high_rate_worst_case_budget_us;
 extern volatile uint32_t firmware_high_rate_worst_case_utilization_permille;
+extern volatile bool firmware_usb_connected;
 #endif

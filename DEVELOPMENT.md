@@ -11,7 +11,9 @@ software and awaiting propeller-free physical validation. The initial
 always-selected Easy mode adds configurable armed idle and a bounded transition
 from the actual launch attitude to level. Blackbox capture now begins before
 arming so startup calibration, pre-arm attitude, and the full arm transition
-are available when diagnosing a failed launch.
+are available when diagnosing a failed launch. A configured USB CDC host now
+closes and suspends the SD blackbox, leaving bench diagnosis to the USB control
+trace and keeping completed standalone logs available for retrieval.
 
 ## Last completed milestone
 
@@ -40,6 +42,12 @@ the receiver, mixer, authority gate, and DShot output path.
   10 Hz during steady disarmed operation and 100 Hz during initialization,
   armed/failsafe operation, and a one-second post-disarm tail. Receiver loss no
   longer closes the log. The decoder remains compatible with format 1 logs.
+- USB CDC configuration now closes an active blackbox log and suppresses new
+  SD capture until disconnect. The policy uses the CDC configured state because
+  V1's defective VBUS divider cannot report cable presence reliably. The
+  control trace remains the opt-in diagnostic path for USB-connected tests. A
+  two-second enumeration grace avoids creating a throwaway SD log during an
+  ordinary USB-powered boot; armed/failsafe/fault capture bypasses the grace.
 - Unified configuration schema 10 uses the full 512-byte persistent payload.
   Schema-9 and all older supported records migrate with compiled Easy-mode
   defaults; corrupt current records still fail startup closed.

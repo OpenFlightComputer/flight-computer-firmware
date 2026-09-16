@@ -88,6 +88,8 @@ bool blackbox_capture_due(const blackbox_t *blackbox,
                           system_state_t state);
 void blackbox_capture(blackbox_t *blackbox,
                       const control_trace_sample_t *sample);
+void blackbox_finish_recording(blackbox_t *blackbox,
+                               const control_trace_sample_t *sample);
 void blackbox_service(blackbox_t *blackbox);
 size_t blackbox_log_count(const blackbox_t *blackbox);
 bool blackbox_log_information(const blackbox_t *blackbox,

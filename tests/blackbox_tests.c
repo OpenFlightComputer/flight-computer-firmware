@@ -203,5 +203,16 @@ int main(void)
     current = sample(2020000U, SYSTEM_STATE_DISARMED);
     blackbox_capture(&blackbox, &current);
     assert(blackbox.status == BLACKBOX_STATUS_FINISHING);
+
+    /* USB diagnostics can close a pre-arm recording immediately so the host
+       can list and download already completed standalone flights. */
+    service_until_idle(&blackbox);
+    current = sample(3000000U, SYSTEM_STATE_DISARMED);
+    blackbox_capture(&blackbox, &current);
+    assert(blackbox.status == BLACKBOX_STATUS_RECORDING);
+    blackbox_finish_recording(&blackbox, &current);
+    assert(blackbox.status == BLACKBOX_STATUS_FINISHING);
+    service_until_idle(&blackbox);
+    assert(blackbox.status == BLACKBOX_STATUS_READY);
     return 0;
 }

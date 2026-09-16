@@ -10,6 +10,7 @@ static task_callback_result_t run_usb_service_task(void *context)
 {
     (void)context;
     usb_cdc_transport_process();
+    firmware_usb_connected = usb_cdc_transport_is_configured();
     firmware_usb_command_last_result =
         (uint32_t)usb_command_processor_process_once(
             &firmware_usb_command_processor);

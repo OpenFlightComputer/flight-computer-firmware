@@ -714,6 +714,16 @@ void blackbox_capture(blackbox_t *blackbox,
     blackbox->previous_system_state = sample->system_state;
 }
 
+void blackbox_finish_recording(blackbox_t *blackbox,
+                               const control_trace_sample_t *sample)
+{
+    if ((blackbox == NULL) || (sample == NULL) ||
+        (blackbox->status != BLACKBOX_STATUS_RECORDING)) {
+        return;
+    }
+    finish_flight(blackbox, sample);
+}
+
 void blackbox_service(blackbox_t *blackbox)
 {
     blackbox_queued_sector_t *queued;
