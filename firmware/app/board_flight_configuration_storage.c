@@ -6,7 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(8)
+#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(9)
+#define SCHEMA_NINE_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(8)
 #define SCHEMA_EIGHT_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(7)
 #define SCHEMA_SEVEN_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(6)
 #define PREVIOUS_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(5)
@@ -52,7 +53,14 @@ typedef struct {
     float level_trim_degrees[2];
     float acceleration_filter_cutoff_hz;
     float integral_activation_throttle;
+    uint32_t easy_mode_packed;
 } flight_configuration_payload_t;
+
+typedef struct {
+    uint32_t version;
+    uint32_t schema_version;
+    uint8_t remaining_payload[500];
+} schema_nine_flight_configuration_payload_t;
 
 typedef struct {
     uint32_t version;
@@ -156,8 +164,10 @@ typedef struct {
     uint8_t directions[MOTOR_COMMAND_MOTOR_COUNT];
 } legacy_motor_configuration_payload_t;
 
-_Static_assert(sizeof(flight_configuration_payload_t) == 508U,
+_Static_assert(sizeof(flight_configuration_payload_t) == 512U,
                "Flight configuration payload format changed");
+_Static_assert(sizeof(schema_nine_flight_configuration_payload_t) == 508U,
+               "Schema 9 flight configuration payload format changed");
 _Static_assert(sizeof(schema_eight_flight_configuration_payload_t) == 500U,
                "Schema 8 flight configuration payload format changed");
 _Static_assert(sizeof(schema_seven_flight_configuration_payload_t) == 488U,
@@ -273,6 +283,15 @@ static void encode(const flight_configuration_t *configuration,
             configuration->acceleration_filter.cutoff_hz,
         .integral_activation_throttle =
             configuration->rate_controller.integral_activation_throttle,
+        .easy_mode_packed =
+            ((uint32_t)(configuration->easy_mode.takeoff_leveling_enabled
+                            ? 1U
+                            : 0U)) |
+            ((uint32_t)configuration->easy_mode.armed_idle_permille << 1U) |
+            ((uint32_t)configuration->easy_mode
+                 .activation_throttle_permille << 11U) |
+            ((uint32_t)configuration->easy_mode
+                 .leveling_rate_decidegrees_per_second << 21U),
     };
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
         payload->directions[motor] =
@@ -333,13 +352,26 @@ static bool decode(const flight_configuration_payload_t *payload,
     size_t motor;
 
     if ((payload->version != FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
-        (payload->schema_version != 9U)) {
+        (payload->schema_version != 10U)) {
         return false;
     }
     flight_configuration_defaults(&defaults);
     *configuration = (flight_configuration_t){
         .schema_version = defaults.schema_version,
         .propeller_layout = (propeller_layout_t)payload->propeller_layout,
+        .easy_mode = {
+            .takeoff_leveling_enabled =
+                (payload->easy_mode_packed & UINT32_C(1)) != 0U,
+            .armed_idle_permille =
+                (uint16_t)((payload->easy_mode_packed >> 1U) &
+                           UINT32_C(0x3ff)),
+            .activation_throttle_permille =
+                (uint16_t)((payload->easy_mode_packed >> 11U) &
+                           UINT32_C(0x3ff)),
+            .leveling_rate_decidegrees_per_second =
+                (uint16_t)((payload->easy_mode_packed >> 21U) &
+                           UINT32_C(0x7ff)),
+        },
         .receiver_failsafe = {
             .stale_after_us = payload->timing_us[0],
             .loss_detected_after_us = payload->timing_us[1],
@@ -460,6 +492,44 @@ static bool decode(const flight_configuration_payload_t *payload,
     return flight_configuration_is_valid(configuration);
 }
 
+static bool decode_schema_nine(
+    const schema_nine_flight_configuration_payload_t *payload,
+    flight_configuration_t *configuration)
+{
+    flight_configuration_payload_t upgraded = {0};
+    flight_configuration_t defaults;
+
+    if ((payload->version !=
+         SCHEMA_NINE_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+        (payload->schema_version != 9U)) {
+        return false;
+    }
+    memcpy(&upgraded, payload, sizeof(*payload));
+    flight_configuration_defaults(&defaults);
+    upgraded.version = FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
+    upgraded.schema_version = defaults.schema_version;
+    upgraded.easy_mode_packed =
+        ((uint32_t)(defaults.easy_mode.takeoff_leveling_enabled ? 1U : 0U)) |
+        ((uint32_t)defaults.easy_mode.armed_idle_permille << 1U) |
+        ((uint32_t)defaults.easy_mode.activation_throttle_permille << 11U) |
+        ((uint32_t)defaults.easy_mode
+             .leveling_rate_decidegrees_per_second << 21U);
+    return decode(&upgraded, configuration);
+}
+
+static uint32_t default_easy_mode_packed(
+    const flight_configuration_t *defaults)
+{
+    return ((uint32_t)(defaults->easy_mode.takeoff_leveling_enabled
+                           ? 1U
+                           : 0U)) |
+           ((uint32_t)defaults->easy_mode.armed_idle_permille << 1U) |
+           ((uint32_t)defaults->easy_mode.activation_throttle_permille
+            << 11U) |
+           ((uint32_t)defaults->easy_mode
+                .leveling_rate_decidegrees_per_second << 21U);
+}
+
 static bool decode_schema_eight(
     const schema_eight_flight_configuration_payload_t *payload,
     flight_configuration_t *configuration)
@@ -480,6 +550,7 @@ static bool decode_schema_eight(
         defaults.acceleration_filter.cutoff_hz;
     upgraded.integral_activation_throttle =
         defaults.rate_controller.integral_activation_throttle;
+    upgraded.easy_mode_packed = default_easy_mode_packed(&defaults);
     return decode(&upgraded, configuration);
 }
 
@@ -545,6 +616,7 @@ static bool decode_schema_seven(
         defaults.acceleration_filter.cutoff_hz;
     upgraded.integral_activation_throttle =
         defaults.rate_controller.integral_activation_throttle;
+    upgraded.easy_mode_packed = default_easy_mode_packed(&defaults);
     return decode(&upgraded, configuration);
 }
 
@@ -722,6 +794,16 @@ static flight_configuration_load_result_t load_configuration(
         return decode(&payload, configuration)
                    ? FLIGHT_CONFIGURATION_LOAD_OK
                    : FLIGHT_CONFIGURATION_LOAD_ERROR;
+    }
+    {
+        schema_nine_flight_configuration_payload_t schema_nine;
+
+        if ((board_persistent_storage_read(&schema_nine,
+                                           sizeof(schema_nine)) ==
+             BOARD_PERSISTENT_STORAGE_READ_OK) &&
+            decode_schema_nine(&schema_nine, configuration)) {
+            return FLIGHT_CONFIGURATION_LOAD_OK;
+        }
     }
     {
         schema_eight_flight_configuration_payload_t schema_eight;

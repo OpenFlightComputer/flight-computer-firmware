@@ -35,6 +35,11 @@ def response(*, channels=None, available=True):
         "uplink_snr_db": 8,
         "uart_bytes": 135014,
         "valid_frames": 5000,
+        "uart_last_error": 12,
+        "uart_errors": 1,
+        "uart_recoveries": 1,
+        "uart_recovery_failures": 0,
+        "uart_recovery_pending": False,
         "crc_errors": 0,
         "framing_errors": 0,
         "dma_overruns": 0,
@@ -50,6 +55,8 @@ def test_response_is_validated_and_converted():
     assert sample.pitch == 0.25
     assert sample.arm is True
     assert sample.uart_bytes == 135014
+    assert sample.uart_last_error == 12
+    assert sample.uart_recoveries == 1
 
 
 def test_view_tracks_local_minima_and_maxima():
@@ -71,6 +78,7 @@ def test_render_contains_tester_and_normalized_information():
     assert "Receiver channels" in rendered
     assert "135014" in rendered
     assert "CRC / framing errors" in rendered
+    assert "UART recoveries / failures / pending" in rendered
     assert "DMA overruns / dropped bytes" in rendered
     assert "CH16" in rendered
 
@@ -91,6 +99,7 @@ def test_unavailable_response_renders_without_snapshot():
         lambda item: item["normalized"].update(throttle=1.1),
         lambda item: item["failsafe"].update(recovery_ready=1),
         lambda item: item.update(dma_overruns=-1),
+        lambda item: item.update(uart_recovery_pending=1),
     ],
 )
 def test_invalid_receiver_responses_are_rejected(mutation):

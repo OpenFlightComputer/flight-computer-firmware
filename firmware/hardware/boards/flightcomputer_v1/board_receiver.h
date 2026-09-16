@@ -18,6 +18,9 @@ typedef enum {
 typedef struct {
     uint32_t uart_received_byte_count;
     uint32_t uart_error;
+    uint32_t uart_error_count;
+    uint32_t uart_recovery_count;
+    uint32_t uart_recovery_failure_count;
     uint32_t valid_frame_count;
     uint32_t channel_frame_count;
     uint32_t link_statistics_frame_count;
@@ -29,10 +32,12 @@ typedef struct {
     uint8_t uplink_link_quality_percent;
     int8_t uplink_snr_db;
     bool link_statistics_present;
+    bool uart_recovery_pending;
 } board_receiver_statistics_t;
 
 board_receiver_init_result_t board_receiver_initialize(
     receiver_source_t *source);
+void board_receiver_maintain(void);
 bool board_receiver_statistics(board_receiver_statistics_t *statistics);
 
 #endif

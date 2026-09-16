@@ -204,11 +204,37 @@ static void test_error_and_byte_budget_are_bounded(void)
     assert(crsf_receiver_source_read(&source, NULL) == RECEIVER_SOURCE_ERROR);
 }
 
+static void test_discard_partial_frame_preserves_diagnostics(void)
+{
+    fake_stream_t fake = {0};
+    crsf_byte_stream_t stream = byte_stream_for(&fake);
+    crsf_receiver_source_t source;
+
+    assert(crsf_receiver_source_initialize(&source, &stream));
+    source.parser.received_length = 9U;
+    source.parser.expected_length = 26U;
+    source.parser.valid_frame_count = 17U;
+    source.parser.crc_error_count = 3U;
+    source.parser.framing_error_count = 2U;
+    source.parser.last_push_rejected_frame = true;
+
+    crsf_receiver_source_discard_partial_frame(&source);
+
+    assert(source.parser.received_length == 0U);
+    assert(source.parser.expected_length == 0U);
+    assert(!source.parser.last_push_rejected_frame);
+    assert(source.parser.valid_frame_count == 17U);
+    assert(source.parser.crc_error_count == 3U);
+    assert(source.parser.framing_error_count == 2U);
+    crsf_receiver_source_discard_partial_frame(NULL);
+}
+
 int main(void)
 {
     test_initialization_and_empty_stream();
     test_link_frame_then_channel_frame_returns_channels();
     test_invalid_frame_is_reported_and_valid_frame_wins();
     test_error_and_byte_budget_are_bounded();
+    test_discard_partial_frame_preserves_diagnostics();
     return 0;
 }

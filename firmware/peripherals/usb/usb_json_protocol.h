@@ -51,6 +51,10 @@ typedef struct {
         USB_JSON_CONFIGURATION_CONTROL_COUNT];
     uint8_t directions[USB_JSON_CONFIGURATION_MOTOR_COUNT];
     uint8_t propeller_layout;
+    uint32_t easy_mode_armed_idle_millionths;
+    uint32_t easy_mode_activation_throttle_millionths;
+    uint32_t easy_mode_leveling_rate_millionths;
+    bool easy_mode_leveling_enabled;
     uint64_t gyro_timing_us[USB_JSON_CONFIGURATION_GYRO_TIMING_COUNT];
     uint32_t gyro_threshold_millionths[
         USB_JSON_CONFIGURATION_GYRO_THRESHOLD_COUNT];

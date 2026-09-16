@@ -29,6 +29,16 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
     *configuration = (flight_configuration_t){
         .schema_version = OFC_DEFAULT_CONFIGURATION_SCHEMA_VERSION,
         .propeller_layout = OFC_DEFAULT_PROPELLER_LAYOUT,
+        .easy_mode = {
+            .armed_idle_permille =
+                OFC_DEFAULT_EASY_MODE_ARMED_IDLE_PERMILLE,
+            .activation_throttle_permille =
+                OFC_DEFAULT_EASY_MODE_ACTIVATION_THROTTLE_PERMILLE,
+            .leveling_rate_decidegrees_per_second =
+                OFC_DEFAULT_EASY_MODE_LEVELING_RATE_DECIDEGREES_PER_SECOND,
+            .takeoff_leveling_enabled =
+                OFC_DEFAULT_EASY_MODE_LEVELING_ENABLED,
+        },
         .control = {
             .roll = {
                 .deadband = OFC_DEFAULT_CONTROL_ROLL_DEADBAND,
@@ -189,6 +199,14 @@ bool flight_configuration_is_valid(
            (configuration->schema_version ==
             OFC_DEFAULT_CONFIGURATION_SCHEMA_VERSION) &&
            (configuration->propeller_layout < PROPELLER_LAYOUT_COUNT) &&
+           (configuration->easy_mode.armed_idle_permille > 0U) &&
+           (configuration->easy_mode.armed_idle_permille < 1000U) &&
+           (configuration->easy_mode.activation_throttle_permille > 0U) &&
+           (configuration->easy_mode.activation_throttle_permille < 1000U) &&
+           (configuration->easy_mode
+                .leveling_rate_decidegrees_per_second > 0U) &&
+           (configuration->easy_mode
+                .leveling_rate_decidegrees_per_second <= 2000U) &&
            motor_configuration_is_valid(&configuration->motors) &&
            control_input_shaping_config_is_valid(&configuration->control) &&
            roll_attitude_controller_config_is_valid(

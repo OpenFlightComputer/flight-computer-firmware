@@ -22,6 +22,7 @@ static task_callback_result_t run_receiver_task(void *context)
     board_receiver_statistics_t statistics = {0};
     receiver_service_result_t result;
 
+    board_receiver_maintain();
     result = receiver_service_process_once(service);
     firmware_receiver_service_last_result = (uint32_t)result;
     firmware_receiver_task_executions++;
@@ -116,12 +117,19 @@ static bool read_receiver_inspection(void *context,
         inspection->uplink_snr_db = statistics.uplink_snr_db;
         inspection->uart_received_byte_count =
             statistics.uart_received_byte_count;
+        inspection->uart_last_error = statistics.uart_error;
+        inspection->uart_error_count = statistics.uart_error_count;
+        inspection->uart_recovery_count = statistics.uart_recovery_count;
+        inspection->uart_recovery_failure_count =
+            statistics.uart_recovery_failure_count;
         inspection->valid_frame_count = statistics.valid_frame_count;
         inspection->crc_error_count = statistics.crc_error_count;
         inspection->framing_error_count = statistics.framing_error_count;
         inspection->dma_overrun_count = statistics.dma_overrun_count;
         inspection->dma_dropped_byte_count =
             statistics.dma_dropped_byte_count;
+        inspection->uart_recovery_pending =
+            statistics.uart_recovery_pending;
     }
     return true;
 }

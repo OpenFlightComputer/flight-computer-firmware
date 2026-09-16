@@ -82,20 +82,20 @@ int main(void)
     assert(quad_x_mixer_prepare(PROPELLER_LAYOUT_PROPS_IN, &prepared));
     assert(quad_x_mixer_apply_prepared(&prepared, 0.5F, correction, 10U,
                                        &output));
-    assert(close_to(output.command.throttle[0], 0.57F));
-    assert(close_to(output.command.throttle[1], 0.63F));
-    assert(close_to(output.command.throttle[2], 0.33F));
-    assert(close_to(output.command.throttle[3], 0.47F));
+    assert(close_to(output.command.throttle[0], 0.53F));
+    assert(close_to(output.command.throttle[1], 0.67F));
+    assert(close_to(output.command.throttle[2], 0.37F));
+    assert(close_to(output.command.throttle[3], 0.43F));
     assert(!output.saturated);
     assert(output.correction_scale == 1.0F);
     assert(output.collective_shift == 0.0F);
 
     assert(quad_x_mixer_apply(PROPELLER_LAYOUT_PROPS_OUT, 0.5F,
                               correction, 11U, &output));
-    assert(close_to(output.command.throttle[0], 0.53F));
-    assert(close_to(output.command.throttle[1], 0.67F));
-    assert(close_to(output.command.throttle[2], 0.37F));
-    assert(close_to(output.command.throttle[3], 0.43F));
+    assert(close_to(output.command.throttle[0], 0.57F));
+    assert(close_to(output.command.throttle[1], 0.63F));
+    assert(close_to(output.command.throttle[2], 0.33F));
+    assert(close_to(output.command.throttle[3], 0.47F));
 
     assert(quad_x_mixer_apply(PROPELLER_LAYOUT_PROPS_IN, 0.0F,
                               correction, 12U, &output));
@@ -136,6 +136,20 @@ int main(void)
         assert(output.command.throttle[2] > output.command.throttle[3]);
     }
     {
+        const float positive_yaw[3] = {0.0F, 0.0F, 0.1F};
+
+        assert(quad_x_mixer_apply(PROPELLER_LAYOUT_PROPS_IN, 0.5F,
+                                  positive_yaw, 16U, &output));
+        /* M2/M3 are the physically verified CCW pair on this props-in quad. */
+        assert(output.command.throttle[1] > output.command.throttle[0]);
+        assert(output.command.throttle[2] > output.command.throttle[3]);
+
+        assert(quad_x_mixer_apply(PROPELLER_LAYOUT_PROPS_OUT, 0.5F,
+                                  positive_yaw, 16U, &output));
+        assert(output.command.throttle[0] > output.command.throttle[1]);
+        assert(output.command.throttle[3] > output.command.throttle[2]);
+    }
+    {
         /* Regression for the captured low-throttle bench acceleration. */
         const float captured_correction[3] = {0.051F, 0.004F, 0.0F};
         assert(quad_x_mixer_apply(PROPELLER_LAYOUT_PROPS_IN, 0.002F,
@@ -146,6 +160,29 @@ int main(void)
         for (size_t motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
             assert(output.command.throttle[motor] <= 0.0041F);
         }
+    }
+    {
+        const float zero_correction[3] = {0.0F, 0.0F, 0.0F};
+
+        assert(quad_x_mixer_apply_prepared_with_floor(
+            &prepared, 0.05F, 0.05F, zero_correction, 17U, &output));
+        for (size_t motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+            assert(close_to(output.command.throttle[motor], 0.05F));
+        }
+    }
+    {
+        const float roll_correction[3] = {0.1F, 0.0F, 0.0F};
+
+        assert(quad_x_mixer_apply_prepared_with_floor(
+            &prepared, 0.06F, 0.05F, roll_correction, 18U, &output));
+        assert(output.saturated);
+        assert(close_to(output.correction_scale, 0.1F));
+        assert(close_to(output.command.throttle[0], 0.07F));
+        assert(close_to(output.command.throttle[1], 0.07F));
+        assert(close_to(output.command.throttle[2], 0.05F));
+        assert(close_to(output.command.throttle[3], 0.05F));
+        assert(!quad_x_mixer_apply_prepared_with_floor(
+            &prepared, 0.04F, 0.05F, roll_correction, 18U, &output));
     }
 
     {

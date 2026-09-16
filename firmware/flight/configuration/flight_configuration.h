@@ -8,6 +8,7 @@
 #include "rate_controller.h"
 #include "receiver_failsafe.h"
 #include "roll_attitude_controller.h"
+#include "takeoff_leveling.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -63,6 +64,7 @@ typedef struct {
 typedef struct {
     uint32_t schema_version;
     propeller_layout_t propeller_layout;
+    easy_mode_config_t easy_mode;
     motor_configuration_t motors;
     control_input_shaping_config_t control;
     roll_attitude_controller_config_t roll_attitude_controller;

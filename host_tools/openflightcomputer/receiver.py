@@ -74,6 +74,11 @@ class ReceiverSample:
     uplink_snr_db: int
     uart_bytes: int
     valid_frames: int
+    uart_last_error: int
+    uart_errors: int
+    uart_recoveries: int
+    uart_recovery_failures: int
+    uart_recovery_pending: bool
     crc_errors: int
     framing_errors: int
     dma_overruns: int
@@ -159,6 +164,24 @@ class ReceiverSample:
             valid_frames=_required_int(
                 response, "valid_frames", minimum=0, maximum=0xFFFFFFFF
             ),
+            uart_last_error=_required_int(
+                response, "uart_last_error", minimum=0, maximum=0xFFFFFFFF
+            ),
+            uart_errors=_required_int(
+                response, "uart_errors", minimum=0, maximum=0xFFFFFFFF
+            ),
+            uart_recoveries=_required_int(
+                response, "uart_recoveries", minimum=0, maximum=0xFFFFFFFF
+            ),
+            uart_recovery_failures=_required_int(
+                response,
+                "uart_recovery_failures",
+                minimum=0,
+                maximum=0xFFFFFFFF,
+            ),
+            uart_recovery_pending=_required_bool(
+                response, "uart_recovery_pending"
+            ),
             crc_errors=_required_int(
                 response, "crc_errors", minimum=0, maximum=0xFFFFFFFF
             ),
@@ -240,6 +263,16 @@ class ReceiverView:
         )
         table.add_row("UART bytes", str(sample.uart_bytes) if sample else "—")
         table.add_row("Valid CRSF frames", str(sample.valid_frames) if sample else "—")
+        table.add_row(
+            "UART last error / occurrences",
+            f"0x{sample.uart_last_error:08x} / {sample.uart_errors}"
+            if sample else "—",
+        )
+        table.add_row(
+            "UART recoveries / failures / pending",
+            f"{sample.uart_recoveries} / {sample.uart_recovery_failures} / "
+            f"{sample.uart_recovery_pending}" if sample else "—",
+        )
         table.add_row(
             "CRC / framing errors",
             f"{sample.crc_errors} / {sample.framing_errors}" if sample else "—",

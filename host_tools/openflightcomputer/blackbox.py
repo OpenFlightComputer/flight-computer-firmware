@@ -13,8 +13,8 @@ from openflightcomputer.protocol import JsonProtocolClient, ProtocolError
 
 SECTOR_SIZE = 512
 BLOCK_MAGIC = b"OFCB"
-FORMAT_VERSION = 1
-SAMPLE_SIZE = 232
+FORMAT_VERSION = 2
+SAMPLE_SIZES = {1: 232, 2: 244}
 
 
 def select_log(logs: list[dict[str, Any]], identifier: str) -> dict[str, Any]:
@@ -52,23 +52,24 @@ def download_log(client: JsonProtocolClient, log: dict[str, Any], *, timeout: fl
     return bytes(output)
 
 
-def _block(sector: bytes) -> tuple[int, int, int, int, bytes]:
+def _block(sector: bytes) -> tuple[int, int, int, int, int, bytes]:
     if len(sector) != SECTOR_SIZE or sector[:4] != BLOCK_MAGIC:
         raise ValueError("invalid blackbox block magic")
     version, block_type, log_id, sequence, item_count, payload_length = struct.unpack_from(
         "<HHIIHH", sector, 4
     )
-    if version != FORMAT_VERSION or payload_length > 488:
+    if version not in SAMPLE_SIZES or payload_length > 488:
         raise ValueError(f"unsupported blackbox block version {version}")
     expected_crc = struct.unpack_from("<I", sector, 508)[0]
     actual_crc = zlib.crc32(sector[:508]) & 0xFFFFFFFF
     if expected_crc != actual_crc:
         raise ValueError(f"blackbox block {sequence} failed CRC validation")
-    return block_type, log_id, sequence, item_count, sector[20 : 20 + payload_length]
+    return version, block_type, log_id, sequence, item_count, sector[20 : 20 + payload_length]
 
 
-def _sample(data: bytes) -> dict[str, Any]:
-    if len(data) != SAMPLE_SIZE:
+def _sample(data: bytes, version: int) -> dict[str, Any]:
+    sample_size = SAMPLE_SIZES[version]
+    if len(data) != sample_size:
         raise ValueError("invalid blackbox sample size")
     timestamp_us, imu_sequence, dt_us, events, packed_status, packed_imu, validity = struct.unpack_from(
         "<QQIIIII", data
@@ -88,7 +89,15 @@ def _sample(data: bytes) -> dict[str, Any]:
     pid = [list(struct.unpack_from("<ffff", data, offset + axis * 16)) for axis in range(3)]
     offset += 48
     motors = list(struct.unpack_from("<ffff", data, offset)); offset += 16
-    correction_scale, collective_shift, sequence = struct.unpack_from("<ffI", data, offset)
+    correction_scale, collective_shift = struct.unpack_from("<ff", data, offset)
+    offset += 8
+    if version >= 2:
+        effective_attitude_target = list(struct.unpack_from("<ff", data, offset)); offset += 8
+        motor_baseline = struct.unpack_from("<f", data, offset)[0]; offset += 4
+    else:
+        effective_attitude_target = setpoint[1:3]
+        motor_baseline = setpoint[0]
+    sequence = struct.unpack_from("<I", data, offset)[0]
     return {
         "sequence": sequence, "timestamp_us": timestamp_us,
         "imu_sequence": imu_sequence, "dt_us": dt_us, "event_flags": events,
@@ -99,6 +108,8 @@ def _sample(data: bytes) -> dict[str, Any]:
         "imu_freshness": packed_imu & 0xFF,
         "control_result": (packed_imu >> 8) & 0xFF,
         "rate_result": (packed_imu >> 16) & 0xFF,
+        "takeoff_leveling_state": (packed_imu >> 24) & 0x0F,
+        "level_calibration_state": (packed_imu >> 28) & 0x0F,
         "validity_flags": validity,
         "raw_acceleration": raw_acceleration, "raw_gyroscope": raw_gyroscope,
         "filtered_acceleration_g": filtered_acceleration,
@@ -109,6 +120,8 @@ def _sample(data: bytes) -> dict[str, Any]:
         "receiver": receiver, "setpoint": setpoint, "desired_rates_dps": desired_rates,
         "pid": pid, "motors": motors, "correction_scale": correction_scale,
         "collective_shift": collective_shift,
+        "effective_attitude_target_degrees": effective_attitude_target,
+        "motor_baseline": motor_baseline,
     }
 
 
@@ -117,33 +130,38 @@ def decode_log(data: bytes) -> dict[str, Any]:
         raise ValueError("blackbox file must contain complete 512-byte sectors")
     blocks = [_block(data[index : index + SECTOR_SIZE])
               for index in range(0, len(data), SECTOR_SIZE)]
-    log_ids = {block[1] for block in blocks}
+    versions = {block[0] for block in blocks}
+    if len(versions) != 1:
+        raise ValueError("blackbox file contains mixed format versions")
+    version = next(iter(versions))
+    log_ids = {block[2] for block in blocks}
     if len(log_ids) != 1:
         raise ValueError("blackbox file contains mixed log IDs")
-    header = next((block for block in blocks if block[0] == 1), None)
-    if header is None or len(header[4]) < 68:
+    header = next((block for block in blocks if block[1] == 1), None)
+    if header is None or len(header[5]) < 68:
         raise ValueError("blackbox flight header is missing")
     sample_interval_us, config_length, config_crc, started_at_us = struct.unpack_from(
-        "<IIIQ", header[4]
+        "<IIIQ", header[5]
     )
-    firmware_version = header[4][20:36].split(b"\0", 1)[0].decode("ascii", "replace")
-    build_id = header[4][36:68].split(b"\0", 1)[0].decode("ascii", "replace")
-    configuration = b"".join(block[4] for block in blocks if block[0] == 2)[:config_length]
+    firmware_version = header[5][20:36].split(b"\0", 1)[0].decode("ascii", "replace")
+    build_id = header[5][36:68].split(b"\0", 1)[0].decode("ascii", "replace")
+    configuration = b"".join(block[5] for block in blocks if block[1] == 2)[:config_length]
     if (zlib.crc32(configuration) & 0xFFFFFFFF) != config_crc:
         raise ValueError("blackbox configuration snapshot failed CRC validation")
     samples: list[dict[str, Any]] = []
-    for block_type, _log_id, _sequence, count, payload in blocks:
+    sample_size = SAMPLE_SIZES[version]
+    for _version, block_type, _log_id, _sequence, count, payload in blocks:
         if block_type == 3:
             for index in range(count):
-                samples.append(_sample(payload[index * SAMPLE_SIZE : (index + 1) * SAMPLE_SIZE]))
-    footer = next((block for block in reversed(blocks) if block[0] == 4), None)
+                samples.append(_sample(payload[index * sample_size : (index + 1) * sample_size], version))
+    footer = next((block for block in reversed(blocks) if block[1] == 4), None)
     footer_data: dict[str, Any] | None = None
     if footer is not None:
-        ended, captured, dropped, final_state = struct.unpack_from("<QIII", footer[4])
+        ended, captured, dropped, final_state = struct.unpack_from("<QIII", footer[5])
         footer_data = {"ended_at_us": ended, "captured_sample_count": captured,
                        "dropped_sample_count": dropped, "final_state": final_state}
     return {
-        "format_version": FORMAT_VERSION, "log_id": next(iter(log_ids)),
+        "format_version": version, "log_id": next(iter(log_ids)),
         "sample_interval_us": sample_interval_us, "started_at_us": started_at_us,
         "firmware_version": firmware_version, "build_id": build_id,
         "configuration_snapshot_hex": configuration.hex(),

@@ -64,6 +64,19 @@ the UART and parser diagnostics. The receiver task is independent of the
 lower-priority USB/logging service, so output backpressure cannot decide when
 receiver input is drained.
 
+UART framing, noise, parity, overrun, or DMA errors can make STM32 HAL abort a
+circular receive operation. The UART error callback therefore only latches the
+error, increments a saturating occurrence count, and requests recovery; it
+does not call HAL or parse bytes in interrupt context. At the start of the next
+1 kHz receiver-task invocation, the board maintenance step makes one bounded
+restart attempt. It stops the old receive operation, clears the UART error and
+stale data flags, resets the DMA producer/consumer epoch, restarts circular
+DMA, and discards only the parser's incomplete frame. Completed-frame and
+protocol-error counters remain intact. A failed restart remains pending and is
+retried at most once on the following task invocation. Until recovery produces
+a new valid CRSF frame, the existing freshness and receiver-loss policy remain
+authoritative.
+
 The separate receiver-loss policy classifies the latest snapshot into live,
 hold, Stage 1 fallback, or latched Stage 2 stop actions. The application logs
 transitions and reports a recoverable connection-loss fault. Phase 3.2 now
@@ -78,7 +91,9 @@ session. Receiver control values still cannot reach motor output. See
 The `receiver` USB command calls a read-only inspection provider in application
 context. The provider copies the raw and normalized snapshots already owned by
 the receiver service, calculates packet age from the monotonic clock, and adds
-the current failsafe, link, UART, parser, and DMA diagnostics. It does not
+the current failsafe, link, UART, parser, and DMA diagnostics. UART diagnostics
+include the last HAL error mask, error occurrences, successful recoveries,
+failed recovery attempts, and whether another attempt is pending. It does not
 consume DMA bytes or call the receiver task. Consequently, inspection is idle
 when no host requests it, and even a slow terminal display cannot delay the
 high-priority receiver input path.

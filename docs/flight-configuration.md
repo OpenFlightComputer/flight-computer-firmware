@@ -11,7 +11,7 @@ validate, and write one complete snapshot.
 compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
 therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, and the
-reviewed receiver-failsafe values in that file. Schema 9 also carries the startup gyro-calibration policy, the selected gyro
+reviewed receiver-failsafe values in that file. Schema 10 carries the startup gyro-calibration policy, the selected gyro
 and accelerometer filters and cutoffs, and the selected attitude estimator, correction time
 constant, and maximum accepted sample gap. It adds control-input deadbands,
 angle/rate limits, maximum throttle, four bounded control-point curves,
@@ -32,6 +32,20 @@ absolute DShot setting stored by each corresponding ESC. They are separate
 fields because a wiring correction may intentionally differ from the nominal
 layout. A configuration editor must update both consistently when changing the
 vehicle convention.
+
+Schema 10 adds the initial `easy_mode` policy. `armed_idle_throttle` is the
+minimum output while receiver control is armed, while an exact zero throttle
+stick still resets the rate controller and commands that equal idle value to
+all motors. Disarming remains the only operation that commands a full motor
+stop. `stabilization_activation_throttle` selects when the launch attitude is
+frozen and begins moving toward level. `takeoff_leveling_rate_dps` bounds that
+movement; disabling `takeoff_leveling_enabled` bypasses the launch-offset
+transition without changing the rest of angle mode.
+
+For the physically verified props-in layout, positive yaw correction raises
+the counter-clockwise M2/M3 pair and lowers the clockwise M1/M4 pair. The
+props-out layout uses the inverse diagonal. This sign is defined against the
+standard body convention where positive yaw rotates the nose right.
 
 ## Runtime commands
 
@@ -77,12 +91,13 @@ Flight Computer V1 reserves STM32F405 sector 11 at `0x080E0000` through
 `0x080FFFFF`. The application linker region ends before it, so normal flashing
 does not overwrite settings. A programmer mass erase still clears the sector.
 
-The board layer stores a 508-byte versioned payload inside fixed 536-byte
+The board layer stores a 512-byte versioned payload inside fixed 536-byte
 append-only records. Each record has a format version, sequence, payload
 length, CRC32, and a commit word programmed last. The sector holds 244 full
 configuration records before an explicit reset is needed.
 
-The loader migrates the 500-byte schema-8 payload by supplying the default
+The loader migrates the 508-byte schema-9 payload by supplying the default
+Easy-mode policy. It migrates the 500-byte schema-8 payload by supplying the default
 accelerometer cutoff and integral-activation threshold. It also migrates the
 488-byte schema-6/schema-7 payload by ignoring its
 retired mixer-factor slots and marking level calibration incomplete. It can
@@ -214,16 +229,15 @@ lost authority, or lost/invalid IMU data. Fresh duplicate or briefly stale IMU
 data does not create another command; the motor layer retains the last complete
 accepted command. Lost or incoherent IMU data enters the central failsafe.
 
-The mixer returns four exact zeros immediately when normalized throttle is
-exactly zero. Otherwise it applies a prepared pure-sign quad-X matrix to the
-three PID corrections. The initial non-airmode policy scales all corrections
-equally until they fit the lower and upper headroom around the requested
-throttle. It never shifts collective power, so the four-motor average cannot
-exceed the shaped throttle and stabilization authority deliberately approaches
-zero near either limit. The average is equal before the central stop threshold
-converts tiny values to exact zero. This preserves correction ratios without
-allowing a small throttle request to create a large collective command. Schema
-7 removes the obsolete open-loop mixer factors because the PID output limits
+While armed in Easy mode, exact zero normalized throttle bypasses axis work and
+commands the configured equal motor idle. For nonzero throttle, the configured
+idle is the lower motor floor and pilot throttle is rescaled across the
+idle-to-full range. The mixer applies a prepared pure-sign quad-X matrix to the
+three PID corrections and scales all corrections equally until they fit the
+headroom between that floor and full output. It never shifts collective power,
+so stabilization cannot force a motor below armed idle. Disarming bypasses this
+policy and the motor safety layer sends four exact-zero stop commands. Schema 7
+removed the obsolete open-loop mixer factors because the PID output limits
 already bound correction authority. The result still passes through the
 central motor lifecycle, source, health, freshness, mapping, and backend gates.
 
@@ -238,9 +252,9 @@ A new low-to-high arm-switch edge is still required to arm again.
 ## Verification boundary
 
 Native tests cover JSON-derived defaults, curve preparation and interpolation,
-deadbands, exact-zero early return, maximum-curve serialization, legacy
+deadbands, armed-idle early return, maximum-curve serialization, legacy
 migration, disarmed-only replacement/reset, runtime application including
 prepared shaping/mixer and processing-pipeline replacement, stabilized mixer
-equations, proportional saturation handling, exact-zero behavior, IMU gates,
+equations, floor-aware saturation handling, armed-idle behavior, IMU gates,
 source ownership, and immediate Stage 2 failsafe entry. Debug and Release
 cross-builds verify the generated header and flash integration.

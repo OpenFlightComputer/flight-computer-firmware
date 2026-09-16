@@ -46,6 +46,10 @@ typedef struct {
     flight_control_desired_rates_t desired_rates;
     rate_controller_output_t rate_output;
     quad_x_mixer_output_t mixer_output;
+    float effective_attitude_target_degrees[2];
+    float motor_baseline;
+    takeoff_leveling_state_t takeoff_leveling_state;
+    uint8_t level_calibration_state;
     bool mixer_output_valid;
 } control_trace_sample_t;
 
@@ -62,9 +66,13 @@ typedef struct {
     imu_freshness_t imu_freshness;
     flight_control_result_t control_result;
     rate_controller_result_t rate_result;
+    takeoff_leveling_state_t takeoff_leveling_state;
+    uint8_t level_calibration_state;
     float receiver[4];
     float setpoint[4];
     float attitude[2];
+    float effective_attitude_target[2];
+    float motor_baseline;
     float desired_rate[3];
     float measured_rate[3];
     rate_pid_output_t pid[3];

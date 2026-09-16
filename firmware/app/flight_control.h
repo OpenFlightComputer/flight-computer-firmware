@@ -30,12 +30,18 @@ typedef struct {
 typedef struct {
     control_setpoint_t setpoint;
     quad_x_mixer_output_t mixer_output;
+    float effective_roll_degrees;
+    float effective_pitch_degrees;
+    float motor_baseline;
+    takeoff_leveling_state_t takeoff_leveling_state;
     bool mixer_output_valid;
 } flight_control_output_t;
 
 typedef struct {
     const roll_attitude_controller_config_t *roll_controller;
     const pitch_attitude_controller_config_t *pitch_controller;
+    const easy_mode_config_t *easy_mode;
+    takeoff_leveling_t *takeoff_leveling;
     rate_controller_t *rate_controller;
     const attitude_snapshot_t *attitude;
     imu_freshness_t imu_freshness;

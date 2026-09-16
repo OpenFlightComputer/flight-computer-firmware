@@ -42,6 +42,18 @@ receiver_source_t crsf_receiver_source_interface(
     };
 }
 
+void crsf_receiver_source_discard_partial_frame(
+    crsf_receiver_source_t *source)
+{
+    if ((source == NULL) || !source->initialized) {
+        return;
+    }
+
+    source->parser.received_length = 0U;
+    source->parser.expected_length = 0U;
+    source->parser.last_push_rejected_frame = false;
+}
+
 receiver_source_result_t crsf_receiver_source_read(
     void *context,
     receiver_channel_frame_t *frame)

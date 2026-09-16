@@ -81,3 +81,4 @@ control_trace_t firmware_control_trace;
 blackbox_t firmware_blackbox;
 flight_control_desired_rates_t firmware_flight_control_desired_rates;
 rate_controller_output_t firmware_rate_controller_output;
+takeoff_leveling_t firmware_takeoff_leveling;

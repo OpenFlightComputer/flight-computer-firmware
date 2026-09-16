@@ -8,12 +8,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define BLACKBOX_FORMAT_VERSION 1U
+#define BLACKBOX_FORMAT_VERSION 2U
+#define BLACKBOX_STORAGE_FORMAT_VERSION 1U
 #define BLACKBOX_QUEUE_CAPACITY 32U
 #define BLACKBOX_LOG_CAPACITY 16U
 #define BLACKBOX_SAMPLE_RATE_HZ 100U
 #define BLACKBOX_SAMPLE_INTERVAL_US UINT32_C(10000)
-#define BLACKBOX_CONFIGURATION_CAPACITY 508U
+#define BLACKBOX_CONFIGURATION_CAPACITY 512U
 
 typedef struct {
     uint32_t id;
@@ -55,6 +56,7 @@ typedef struct {
     uint64_t maximum_sector_write_time_us;
     uint64_t sector_write_started_at_us;
     uint64_t next_checkpoint_at_sample;
+    uint64_t finish_after_us;
     uint32_t next_sector;
     uint32_t next_log_id;
     uint32_t generation;
@@ -65,6 +67,7 @@ typedef struct {
     uint32_t maximum_queue_depth;
     uint8_t sample_count_in_block;
     blackbox_status_t status;
+    system_state_t previous_system_state;
     bool sector_write_active;
     bool armed_seen;
     bool initialized;
@@ -80,6 +83,9 @@ bool blackbox_set_configuration(blackbox_t *blackbox,
                                 const uint8_t *configuration,
                                 size_t configuration_length);
 bool blackbox_storage_initialize(blackbox_t *blackbox);
+bool blackbox_capture_due(const blackbox_t *blackbox,
+                          uint64_t timestamp_us,
+                          system_state_t state);
 void blackbox_capture(blackbox_t *blackbox,
                       const control_trace_sample_t *sample);
 void blackbox_service(blackbox_t *blackbox);

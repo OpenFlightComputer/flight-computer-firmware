@@ -126,9 +126,13 @@ static void valid_commands_and_key_order_are_accepted(void)
     request = parse(
         "{\"type\":\"command\",\"request_id\":8,"
         "\"command\":\"config_write\",\"configuration\":{"
-        "\"schema_version\":9,\"motors\":{\"propeller_layout\":"
+        "\"schema_version\":10,\"motors\":{\"propeller_layout\":"
         "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
         "\"NORMAL\",\"REVERSED\"]},"
+        "\"easy_mode\":{\"armed_idle_throttle\":0.05,"
+        "\"stabilization_activation_throttle\":0.18,"
+        "\"takeoff_leveling_enabled\":true,"
+        "\"takeoff_leveling_rate_dps\":10.0},"
         "\"control\":{"
         "\"roll\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
         "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","
@@ -163,6 +167,12 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(request.command == USB_JSON_COMMAND_CONFIG_WRITE);
     assert(request.configuration.propeller_layout == 1U);
     assert(request.configuration.directions[0] == 1U);
+    assert(request.configuration.easy_mode_armed_idle_millionths == 50000U);
+    assert(request.configuration.easy_mode_activation_throttle_millionths ==
+           180000U);
+    assert(request.configuration.easy_mode_leveling_enabled);
+    assert(request.configuration.easy_mode_leveling_rate_millionths ==
+           10000000U);
     assert(request.configuration.failsafe_control_millionths[0] == -100000);
     assert(request.configuration.gyro_timing_us[1] == 500000U);
     assert(request.configuration.gyro_threshold_millionths[0] == 5000000U);
@@ -278,7 +288,11 @@ static void response_builders_are_exact_and_bounded(void)
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
     const usb_json_configuration_t configuration = {
-        .schema_version = 9U,
+        .schema_version = 10U,
+        .easy_mode_armed_idle_millionths = 50000U,
+        .easy_mode_activation_throttle_millionths = 180000U,
+        .easy_mode_leveling_rate_millionths = 10000000U,
+        .easy_mode_leveling_enabled = true,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {-100000, 0, 0, 50000, 50000},
         .directions = {0U, 0U, 1U, 0U},
@@ -365,6 +379,11 @@ static void response_builders_are_exact_and_bounded(void)
     assert(strstr(output,
                   "\"directions\":[\"NORMAL\",\"NORMAL\","
                   "\"REVERSED\",\"NORMAL\"]") != NULL);
+    assert(strstr(output,
+                  "\"easy_mode\":{\"armed_idle_throttle\":0.050000,"
+                  "\"stabilization_activation_throttle\":0.180000,"
+                  "\"takeoff_leveling_enabled\":true,"
+                  "\"takeoff_leveling_rate_dps\":10.000000}") != NULL);
     assert(strstr(output, "\"stage_one_roll\":-0.100000") != NULL);
     assert(strstr(output, "\"rate_controller\":{\"type\":\"PID\"") !=
            NULL);
@@ -412,7 +431,11 @@ static void response_builders_are_exact_and_bounded(void)
 static void maximum_curve_response_fits_transport_capacity(void)
 {
     usb_json_configuration_t configuration = {
-        .schema_version = 9U,
+        .schema_version = 10U,
+        .easy_mode_armed_idle_millionths = 50000U,
+        .easy_mode_activation_throttle_millionths = 180000U,
+        .easy_mode_leveling_rate_millionths = 10000000U,
+        .easy_mode_leveling_enabled = true,
         .timing_us = {25000U, 100000U, 400000U, 1500000U, 500000U},
         .failsafe_control_millionths = {0, 0, 0, 50000, 50000},
         .gyro_timing_us = {100000U, 500000U},

@@ -165,7 +165,12 @@ Planned milestones:
    pitch feedback, receiver loss, terminal-state capture, and zero-drop
    standalone recording. Power-loss recovery remains open. The original 500 Hz
    target requires batched SD multi-block writes and remains deferred.
-10. Constrained first-hover preparation and test.
+   Automatic task-context UART/DMA recovery for receiver startup noise is
+   implemented; cold-power-order recovery still requires physical validation.
+10. Constrained first-hover preparation and test. The initial always-selected
+    Easy mode adds configurable armed idle, launch-attitude capture followed by
+    a bounded transition to level, and pre-arm blackbox coverage. Physical
+    propeller-free validation remains before the next lift-off.
 
 After the control behavior has been physically validated, perform a
 behavior-preserving readability pass over the flight-control coordinator.
@@ -177,9 +182,10 @@ algorithms. This cleanup is recorded work but is not a first-hover blocker.
 
 Explicitly defer setpoint slew limiting until physical control tests show that
 expo plus angle/rate limits are insufficient. Also defer acrobatic/rate-only
-flight modes and their supporting airmode/armed-idle behavior. The initial
-zero-throttle policy remains an actual motor stop with the rate-controller
-integral reset to zero; it does not add free-fall-specific leveling limits on
+flight modes and their supporting airmode behavior. Easy mode now commands a
+configurable equal armed-idle output at exact zero stick while resetting the
+rate controller; disarm remains a complete motor stop. It does not add
+free-fall-specific leveling limits on
 throttle recovery, acceleration-magnitude gating of accelerometer correction,
 or a dedicated gyro-only free-fall estimator mode. Revisit these together when
 an aggressive flight mode is designed.

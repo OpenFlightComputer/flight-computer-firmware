@@ -106,9 +106,16 @@ int main(void)
             {.kp = 0.01F, .integral_limit = 0.2F, .output_limit = 1.0F},
         },
     };
+    const easy_mode_config_t easy_mode = {
+        .armed_idle_permille = 50U,
+        .activation_throttle_permille = 180U,
+        .leveling_rate_decidegrees_per_second = 100U,
+        .takeoff_leveling_enabled = true,
+    };
     prepared_control_input_shaping_t control;
     prepared_quad_x_mixer_t mixer;
     rate_controller_t rate_controller;
+    takeoff_leveling_t takeoff_leveling;
     flight_control_desired_rates_t desired_rates;
     rate_controller_output_t rate_output;
     volatile uint32_t rate_result = UINT32_MAX;
@@ -124,9 +131,13 @@ int main(void)
     assert(control_input_shaping_prepare(&control_config, &control));
     assert(quad_x_mixer_prepare(PROPELLER_LAYOUT_PROPS_IN, &mixer));
     assert(rate_controller_initialize(&rate_controller, &rate_config));
+    takeoff_leveling_initialize(&takeoff_leveling);
+    takeoff_leveling_reset(&takeoff_leveling, &easy_mode);
     stabilization = (flight_control_stabilization_t){
         .roll_controller = &roll_controller,
         .pitch_controller = &pitch_controller,
+        .easy_mode = &easy_mode,
+        .takeoff_leveling = &takeoff_leveling,
         .rate_controller = &rate_controller,
         .attitude = &attitude,
         .imu_freshness = IMU_FRESHNESS_FRESH,
@@ -143,16 +154,19 @@ int main(void)
            FLIGHT_CONTROL_IDLE);
     active_source = MOTOR_CONTROL_SOURCE_RECEIVER;
 
-    /* The first valid IMU sample seeds derivative history and commands stop. */
+    /* The first valid IMU sample captures the launch attitude and commands
+       armed idle while it seeds derivative history. */
     assert(flight_control_process_receiver(&control, &mixer, &decision,
                                            &stabilization, &output, 42U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_SEEDED);
-    assert(submitted_command.throttle[0] == 0.0F);
+    assert(close_to(submitted_command.throttle[0], 0.05F));
     assert(desired_rates.valid);
-    assert(desired_rates.desired_rate_dps[0] == 28.0F);
-    assert(desired_rates.desired_rate_dps[1] == -4.0F);
+    assert(close_to(desired_rates.desired_rate_dps[0], 0.0F));
+    assert(close_to(desired_rates.desired_rate_dps[1], 0.0F));
     assert(desired_rates.desired_rate_dps[2] == 75.0F);
+    assert(output.takeoff_leveling_state == TAKEOFF_LEVELING_ACTIVE);
+    assert(close_to(output.motor_baseline, 0.05F));
 
     attitude.acquired_at_us = 2000U;
     attitude.source_sequence = 2U;
@@ -160,12 +174,18 @@ int main(void)
                                            &stabilization, &output, 43U) ==
            FLIGHT_CONTROL_SUBMITTED);
     assert(rate_result == (uint32_t)RATE_CONTROLLER_RESULT_UPDATED);
-    assert(close_to(rate_output.axis[0].total, 0.18F));
-    assert(close_to(rate_output.axis[1].total, 0.01F));
+    assert(close_to(rate_output.axis[0].total, -0.0996F));
+    assert(close_to(rate_output.axis[1].total, 0.0496F));
     assert(close_to(rate_output.axis[2].total, 0.73F));
-    /* The combined corrections retain the expected props-in yaw diagonal. */
-    assert(submitted_command.throttle[0] > submitted_command.throttle[1]);
-    assert(submitted_command.throttle[3] > submitted_command.throttle[1]);
+    assert(output.motor_baseline > 0.5F);
+    assert(output.effective_roll_degrees > 5.0F);
+    assert(output.effective_pitch_degrees < -5.0F);
+    for (size_t motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
+        assert(submitted_command.throttle[motor] >= 0.05F);
+    }
+    /* Positive props-in yaw correction raises the CCW M2/M3 pair. */
+    assert(submitted_command.throttle[1] > submitted_command.throttle[0]);
+    assert(submitted_command.throttle[2] > submitted_command.throttle[3]);
 
     /* Below the configured threshold, P/D remain active but I is cleared. */
     decision.requested_control.throttle = 0.1F;
@@ -197,7 +217,7 @@ int main(void)
     assert(flight_control_process_receiver(&control, &mixer, &decision,
                                            &stabilization, &output, 46U) ==
            FLIGHT_CONTROL_SUBMITTED);
-    assert(submitted_command.throttle[0] == 0.0F);
+    assert(close_to(submitted_command.throttle[0], 0.05F));
     /* Control execution does not require the optional diagnostic output. */
     assert(flight_control_process_receiver(&control, &mixer, &decision,
                                            &stabilization, NULL, 46U) ==
@@ -211,7 +231,7 @@ int main(void)
     assert(flight_control_process_receiver(&control, &mixer, &decision,
                                            &stabilization, &output, 47U) ==
            FLIGHT_CONTROL_SUBMITTED);
-    assert(submitted_command.throttle[0] == 0.0F);
+    assert(close_to(submitted_command.throttle[0], 0.05F));
     assert(desired_rates.desired_rate_dps[0] == 28.0F);
 
     decision.action = RECEIVER_FAILSAFE_ACTION_STOP;

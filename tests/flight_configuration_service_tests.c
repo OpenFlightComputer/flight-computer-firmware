@@ -202,7 +202,7 @@ int main(void)
     assert(service.prepared_mixer.coefficient[1][1] == -1.0F);
     assert(service.prepared_mixer.coefficient[2][1] == 1.0F);
     assert(service.prepared_mixer.coefficient[3][1] == -1.0F);
-    assert(service.prepared_mixer.coefficient[0][2] == -1.0F);
+    assert(service.prepared_mixer.coefficient[0][2] == 1.0F);
     assert(service.active.roll_attitude_controller.gain_per_s == 5.0F);
     assert(level_calibration.state == LEVEL_CALIBRATION_READY);
     assert(level_calibration.roll_trim_degrees == 2.0F);

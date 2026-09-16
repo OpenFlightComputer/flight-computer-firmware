@@ -25,8 +25,21 @@ function(ofc_direction_constant output index)
 endfunction()
 
 ofc_json_get(OFC_CONFIG_SCHEMA_VERSION schema_version)
-if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 9)
-    message(FATAL_ERROR "Default configuration schema_version must be 9")
+if(NOT OFC_CONFIG_SCHEMA_VERSION EQUAL 10)
+    message(FATAL_ERROR "Default configuration schema_version must be 10")
+endif()
+ofc_json_get(OFC_CONFIG_EASY_MODE_ARMED_IDLE
+    easy_mode armed_idle_throttle)
+ofc_json_get(OFC_CONFIG_EASY_MODE_ACTIVATION_THROTTLE
+    easy_mode stabilization_activation_throttle)
+ofc_json_get(OFC_CONFIG_EASY_MODE_LEVELING_ENABLED
+    easy_mode takeoff_leveling_enabled)
+ofc_json_get(OFC_CONFIG_EASY_MODE_LEVELING_RATE
+    easy_mode takeoff_leveling_rate_dps)
+if(OFC_CONFIG_EASY_MODE_LEVELING_ENABLED)
+    set(OFC_CONFIG_EASY_MODE_LEVELING_ENABLED_VALUE true)
+else()
+    set(OFC_CONFIG_EASY_MODE_LEVELING_ENABLED_VALUE false)
 endif()
 string(JSON direction_count LENGTH
     "${OFC_DEFAULT_CONFIGURATION_JSON}" motors directions)
@@ -197,6 +210,14 @@ if(OFC_CONFIG_CONTROL_ROLL_MAXIMUM_ANGLE LESS_EQUAL 0 OR
    OFC_CONFIG_CONTROL_THROTTLE_MAXIMUM LESS_EQUAL 0 OR
    OFC_CONFIG_CONTROL_THROTTLE_MAXIMUM GREATER 1)
     message(FATAL_ERROR "Default control limits are invalid")
+endif()
+if(OFC_CONFIG_EASY_MODE_ARMED_IDLE LESS_EQUAL 0 OR
+   OFC_CONFIG_EASY_MODE_ARMED_IDLE GREATER_EQUAL 1 OR
+   OFC_CONFIG_EASY_MODE_ACTIVATION_THROTTLE LESS_EQUAL 0 OR
+   OFC_CONFIG_EASY_MODE_ACTIVATION_THROTTLE GREATER_EQUAL 1 OR
+   OFC_CONFIG_EASY_MODE_LEVELING_RATE LESS_EQUAL 0 OR
+   OFC_CONFIG_EASY_MODE_LEVELING_RATE GREATER 200)
+    message(FATAL_ERROR "Default Easy-mode configuration is invalid")
 endif()
 if(OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP LESS_EQUAL 0 OR
    OFC_CONFIG_RATE_CONTROLLER_MAXIMUM_GAP GREATER 1000000 OR

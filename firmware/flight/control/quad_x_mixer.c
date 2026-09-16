@@ -13,10 +13,10 @@ static bool correction_is_valid(float value)
     return isfinite(value) && (value >= -1.0F) && (value <= 1.0F);
 }
 
-static float clamp_throttle(float value)
+static float clamp_throttle(float value, float minimum)
 {
-    if (value < 0.0F) {
-        return 0.0F;
+    if (value < minimum) {
+        return minimum;
     }
     if (value > 1.0F) {
         return 1.0F;
@@ -40,13 +40,15 @@ static bool corrections_are_valid(const float correction[3])
 }
 
 static float correction_scale_for_headroom(float throttle,
+                                           float minimum_throttle,
                                            float minimum_delta,
                                            float maximum_delta)
 {
     float scale = 1.0F;
 
     if (minimum_delta < 0.0F) {
-        const float lower_scale = throttle / -minimum_delta;
+        const float lower_scale =
+            (throttle - minimum_throttle) / -minimum_delta;
 
         if (lower_scale < scale) {
             scale = lower_scale;
@@ -70,7 +72,8 @@ bool quad_x_mixer_prepare(propeller_layout_t layout,
     if ((layout >= PROPELLER_LAYOUT_COUNT) || (prepared == NULL)) {
         return false;
     }
-    yaw = layout == PROPELLER_LAYOUT_PROPS_OUT ? -1.0F : 1.0F;
+    /* Positive yaw torque raises the CCW pair for props-in. */
+    yaw = layout == PROPELLER_LAYOUT_PROPS_OUT ? 1.0F : -1.0F;
     *prepared = (prepared_quad_x_mixer_t){
         .coefficient = {
             {1.0F, 1.0F, yaw},
@@ -89,6 +92,18 @@ bool quad_x_mixer_apply_prepared(const prepared_quad_x_mixer_t *prepared,
                                  uint64_t timestamp_us,
                                  quad_x_mixer_output_t *output)
 {
+    return quad_x_mixer_apply_prepared_with_floor(
+        prepared, throttle, 0.0F, correction, timestamp_us, output);
+}
+
+bool quad_x_mixer_apply_prepared_with_floor(
+    const prepared_quad_x_mixer_t *prepared,
+    float throttle,
+    float minimum_throttle,
+    const float correction[3],
+    uint64_t timestamp_us,
+    quad_x_mixer_output_t *output)
+{
     float throttles[MOTOR_COMMAND_MOTOR_COUNT] = {0.0F};
     float delta[MOTOR_COMMAND_MOTOR_COUNT];
     float minimum_delta;
@@ -98,12 +113,14 @@ bool quad_x_mixer_apply_prepared(const prepared_quad_x_mixer_t *prepared,
     size_t axis;
 
     if ((prepared == NULL) || !prepared->initialized ||
-        !unit_value_is_valid(throttle) || (correction == NULL) ||
+        !unit_value_is_valid(throttle) ||
+        !unit_value_is_valid(minimum_throttle) ||
+        (minimum_throttle > throttle) || (correction == NULL) ||
         (output == NULL)) {
         return false;
     }
     *output = (quad_x_mixer_output_t){.correction_scale = 1.0F};
-    if (throttle == 0.0F) {
+    if ((throttle == 0.0F) && (minimum_throttle == 0.0F)) {
         return motor_command_create(&output->command, throttles,
                                     timestamp_us) == MOTOR_COMMAND_CREATE_OK;
     }
@@ -128,9 +145,10 @@ bool quad_x_mixer_apply_prepared(const prepared_quad_x_mixer_t *prepared,
         }
     }
     scale = correction_scale_for_headroom(
-        throttle, minimum_delta, maximum_delta);
+        throttle, minimum_throttle, minimum_delta, maximum_delta);
     for (motor = 0U; motor < MOTOR_COMMAND_MOTOR_COUNT; motor++) {
-        throttles[motor] = clamp_throttle(throttle + (delta[motor] * scale));
+        throttles[motor] = clamp_throttle(
+            throttle + (delta[motor] * scale), minimum_throttle);
     }
     output->correction_scale = scale;
     output->collective_shift = 0.0F;

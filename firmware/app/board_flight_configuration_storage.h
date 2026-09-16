@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FLIGHT_CONFIGURATION_SNAPSHOT_CAPACITY 508U
+#define FLIGHT_CONFIGURATION_SNAPSHOT_CAPACITY 512U
 
 flight_configuration_storage_t board_flight_configuration_storage(void);
 bool board_flight_configuration_snapshot_encode(

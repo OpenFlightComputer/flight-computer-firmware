@@ -350,11 +350,17 @@ static void reset_fakes(void)
     motor_outputs_stopped = false;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 9U,
+            .schema_version = 10U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL}},
+            .easy_mode = {
+                .armed_idle_permille = 50U,
+                .activation_throttle_permille = 180U,
+                .leveling_rate_decidegrees_per_second = 100U,
+                .takeoff_leveling_enabled = true,
+            },
             .control = {
                 .roll = {
                     .deadband = 0.03F,
@@ -912,10 +918,14 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":9,"
+        "\"config_write\",\"configuration\":{\"schema_version\":10,"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},"
+        "\"easy_mode\":{\"armed_idle_throttle\":0.05,"
+        "\"stabilization_activation_throttle\":0.18,"
+        "\"takeoff_leveling_enabled\":true,"
+        "\"takeoff_leveling_rate_dps\":10.0},"
         "\"control\":{"
         "\"roll\":{\"deadband\":0.03,\"maximum_angle_degrees\":30.0,"
         "\"maximum_rate_dps\":180.0,\"curve\":{\"type\":\"CONTROL_POINTS\","

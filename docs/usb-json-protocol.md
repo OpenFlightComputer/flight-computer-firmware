@@ -69,7 +69,7 @@ accepted command is a 100 ms lease: without a fresh accepted request, the
 1 kHz motor-control task transmits stop frames and enters failsafe.
 
 Configuration uses complete documents rather than per-field mutations. The
-write envelope contains the complete schema-9 object from
+write envelope contains the complete schema-10 object from
 `config/default-flight-configuration.json`; this shell command shows the exact
 wire representation without duplicating that large document here:
 
@@ -105,7 +105,7 @@ Examples, each followed by one newline:
 ```json
 {"type":"response","request_id":42,"command":"status","ok":true,"state":"DISARMED","control_source":"NONE","uptime_us":123456,"firmware_version":"0.1.0","build_id":"5db525a"}
 {"type":"response","request_id":43,"command":"health","ok":true,"health":"OK","state":"DISARMED","fault_data_complete":true,"active_fault_count":0,"warning_count":0,"fault_count":0,"critical_count":0,"dropped_fault_count":0,"faults":[],"reported_fault_count":0,"truncated":false}
-{"type":"response","request_id":44,"command":"receiver","ok":true,"available":true,"sequence":7,"age_us":1250,"freshness":"FRESH","channels":[174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189],"normalized":{"roll":-0.500000,"pitch":0.250000,"yaw":0.000000,"throttle":1.000000,"arm":true},"failsafe":{"state":"LIVE","action":"LIVE","stage_two_latched":false,"recovery_ready":false},"link_statistics_present":true,"uplink_rssi_dbm":-42,"uplink_link_quality_percent":99,"uplink_snr_db":8,"uart_bytes":135014,"valid_frames":5000,"crc_errors":0,"framing_errors":0,"dma_overruns":0,"dma_bytes_dropped":0}
+{"type":"response","request_id":44,"command":"receiver","ok":true,"available":true,"sequence":7,"age_us":1250,"freshness":"FRESH","channels":[174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189],"normalized":{"roll":-0.500000,"pitch":0.250000,"yaw":0.000000,"throttle":1.000000,"arm":true},"failsafe":{"state":"LIVE","action":"LIVE","stage_two_latched":false,"recovery_ready":false},"link_statistics_present":true,"uplink_rssi_dbm":-42,"uplink_link_quality_percent":99,"uplink_snr_db":8,"uart_bytes":135014,"valid_frames":5000,"uart_last_error":12,"uart_errors":1,"uart_recoveries":1,"uart_recovery_failures":0,"uart_recovery_pending":false,"crc_errors":0,"framing_errors":0,"dma_overruns":0,"dma_bytes_dropped":0}
 {"type":"response","request_id":45,"command":"imu","ok":true,"available":true,"sequence":8100,"age_us":250,"freshness":"FRESH","acceleration_raw":{"x":20,"y":-30,"z":-16384},"gyroscope_raw":{"x":2,"y":-3,"z":1},"gyroscope_corrected_raw":{"x":0,"y":0,"z":0},"calibration":{"state":"READY","progress_permille":1000,"samples":500,"restarts":0,"bias_raw":{"x":2,"y":-3,"z":1}},"level_calibration":{"state":"READY","progress_permille":1000,"samples":500,"calibrated":true,"roll_trim_millidegrees":105,"pitch_trim_millidegrees":70},"attitude":{"source_sequence":8100,"roll_millidegrees":0,"pitch_millidegrees":0,"filtered_gyroscope_millidps":{"x":0,"y":0,"z":0}},"processing":{"processed":7600,"duplicates":0,"rejected":0,"continuity_resets":0},"service":{"reads":8101,"published":8100,"source_errors":1},"task":{"executions":8101,"last_execution_us":37,"maximum_execution_us":45,"overruns":0,"missed_releases":0},"high_rate":{"budget_us":180,"utilization_permille":180}}
 {"type":"response","request_id":44,"command":"arm","ok":true,"pending":true,"state":"DISARMED"}
 {"type":"response","request_id":45,"command":"arm","ok":false,"state":"BOOT","error":"transition_rejected"}
@@ -113,14 +113,14 @@ Examples, each followed by one newline:
 {"type":"response","request_id":47,"command":"arm","ok":false,"state":"DISARMED","error":"motor_not_ready"}
 {"type":"response","request_id":48,"command":"motor_test","ok":true,"state":"ARMED","motor":2,"throttle":0.100000}
 {"type":"response","request_id":49,"command":"motor_test","ok":false,"state":"ARMED","motor":0,"throttle":0.020000,"error":"motor_not_allowed"}
-{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":9,"motors":{},"control":{},"receiver_failsafe":{},"imu":{}}}
+{"type":"response","request_id":51,"command":"config_read","ok":true,"state":"DISARMED","source":"DEFAULT","configuration":{"schema_version":10,"motors":{},"easy_mode":{},"control":{},"receiver_failsafe":{},"imu":{}}}
 {"type":"error","request_id":null,"error":"invalid_request"}
 {"type":"error","request_id":50,"error":"unsupported_command"}
 ```
 
 The compact `config_read` line above abbreviates the five complete nested
 configuration objects for readability. Actual firmware responses include
-every required schema-9 field and can be written back unchanged.
+every required schema-10 field and can be written back unchanged.
 
 The receiver response is produced only when the USB command is dispatched. It
 copies the receiver service's already-published raw and normalized snapshots;

@@ -41,6 +41,7 @@ extern blackbox_t firmware_blackbox;
 extern flight_control_desired_rates_t
     firmware_flight_control_desired_rates;
 extern rate_controller_output_t firmware_rate_controller_output;
+extern takeoff_leveling_t firmware_takeoff_leveling;
 extern volatile uint32_t firmware_rate_controller_result;
 
 extern volatile uint32_t firmware_flight_control_task_executions;

@@ -25,6 +25,9 @@ static receiver_inspection_t available_inspection(void)
         .uplink_snr_db = 8,
         .uart_received_byte_count = 135014U,
         .valid_frame_count = 5000U,
+        .uart_last_error = 12U,
+        .uart_error_count = 1U,
+        .uart_recovery_count = 1U,
         .crc_error_count = 0U,
         .framing_error_count = 0U,
         .dma_overrun_count = 0U,
@@ -55,6 +58,9 @@ static void available_response_is_exact(void)
         "\"link_statistics_present\":true,\"uplink_rssi_dbm\":-42,"
         "\"uplink_link_quality_percent\":99,\"uplink_snr_db\":8,"
         "\"uart_bytes\":135014,\"valid_frames\":5000,"
+        "\"uart_last_error\":12,\"uart_errors\":1,"
+        "\"uart_recoveries\":1,\"uart_recovery_failures\":0,"
+        "\"uart_recovery_pending\":false,"
         "\"crc_errors\":0,\"framing_errors\":0,\"dma_overruns\":0,"
         "\"dma_bytes_dropped\":0}\n";
     receiver_inspection_t inspection = available_inspection();
@@ -117,6 +123,11 @@ static void maximum_response_fits_transport_and_invalid_data_is_rejected(void)
     inspection.uplink_snr_db = INT8_MIN;
     inspection.uart_received_byte_count = UINT32_MAX;
     inspection.valid_frame_count = UINT32_MAX;
+    inspection.uart_last_error = UINT32_MAX;
+    inspection.uart_error_count = UINT32_MAX;
+    inspection.uart_recovery_count = UINT32_MAX;
+    inspection.uart_recovery_failure_count = UINT32_MAX;
+    inspection.uart_recovery_pending = true;
     inspection.crc_error_count = UINT32_MAX;
     inspection.framing_error_count = UINT32_MAX;
     inspection.dma_overrun_count = UINT32_MAX;

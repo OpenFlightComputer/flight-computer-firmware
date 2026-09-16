@@ -1,5 +1,5 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "motors": {
     "propeller_layout": "PROPS_IN",
     "directions": [
@@ -8,6 +8,12 @@
       "NORMAL",
       "NORMAL"
     ]
+  },
+  "easy_mode": {
+    "armed_idle_throttle": 0.05,
+    "stabilization_activation_throttle": 0.18,
+    "takeoff_leveling_enabled": true,
+    "takeoff_leveling_rate_dps": 10.0
   },
   "control": {
     "roll": {

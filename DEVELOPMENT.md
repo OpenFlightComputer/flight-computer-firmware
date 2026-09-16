@@ -6,14 +6,12 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.9 — preflight diagnostics and automatic SD-card blackbox — is
-implemented in software. The USB trace and first-flight 100 Hz raw-sector
-blackbox share one canonical flight-task capture boundary; SD writes proceed
-asynchronously in a background task. Hardware testing showed that the current
-single-sector writer cannot sustain 500 Hz, so 500 Hz remains a multi-block
-write optimization. Sustained standalone 100 Hz recording is physically
-validated with zero drops. Power-loss recovery remains a bench-validation item
-before first flight.
+Milestone 4.10 — constrained first-hover preparation — is implemented in
+software and awaiting propeller-free physical validation. The initial
+always-selected Easy mode adds configurable armed idle and a bounded transition
+from the actual launch attitude to level. Blackbox capture now begins before
+arming so startup calibration, pre-arm attitude, and the full arm transition
+are available when diagnosing a failed launch.
 
 ## Last completed milestone
 
@@ -23,6 +21,45 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Added the initial Easy-mode policy to schema 10 of the unified configuration:
+  5% armed idle, 18% stabilization activation, takeoff leveling enabled, and a
+  10 degree-per-second leveling transition by default. Exact zero stick resets
+  the rate controller and commands equal idle to all motors; disarm still
+  commands a complete stop. Above zero, the pilot throttle is rescaled into
+  the available idle-to-full output range and mixer correction scaling honors
+  the idle floor.
+- Added a bounded takeoff-leveling state machine. Before activation it captures
+  the difference between the measured launch attitude and pilot angle request.
+  At activation it freezes that offset, then removes it at the configured rate
+  using IMU acquisition timestamps. This permits launch from a non-level rock
+  without treating that surface as the permanent level reference. Receiver
+  Stage 1 bypasses the launch offset and continues to request configured level
+  fallback values.
+- Blackbox format 2 adds effective roll/pitch targets, motor baseline, takeoff
+  state, and level-calibration state. Recording begins during startup, uses
+  10 Hz during steady disarmed operation and 100 Hz during initialization,
+  armed/failsafe operation, and a one-second post-disarm tail. Receiver loss no
+  longer closes the log. The decoder remains compatible with format 1 logs.
+- Unified configuration schema 10 uses the full 512-byte persistent payload.
+  Schema-9 and all older supported records migrate with compiled Easy-mode
+  defaults; corrupt current records still fail startup closed.
+- The first brief lift-off exposed yaw positive feedback. Blackbox log 6 from
+  Release build `78e82a0-dirty` recorded an exactly zero shaped yaw request
+  while measured yaw accelerated to `+376.95 deg/s`. The yaw PID correctly
+  saturated negative, but the props-in mixer raised the physically verified
+  CCW M2/M3 pair and reinforced the rotation. Inverted the yaw column for both
+  propeller layouts and added explicit physical-pair regression checks. This
+  correction requires a new propeller-free validation before another lift-off.
+- Diagnosed an intermittent cold-start receiver failure through SWD: a
+  malformed startup byte latched UART4 framing/overrun errors, STM32 HAL
+  aborted circular DMA reception, and the previous error callback never
+  restarted it. The receiver now latches errors in the ISR and performs one
+  bounded UART/DMA restart attempt in each 1 kHz receiver-task invocation.
+  Recovery clears stale UART state, resets DMA epoch accounting, discards an
+  incomplete CRSF frame, and leaves freshness/failsafe policy authoritative
+  until a valid packet returns. On-demand diagnostics expose the last HAL
+  error mask, occurrence count, successful recoveries, failures, and pending
+  state. Cold-start physical validation remains before first flight.
 - Corrected the Quad-X pitch column after the mounted propeller-free tilt test
   showed positive feedback: pitch disturbances previously increased the motor
   pair that reinforced the measured tilt. Positive pitch correction now raises
@@ -81,9 +118,9 @@ the receiver, mixer, authority gate, and DShot output path.
 - Added a replaceable first-order acceleration-vector low-pass filter, set to
   20 Hz by default. Filtering the vector before deriving roll and pitch rejects
   high-frequency motor vibration without hiding the raw values from diagnostics.
-- Extended configuration, USB transport, and persistent storage to schema 9.
-  Existing 500-byte schema-8 records migrate with the new compiled defaults;
-  the current payload is 508 bytes inside the unchanged 536-byte record.
+- Extended configuration, USB transport, and persistent storage to schema 10.
+  Existing 508-byte schema-9 records migrate with the new compiled defaults;
+  the current payload is 512 bytes inside the unchanged 536-byte record.
 - Added a configurable `integral_activation_throttle` of 20%. Below it, rate
   integrals are cleared while proportional and derivative control remain live.
   Mixer saturation also freezes integration until actuator headroom returns.
@@ -114,10 +151,10 @@ the receiver, mixer, authority gate, and DShot output path.
   35,097 reads, with zero overruns and zero source errors. The runtime deadline
   issue is resolved with substantial margin; normal scheduler task timing
   remains.
-- All 53 native tests pass normally and under address/undefined-behavior
-  sanitizers, all 87 Python host-tool tests pass, and Debug and Release
-  firmware build with warnings as errors. The Debug image uses 88,600 bytes of
-  RAM (67.60%) and 220,464 bytes of application flash (24.03%).
+- All 54 native tests pass normally, all 90 Python host-tool tests pass, and
+  Debug and Release firmware build with warnings as errors. The Debug image
+  uses 89,688 bytes of RAM (68.43%) and 226,500 bytes of application flash
+  (24.69%); Release uses 89,680 bytes of RAM and 167,580 bytes of flash.
 
 - Added a flat hardware-independent IMU processing pipeline after the existing
   sample publication and startup gyro calibration. It converts mapped counts
@@ -290,8 +327,9 @@ the receiver, mixer, authority gate, and DShot output path.
   the firmware does not claim to consume every sensor update.
 - Software builds cannot prove the 1 kHz deadlines, SPI recovery behavior, or
   physical axis signs. All remain explicitly pending on-board measurement.
-- IMU data is not yet an input to motor control, so the new shaping changes
-  stick response but does not pretend to provide stabilization.
+- IMU data now has receiver-path motor authority through the stabilized control
+  chain. Software verification cannot establish physical feedback signs or
+  safe gains; every control change still requires propeller-free validation.
 - The displayed engineering units use the configured ±2 g and ±2000
   degree-per-second ranges. They are diagnostic conversions, not yet calibrated
   control values.
@@ -334,9 +372,10 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Next proposed milestone
 
-Milestone 4.9 — add the request-driven control diagnostics needed for physical
-IMU, setpoint, PID, mixer-saturation, motor-command, and failure validation,
-then perform the complete propeller-free validation sequence.
+Physically validate the Milestone 4.10 Easy-mode changes without propellers:
+confirm equal armed idle at zero stick, a complete stop on disarm, the expected
+launch-offset transition in a recovered format-2 blackbox, and unchanged
+negative roll/pitch/yaw feedback before the next constrained lift-off.
 
 ## Historical milestone record
 

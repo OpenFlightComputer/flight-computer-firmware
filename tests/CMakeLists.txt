@@ -652,6 +652,19 @@ target_compile_options(attitude_controller_tests PRIVATE
 )
 add_test(NAME attitude_controller COMMAND attitude_controller_tests)
 
+add_executable(takeoff_leveling_tests
+    takeoff_leveling_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/takeoff_leveling.c"
+)
+target_include_directories(takeoff_leveling_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+)
+target_link_libraries(takeoff_leveling_tests PRIVATE m)
+target_compile_options(takeoff_leveling_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME takeoff_leveling COMMAND takeoff_leveling_tests)
+
 add_executable(flight_control_tests
     flight_control_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_control.c"
@@ -663,6 +676,7 @@ add_executable(flight_control_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/yaw_attitude_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/takeoff_leveling.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
 )
 target_include_directories(flight_control_tests PRIVATE

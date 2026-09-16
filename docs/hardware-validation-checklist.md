@@ -308,3 +308,14 @@ firmware link must not be recorded as proof that the flight image works.
   with CRC validation into the ignored local `historic_logs/` archive before
   `storage initialize` restored an empty `READY` index. Automatic bounded
   rollover remains Phase 5 work; blackbox power-loss recovery remains open.
+
+### 2026-09-15 — First lift-off yaw finding on Release `78e82a0-dirty`
+
+- Blackbox log 6 captured 905 samples with zero drops during the first brief
+  lift-off. Shaped yaw demand stayed exactly zero, while measured yaw reached
+  `+376.95 deg/s` and the yaw PID saturated at `-0.20`.
+- The negative correction raised the physically verified CCW M2/M3 pair and
+  lowered the CW M1/M4 pair, reinforcing the measured rotation. The props-in
+  yaw mixer column was inverted so a negative correction now raises M1/M4.
+- [ ] Rebuild, flash, and verify the corrected diagonal in a propeller-free
+  control trace before attempting another constrained lift-off.

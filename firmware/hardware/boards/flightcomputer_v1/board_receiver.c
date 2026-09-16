@@ -18,7 +18,12 @@ static volatile uint32_t receiver_dma_wrap_count;
 static uint32_t receiver_dma_overrun_count;
 static uint32_t receiver_dma_dropped_byte_count;
 static uint32_t receiver_received_byte_count;
+static volatile uint32_t receiver_active_error;
 static volatile uint32_t receiver_last_error;
+static volatile uint32_t receiver_uart_error_count;
+static uint32_t receiver_uart_recovery_count;
+static uint32_t receiver_uart_recovery_failure_count;
+static volatile bool receiver_uart_recovery_pending;
 static bool receiver_dma_initialized;
 static bool receiver_uart_initialized;
 static bool receiver_initialized;
@@ -101,7 +106,37 @@ static bool receiver_read_byte(void *context, uint8_t *byte)
 static uint32_t receiver_error(void *context)
 {
     (void)context;
-    return receiver_last_error;
+    return receiver_active_error;
+}
+
+static void receiver_reset_dma_accounting(void)
+{
+    receiver_dma_read_count = 0U;
+    receiver_dma_wrap_count = 0U;
+}
+
+static bool receiver_restart_dma(void)
+{
+    HAL_NVIC_DisableIRQ(UART4_IRQn);
+    HAL_NVIC_DisableIRQ(DMA1_Stream2_IRQn);
+
+    (void)HAL_UART_DMAStop(&receiver_uart);
+    __HAL_UART_CLEAR_PEFLAG(&receiver_uart);
+    receiver_uart.ErrorCode = HAL_UART_ERROR_NONE;
+    receiver_reset_dma_accounting();
+
+    if (HAL_UART_Receive_DMA(&receiver_uart,
+                             (uint8_t *)receiver_dma_buffer,
+                             FLIGHTCOMPUTER_V1_RECEIVER_DMA_CAPACITY) !=
+        HAL_OK) {
+        HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
+        HAL_NVIC_EnableIRQ(UART4_IRQn);
+        return false;
+    }
+    __HAL_DMA_DISABLE_IT(&receiver_dma, DMA_IT_HT);
+    HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
+    HAL_NVIC_EnableIRQ(UART4_IRQn);
+    return true;
 }
 
 static void receiver_release_hardware(void)
@@ -143,7 +178,12 @@ board_receiver_init_result_t board_receiver_initialize(
     receiver_dma_overrun_count = 0U;
     receiver_dma_dropped_byte_count = 0U;
     receiver_received_byte_count = 0U;
+    receiver_active_error = HAL_UART_ERROR_NONE;
     receiver_last_error = HAL_UART_ERROR_NONE;
+    receiver_uart_error_count = 0U;
+    receiver_uart_recovery_count = 0U;
+    receiver_uart_recovery_failure_count = 0U;
+    receiver_uart_recovery_pending = false;
     receiver_dma_initialized = false;
     receiver_uart_initialized = false;
     receiver_initialized = false;
@@ -224,6 +264,25 @@ board_receiver_init_result_t board_receiver_initialize(
     return BOARD_RECEIVER_INIT_OK;
 }
 
+void board_receiver_maintain(void)
+{
+    if (!receiver_initialized || !receiver_uart_recovery_pending) {
+        return;
+    }
+
+    /* One restart attempt per receiver-task invocation bounds task latency. */
+    receiver_uart_recovery_pending = false;
+    if (!receiver_restart_dma()) {
+        saturating_increment(&receiver_uart_recovery_failure_count);
+        receiver_uart_recovery_pending = true;
+        return;
+    }
+
+    receiver_active_error = HAL_UART_ERROR_NONE;
+    crsf_receiver_source_discard_partial_frame(&receiver_crsf_source);
+    saturating_increment(&receiver_uart_recovery_count);
+}
+
 bool board_receiver_statistics(board_receiver_statistics_t *statistics)
 {
     if (!receiver_initialized || (statistics == NULL)) {
@@ -233,6 +292,9 @@ bool board_receiver_statistics(board_receiver_statistics_t *statistics)
     *statistics = (board_receiver_statistics_t){
         .uart_received_byte_count = receiver_received_byte_count,
         .uart_error = receiver_last_error,
+        .uart_error_count = receiver_uart_error_count,
+        .uart_recovery_count = receiver_uart_recovery_count,
+        .uart_recovery_failure_count = receiver_uart_recovery_failure_count,
         .valid_frame_count = receiver_crsf_source.parser.valid_frame_count,
         .channel_frame_count = receiver_crsf_source.channel_frame_count,
         .link_statistics_frame_count =
@@ -248,6 +310,7 @@ bool board_receiver_statistics(board_receiver_statistics_t *statistics)
             receiver_crsf_source.link_statistics.uplink_link_quality_percent,
         .uplink_snr_db = receiver_crsf_source.link_statistics.uplink_snr_db,
         .link_statistics_present = receiver_crsf_source.link_statistics_valid,
+        .uart_recovery_pending = receiver_uart_recovery_pending,
     };
     return true;
 }
@@ -269,7 +332,12 @@ void DMA1_Stream2_IRQHandler(void)
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *handle)
 {
     if (handle == &receiver_uart) {
+        receiver_active_error = handle->ErrorCode;
         receiver_last_error = handle->ErrorCode;
+        if (receiver_uart_error_count != UINT32_MAX) {
+            receiver_uart_error_count++;
+        }
+        receiver_uart_recovery_pending = true;
     }
 }
 

@@ -27,11 +27,16 @@ typedef struct {
     uint8_t uplink_link_quality_percent;
     int8_t uplink_snr_db;
     uint32_t uart_received_byte_count;
+    uint32_t uart_last_error;
+    uint32_t uart_error_count;
+    uint32_t uart_recovery_count;
+    uint32_t uart_recovery_failure_count;
     uint32_t valid_frame_count;
     uint32_t crc_error_count;
     uint32_t framing_error_count;
     uint32_t dma_overrun_count;
     uint32_t dma_dropped_byte_count;
+    bool uart_recovery_pending;
     bool available;
 } receiver_inspection_t;
 

@@ -10,13 +10,15 @@
 #define BLACKBOX_BLOCK_CRC_OFFSET 508U
 #define BLACKBOX_BLOCK_PAYLOAD_CAPACITY \
     (BLACKBOX_BLOCK_CRC_OFFSET - BLACKBOX_BLOCK_HEADER_SIZE)
-#define BLACKBOX_SAMPLE_SIZE 232U
+#define BLACKBOX_SAMPLE_SIZE 244U
 #define BLACKBOX_SAMPLES_PER_BLOCK 2U
 #define BLACKBOX_CHECKPOINT_SAMPLE_INTERVAL UINT64_C(500)
 #define BLACKBOX_CONFIGURATION_CHUNK_SIZE BLACKBOX_BLOCK_PAYLOAD_CAPACITY
 #define BLACKBOX_FIRST_DATA_SECTOR UINT32_C(2)
 #define BLACKBOX_SUPERBLOCK_LOG_OFFSET 32U
 #define BLACKBOX_SUPERBLOCK_LOG_SIZE 24U
+#define BLACKBOX_IDLE_SAMPLE_INTERVAL_US UINT32_C(100000)
+#define BLACKBOX_POST_DISARM_DURATION_US UINT64_C(1000000)
 
 typedef enum {
     BLACKBOX_BLOCK_FLIGHT_HEADER = 1,
@@ -89,7 +91,7 @@ static void put_string(uint8_t *destination, size_t capacity, const char *value)
 static bool superblock_valid(const uint8_t sector[SD_CARD_SECTOR_SIZE])
 {
     return (get_u32(sector) == BLACKBOX_SUPERBLOCK_MAGIC) &&
-           (get_u32(sector + 4U) == BLACKBOX_FORMAT_VERSION) &&
+           (get_u32(sector + 4U) == BLACKBOX_STORAGE_FORMAT_VERSION) &&
            (get_u32(sector + BLACKBOX_BLOCK_CRC_OFFSET) ==
             crc32(sector, BLACKBOX_BLOCK_CRC_OFFSET));
 }
@@ -100,7 +102,7 @@ static void build_superblock(const blackbox_t *blackbox,
     size_t index;
     memset(sector, 0, SD_CARD_SECTOR_SIZE);
     put_u32(sector, BLACKBOX_SUPERBLOCK_MAGIC);
-    put_u32(sector + 4U, BLACKBOX_FORMAT_VERSION);
+    put_u32(sector + 4U, BLACKBOX_STORAGE_FORMAT_VERSION);
     put_u32(sector + 8U, blackbox->generation);
     put_u32(sector + 12U, blackbox->next_sector);
     put_u32(sector + 16U, blackbox->next_log_id);
@@ -273,7 +275,8 @@ static bool start_flight(blackbox_t *blackbox, uint64_t timestamp_us)
     blackbox->next_checkpoint_at_sample =
         BLACKBOX_CHECKPOINT_SAMPLE_INTERVAL;
     blackbox->sample_count_in_block = 0U;
-    blackbox->armed_seen = true;
+    blackbox->armed_seen = false;
+    blackbox->finish_after_us = 0U;
     blackbox->status = BLACKBOX_STATUS_RECORDING;
     return true;
 }
@@ -333,7 +336,9 @@ static void encode_sample(const control_trace_sample_t *sample,
     put_u32(destination + offset, statuses); offset += 4U;
     statuses = ((uint32_t)sample->imu_freshness) |
                ((uint32_t)sample->control_result << 8U) |
-               ((uint32_t)sample->rate_result << 16U);
+               ((uint32_t)sample->rate_result << 16U) |
+               (((uint32_t)sample->takeoff_leveling_state & 0x0fU) << 24U) |
+               (((uint32_t)sample->level_calibration_state & 0x0fU) << 28U);
     if (sample->receiver.valid) { validity |= UINT32_C(1) << 0U; }
     if (sample->setpoint.valid) { validity |= UINT32_C(1) << 1U; }
     if (sample->attitude.valid) { validity |= UINT32_C(1) << 2U; }
@@ -403,29 +408,53 @@ static void encode_sample(const control_trace_sample_t *sample,
               sample->mixer_output.correction_scale); offset += 4U;
     put_float(destination + offset,
               sample->mixer_output.collective_shift); offset += 4U;
+    PUT_FLOAT_ARRAY(sample->effective_attitude_target_degrees, 2U);
+    put_float(destination + offset, sample->motor_baseline); offset += 4U;
     put_u32(destination + offset, sequence);
 #undef PUT_FLOAT_ARRAY
 }
 
+static uint32_t sample_interval_for(const blackbox_t *blackbox,
+                                    system_state_t state)
+{
+    if ((state == SYSTEM_STATE_BOOT) ||
+        (state == SYSTEM_STATE_INITIALIZING) ||
+        (state == SYSTEM_STATE_ARMED) ||
+        (state == SYSTEM_STATE_FAILSAFE) ||
+        (blackbox->finish_after_us != 0U)) {
+        return BLACKBOX_SAMPLE_INTERVAL_US;
+    }
+    return BLACKBOX_IDLE_SAMPLE_INTERVAL_US;
+}
+
 static uint64_t sample_periods_due(blackbox_t *blackbox,
-                                   uint64_t timestamp_us)
+                                   uint64_t timestamp_us,
+                                   uint32_t interval_us,
+                                   bool force)
 {
     uint64_t periods;
     uint64_t maximum_advance;
 
+    if (force) {
+        blackbox->next_sample_at_us =
+            timestamp_us <= UINT64_MAX - interval_us
+                ? timestamp_us + interval_us
+                : UINT64_MAX;
+        return 1U;
+    }
     if ((blackbox->next_sample_at_us == UINT64_MAX) ||
         (timestamp_us < blackbox->next_sample_at_us)) {
         return 0U;
     }
     periods = ((timestamp_us - blackbox->next_sample_at_us) /
-               BLACKBOX_SAMPLE_INTERVAL_US) + 1U;
+               interval_us) + 1U;
     maximum_advance = (UINT64_MAX - blackbox->next_sample_at_us) /
-                      BLACKBOX_SAMPLE_INTERVAL_US;
+                      interval_us;
     if (periods > maximum_advance) {
         blackbox->next_sample_at_us = UINT64_MAX;
     } else {
         blackbox->next_sample_at_us +=
-            periods * BLACKBOX_SAMPLE_INTERVAL_US;
+            periods * interval_us;
     }
     return periods;
 }
@@ -585,11 +614,35 @@ bool blackbox_storage_initialize(blackbox_t *blackbox)
     return true;
 }
 
+bool blackbox_capture_due(const blackbox_t *blackbox,
+                          uint64_t timestamp_us,
+                          system_state_t state)
+{
+    if ((blackbox == NULL) || !blackbox->initialized ||
+        (blackbox->status == BLACKBOX_STATUS_NO_MEDIA) ||
+        (blackbox->status == BLACKBOX_STATUS_UNINITIALIZED) ||
+        (blackbox->status == BLACKBOX_STATUS_FINISHING) ||
+        (blackbox->status == BLACKBOX_STATUS_ERROR)) {
+        return false;
+    }
+    if (blackbox->status == BLACKBOX_STATUS_READY) {
+        return state != SYSTEM_STATE_FAULT;
+    }
+    return (state != blackbox->previous_system_state) ||
+           (state == SYSTEM_STATE_FAULT) ||
+           ((blackbox->finish_after_us != 0U) &&
+            (timestamp_us >= blackbox->finish_after_us)) ||
+           ((blackbox->next_sample_at_us != UINT64_MAX) &&
+            (timestamp_us >= blackbox->next_sample_at_us));
+}
+
 void blackbox_capture(blackbox_t *blackbox,
                       const control_trace_sample_t *sample)
 {
     uint8_t *destination;
     uint64_t periods_due;
+    uint32_t interval_us;
+    bool state_changed;
     bool stop_after;
 
     if ((blackbox == NULL) || !blackbox->initialized || (sample == NULL) ||
@@ -598,8 +651,12 @@ void blackbox_capture(blackbox_t *blackbox,
         (blackbox->status == BLACKBOX_STATUS_ERROR)) {
         return;
     }
-    if ((blackbox->status == BLACKBOX_STATUS_READY) &&
-        (sample->system_state == SYSTEM_STATE_ARMED)) {
+    if (blackbox->status == BLACKBOX_STATUS_READY) {
+        /* A terminal fault may continue to be observed while background
+           writes finish. Keep the completed log terminal until reboot. */
+        if (sample->system_state == SYSTEM_STATE_FAULT) {
+            return;
+        }
         blackbox->active_block_sequence = 0U;
         if (!start_flight(blackbox, sample->timestamp_us)) {
             blackbox->status = BLACKBOX_STATUS_ERROR;
@@ -609,11 +666,25 @@ void blackbox_capture(blackbox_t *blackbox,
     if (blackbox->status != BLACKBOX_STATUS_RECORDING) {
         return;
     }
-    stop_after = blackbox->armed_seen &&
-                 ((sample->system_state == SYSTEM_STATE_DISARMED) ||
-                  (sample->system_state == SYSTEM_STATE_FAILSAFE) ||
-                  (sample->system_state == SYSTEM_STATE_FAULT));
-    periods_due = sample_periods_due(blackbox, sample->timestamp_us);
+    state_changed = sample->system_state != blackbox->previous_system_state;
+    if (sample->system_state == SYSTEM_STATE_ARMED) {
+        blackbox->armed_seen = true;
+        blackbox->finish_after_us = 0U;
+    } else if (blackbox->armed_seen &&
+               (sample->system_state == SYSTEM_STATE_DISARMED) &&
+               (blackbox->finish_after_us == 0U)) {
+        blackbox->finish_after_us =
+            sample->timestamp_us <=
+                    UINT64_MAX - BLACKBOX_POST_DISARM_DURATION_US
+                ? sample->timestamp_us + BLACKBOX_POST_DISARM_DURATION_US
+                : UINT64_MAX;
+    }
+    stop_after = (sample->system_state == SYSTEM_STATE_FAULT) ||
+                 ((blackbox->finish_after_us != 0U) &&
+                  (sample->timestamp_us >= blackbox->finish_after_us));
+    interval_us = sample_interval_for(blackbox, sample->system_state);
+    periods_due = sample_periods_due(
+        blackbox, sample->timestamp_us, interval_us, state_changed);
     if ((periods_due > 0U) || stop_after) {
         if (periods_due > 1U) {
             add_dropped_samples(blackbox, periods_due - 1U);
@@ -640,6 +711,7 @@ void blackbox_capture(blackbox_t *blackbox,
     if (stop_after) {
         finish_flight(blackbox, sample);
     }
+    blackbox->previous_system_state = sample->system_state;
 }
 
 void blackbox_service(blackbox_t *blackbox)

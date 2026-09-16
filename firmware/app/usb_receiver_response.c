@@ -87,6 +87,9 @@ bool usb_receiver_response_build(const receiver_inspection_t *inspection,
             "\"uplink_rssi_dbm\":%d,"
             "\"uplink_link_quality_percent\":%u,\"uplink_snr_db\":%d,"
             "\"uart_bytes\":%lu,\"valid_frames\":%lu,"
+            "\"uart_last_error\":%lu,\"uart_errors\":%lu,"
+            "\"uart_recoveries\":%lu,\"uart_recovery_failures\":%lu,"
+            "\"uart_recovery_pending\":%s,"
             "\"crc_errors\":%lu,\"framing_errors\":%lu,"
             "\"dma_overruns\":%lu,\"dma_bytes_dropped\":%lu}\n",
             (unsigned long)request_id,
@@ -101,6 +104,11 @@ bool usb_receiver_response_build(const receiver_inspection_t *inspection,
             (int)inspection->uplink_snr_db,
             (unsigned long)inspection->uart_received_byte_count,
             (unsigned long)inspection->valid_frame_count,
+            (unsigned long)inspection->uart_last_error,
+            (unsigned long)inspection->uart_error_count,
+            (unsigned long)inspection->uart_recovery_count,
+            (unsigned long)inspection->uart_recovery_failure_count,
+            inspection->uart_recovery_pending ? "true" : "false",
             (unsigned long)inspection->crc_error_count,
             (unsigned long)inspection->framing_error_count,
             (unsigned long)inspection->dma_overrun_count,
@@ -152,6 +160,9 @@ bool usb_receiver_response_build(const receiver_inspection_t *inspection,
         "\"link_statistics_present\":%s,\"uplink_rssi_dbm\":%d,"
         "\"uplink_link_quality_percent\":%u,\"uplink_snr_db\":%d,"
         "\"uart_bytes\":%lu,\"valid_frames\":%lu,"
+        "\"uart_last_error\":%lu,\"uart_errors\":%lu,"
+        "\"uart_recoveries\":%lu,\"uart_recovery_failures\":%lu,"
+        "\"uart_recovery_pending\":%s,"
         "\"crc_errors\":%lu,\"framing_errors\":%lu,"
         "\"dma_overruns\":%lu,\"dma_bytes_dropped\":%lu}\n",
         (unsigned long)request_id,
@@ -189,6 +200,11 @@ bool usb_receiver_response_build(const receiver_inspection_t *inspection,
         (int)inspection->uplink_snr_db,
         (unsigned long)inspection->uart_received_byte_count,
         (unsigned long)inspection->valid_frame_count,
+        (unsigned long)inspection->uart_last_error,
+        (unsigned long)inspection->uart_error_count,
+        (unsigned long)inspection->uart_recovery_count,
+        (unsigned long)inspection->uart_recovery_failure_count,
+        inspection->uart_recovery_pending ? "true" : "false",
         (unsigned long)inspection->crc_error_count,
         (unsigned long)inspection->framing_error_count,
         (unsigned long)inspection->dma_overrun_count,

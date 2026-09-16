@@ -2,20 +2,26 @@
 
 The flight blackbox records the same canonical control sample used by the USB
 control trace, without adding a second diagnostic construction path to the
-flight-control task. Recording starts automatically when the system becomes
-`ARMED` and finishes after preserving the terminal control sample when
-`DISARMED`, `FAILSAFE`, or `FAULT` is observed.
+flight-control task. Recording starts as soon as initialized SD storage and a
+canonical diagnostic sample are available, so startup calibration, the
+pre-arm attitude, and the complete arm transition are retained. Receiver-loss
+`FAILSAFE` remains in the same log. A fault closes the log immediately; a
+normal disarm retains a one-second 100 Hz tail before closing it.
 
 ## Real-time boundary
 
 The 1 kHz flight task calls `flight_diagnostics_capture()` once. The call
-returns immediately when neither diagnostic consumer is active. During a
-flight it copies a sample into a fixed RAM sector buffer at 100 Hz. Completed
+returns immediately when neither diagnostic consumer is active. During
+startup, flight, failsafe, and the post-disarm tail it copies a sample into a
+fixed RAM sector buffer at 100 Hz. Steady disarmed operation is sampled at 10 Hz.
+Completed
 512-byte sectors enter a fixed 32-sector queue; a background, low-priority SD
 task advances one SPI1 DMA transfer at a time. The flight task never performs
 SPI, waits for the SD card, formats JSON, or allocates memory. If the card
 cannot keep up, new samples are dropped and the count is stored in the flight
-footer and log index.
+footer and log index. A constant-time due check runs before assembling the
+canonical diagnostic sample, so the steady disarmed path does not copy the
+large record at the 1 kHz control-task rate merely to retain it at 10 Hz.
 
 The board backend uses the hardware mapping validated by the manufacturing
 tester: SPI1 on PA5/PA6/PA7, PC4 chip select, and active-low PC5 card detect.
@@ -33,9 +39,10 @@ versioned blocks:
 1. flight header with format version, sample interval, firmware version/build,
    start time, and configuration length/CRC;
 2. the complete stable binary flight-configuration snapshot;
-3. 100 Hz control samples containing raw and filtered IMU data, estimator
+3. version-2 control samples containing raw and filtered IMU data, estimator
    stages, receiver/setpoint values, desired rates, P/I/D terms, mixer results,
-   motor commands, states, timestamps, validity, and event flags;
+   motor commands, effective takeoff-leveling targets, motor baseline,
+   takeoff-leveling/calibration states, timestamps, validity, and event flags;
 4. footer with end time, captured/dropped counts, and final state.
 
 `storage initialize` writes only the two blackbox index sectors. It does not
@@ -58,8 +65,9 @@ Storage management is disarmed-only:
 
 Downloads read one sector per correlated JSON request. The raw `.ofcb` file
 preserves the exact versioned on-card bytes; decoding validates every block
-CRC before producing JSON. The SD card therefore remains installed in the
-aircraft for normal retrieval.
+CRC before producing JSON. The host decoder accepts both the prior version-1
+sample layout and the current version-2 layout. The SD card therefore remains
+installed in the aircraft for normal retrieval.
 
 `storage status` reports the current and maximum queue depth, completed sector
 writes, and average/maximum sector-write latency in addition to captured and

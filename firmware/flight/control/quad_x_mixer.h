@@ -30,6 +30,13 @@ bool quad_x_mixer_apply_prepared(const prepared_quad_x_mixer_t *prepared,
                                  const float correction[3],
                                  uint64_t timestamp_us,
                                  quad_x_mixer_output_t *output);
+bool quad_x_mixer_apply_prepared_with_floor(
+    const prepared_quad_x_mixer_t *prepared,
+    float throttle,
+    float minimum_throttle,
+    const float correction[3],
+    uint64_t timestamp_us,
+    quad_x_mixer_output_t *output);
 bool quad_x_mixer_apply(propeller_layout_t layout,
                         float throttle,
                         const float correction[3],

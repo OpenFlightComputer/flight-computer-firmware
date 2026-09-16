@@ -563,6 +563,7 @@ static bool parse_configuration(const char *line,
     };
     const jsmntok_t *schema;
     const jsmntok_t *motors;
+    const jsmntok_t *easy_mode;
     const jsmntok_t *failsafe;
     const jsmntok_t *imu;
     const jsmntok_t *control;
@@ -577,13 +578,15 @@ static bool parse_configuration(const char *line,
     size_t index;
 
     if ((object == NULL) || (object->type != JSMN_OBJECT) ||
-        (object->size != 10)) {
+        (object->size != 12)) {
         return false;
     }
     schema = object_member(line, tokens, token_count,
                            token_index(tokens, object), "schema_version");
     motors = object_member(line, tokens, token_count,
                            token_index(tokens, object), "motors");
+    easy_mode = object_member(line, tokens, token_count,
+                              token_index(tokens, object), "easy_mode");
     failsafe = object_member(line, tokens, token_count,
                              token_index(tokens, object),
                              "receiver_failsafe");
@@ -592,8 +595,10 @@ static bool parse_configuration(const char *line,
     control = object_member(line, tokens, token_count,
                             token_index(tokens, object), "control");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 9U) || (motors == NULL) ||
+        (schema_value != 10U) || (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
+        (easy_mode == NULL) || (easy_mode->type != JSMN_OBJECT) ||
+        (easy_mode->size != 8) ||
         (failsafe == NULL) ||
         (failsafe->type != JSMN_OBJECT) || (failsafe->size != 20) ||
         (imu == NULL) || (imu->type != JSMN_OBJECT) || (imu->size != 10) ||
@@ -602,6 +607,33 @@ static bool parse_configuration(const char *line,
         return false;
     }
     configuration->schema_version = schema_value;
+
+    if (!parse_normalized_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, easy_mode),
+                          "armed_idle_throttle"),
+            &configuration->easy_mode_armed_idle_millionths) ||
+        !parse_normalized_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, easy_mode),
+                          "stabilization_activation_throttle"),
+            &configuration->easy_mode_activation_throttle_millionths) ||
+        !parse_bool(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, easy_mode),
+                          "takeoff_leveling_enabled"),
+            &configuration->easy_mode_leveling_enabled) ||
+        !parse_positive_millionths(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, easy_mode),
+                          "takeoff_leveling_rate_dps"),
+            &configuration->easy_mode_leveling_rate_millionths)) {
+        return false;
+    }
 
     layout = object_member(line, tokens, token_count,
                            token_index(tokens, motors), "propeller_layout");
@@ -1285,7 +1317,11 @@ bool usb_json_build_configuration_response(
         "\"source\":\"%s\",\"configuration\":{"
         "\"schema_version\":%lu,\"motors\":{"
         "\"propeller_layout\":\"%s\",\"directions\":["
-        "\"%s\",\"%s\",\"%s\",\"%s\"]},\"control\":{"
+        "\"%s\",\"%s\",\"%s\",\"%s\"]},"
+        "\"easy_mode\":{\"armed_idle_throttle\":%lu.%06lu,"
+        "\"stabilization_activation_throttle\":%lu.%06lu,"
+        "\"takeoff_leveling_enabled\":%s,"
+        "\"takeoff_leveling_rate_dps\":%lu.%06lu},\"control\":{"
         "\"roll\":{\"deadband\":%lu.%06lu,"
         "\"maximum_angle_degrees\":%lu.%06lu,"
         "\"maximum_rate_dps\":%lu.%06lu,\"curve\":%s},"
@@ -1338,6 +1374,21 @@ bool usb_json_build_configuration_response(
         accepted ? "true" : "false", state, configuration_source,
         (unsigned long)configuration->schema_version, layout,
         directions[0], directions[1], directions[2], directions[3],
+        (unsigned long)(configuration->easy_mode_armed_idle_millionths /
+                        1000000U),
+        (unsigned long)(configuration->easy_mode_armed_idle_millionths %
+                        1000000U),
+        (unsigned long)(configuration
+                            ->easy_mode_activation_throttle_millionths /
+                        1000000U),
+        (unsigned long)(configuration
+                            ->easy_mode_activation_throttle_millionths %
+                        1000000U),
+        configuration->easy_mode_leveling_enabled ? "true" : "false",
+        (unsigned long)(configuration->easy_mode_leveling_rate_millionths /
+                        1000000U),
+        (unsigned long)(configuration->easy_mode_leveling_rate_millionths %
+                        1000000U),
         (unsigned long)(configuration->control_axis_millionths[0][0] /
                         1000000U),
         (unsigned long)(configuration->control_axis_millionths[0][0] %

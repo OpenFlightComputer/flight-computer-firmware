@@ -113,37 +113,54 @@ int main(void)
     assert(blackbox.status == BLACKBOX_STATUS_UNINITIALIZED);
     assert(blackbox_storage_initialize(&blackbox));
     assert(blackbox.status == BLACKBOX_STATUS_READY);
+    assert(blackbox_capture_due(&blackbox, 80000U,
+                                SYSTEM_STATE_INITIALIZING));
 
-    current = sample(100000U, SYSTEM_STATE_ARMED);
+    current = sample(80000U, SYSTEM_STATE_INITIALIZING);
     blackbox_capture(&blackbox, &current);
     assert(blackbox.status == BLACKBOX_STATUS_RECORDING);
-    current = sample(100000U + BLACKBOX_SAMPLE_INTERVAL_US,
-                     SYSTEM_STATE_ARMED);
+    assert(!blackbox_capture_due(&blackbox, 80001U,
+                                 SYSTEM_STATE_INITIALIZING));
+    assert(!blackbox.armed_seen);
+    current = sample(90000U, SYSTEM_STATE_DISARMED);
     blackbox_capture(&blackbox, &current);
-    current = sample(100000U + BLACKBOX_SAMPLE_INTERVAL_US +
-                         BLACKBOX_SAMPLE_INTERVAL_US / 2U,
+    current = sample(100000U, SYSTEM_STATE_ARMED);
+    blackbox_capture(&blackbox, &current);
+    assert(blackbox.armed_seen);
+    current = sample(100000U + BLACKBOX_SAMPLE_INTERVAL_US,
                      SYSTEM_STATE_FAILSAFE);
+    blackbox_capture(&blackbox, &current);
+    /* Receiver loss remains part of the same log; only a terminal state or
+       the post-disarm tail closes it. */
+    assert(blackbox.status == BLACKBOX_STATUS_RECORDING);
+    current = sample(100000U + 2U * BLACKBOX_SAMPLE_INTERVAL_US,
+                     SYSTEM_STATE_FAULT);
     blackbox_capture(&blackbox, &current);
     assert(blackbox.status == BLACKBOX_STATUS_FINISHING);
     service_until_idle(&blackbox);
     assert(blackbox.status == BLACKBOX_STATUS_READY);
+    assert(!blackbox_capture_due(&blackbox, 130000U, SYSTEM_STATE_FAULT));
     assert(blackbox_log_count(&blackbox) == 1U);
     assert(blackbox_log_information(&blackbox, 0U, &log));
     assert(log.id == 1U);
     assert(log.complete);
-    assert(log.sample_count == 3U);
+    assert(log.sample_count == 5U);
     assert(log.dropped_sample_count == 0U);
     assert(blackbox.maximum_queue_depth > 0U);
     assert(blackbox.completed_sector_write_count > 0U);
     assert(blackbox.maximum_sector_write_time_us == 2500U);
     assert(blackbox.total_sector_write_time_us ==
            blackbox.completed_sector_write_count * 2500U);
+    current = sample(130000U, SYSTEM_STATE_FAULT);
+    blackbox_capture(&blackbox, &current);
+    assert(blackbox.status == BLACKBOX_STATUS_READY);
+    assert(blackbox_log_count(&blackbox) == 1U);
 
     blackbox_initialize(&mounted, &card, configuration,
                         sizeof(configuration), "0.1.0", "test-build");
     assert(mounted.status == BLACKBOX_STATUS_READY);
     assert(blackbox_log_information(&mounted, 0U, &log));
-    assert(log.complete && (log.sample_count == 3U));
+    assert(log.complete && (log.sample_count == 5U));
 
     current = sample(200000U, SYSTEM_STATE_ARMED);
     blackbox_capture(&mounted, &current);
@@ -169,5 +186,22 @@ int main(void)
     assert(!log.complete);
     assert(log.sample_count == 500U);
     assert(log.dropped_sample_count == 2U);
+
+    /* A normal disarm keeps one second of aftermath in the same log. */
+    assert(blackbox_storage_initialize(&blackbox));
+    current = sample(1000000U, SYSTEM_STATE_DISARMED);
+    blackbox_capture(&blackbox, &current);
+    current = sample(1010000U, SYSTEM_STATE_ARMED);
+    blackbox_capture(&blackbox, &current);
+    current = sample(1020000U, SYSTEM_STATE_DISARMED);
+    blackbox_capture(&blackbox, &current);
+    assert(blackbox.status == BLACKBOX_STATUS_RECORDING);
+    assert(blackbox.finish_after_us == 2020000U);
+    current = sample(2010000U, SYSTEM_STATE_DISARMED);
+    blackbox_capture(&blackbox, &current);
+    assert(blackbox.status == BLACKBOX_STATUS_RECORDING);
+    current = sample(2020000U, SYSTEM_STATE_DISARMED);
+    blackbox_capture(&blackbox, &current);
+    assert(blackbox.status == BLACKBOX_STATUS_FINISHING);
     return 0;
 }

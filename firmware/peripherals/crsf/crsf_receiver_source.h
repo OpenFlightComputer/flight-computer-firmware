@@ -34,6 +34,8 @@ bool crsf_receiver_source_initialize(crsf_receiver_source_t *source,
                                      const crsf_byte_stream_t *stream);
 receiver_source_t crsf_receiver_source_interface(
     crsf_receiver_source_t *source);
+void crsf_receiver_source_discard_partial_frame(
+    crsf_receiver_source_t *source);
 receiver_source_result_t crsf_receiver_source_read(
     void *context,
     receiver_channel_frame_t *frame);

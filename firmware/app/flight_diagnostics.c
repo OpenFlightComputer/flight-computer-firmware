@@ -12,10 +12,10 @@ void flight_diagnostics_capture(
     control_trace_sample_t sample;
     const bool usb_trace_enabled =
         firmware_control_trace.level != CONTROL_TRACE_LEVEL_OFF;
-    const bool blackbox_interested =
-        (firmware_blackbox.status == BLACKBOX_STATUS_RECORDING) ||
-        (firmware_blackbox.status == BLACKBOX_STATUS_READY &&
-         firmware_system_state_machine.current == SYSTEM_STATE_ARMED);
+    const bool blackbox_interested = blackbox_capture_due(
+        &firmware_blackbox,
+        now_us,
+        firmware_system_state_machine.current);
 
     if (!usb_trace_enabled && !blackbox_interested) {
         return;
@@ -35,6 +35,14 @@ void flight_diagnostics_capture(
         .desired_rates = firmware_flight_control_desired_rates,
         .rate_output = firmware_rate_controller_output,
         .mixer_output = output->mixer_output,
+        .effective_attitude_target_degrees = {
+            output->effective_roll_degrees,
+            output->effective_pitch_degrees,
+        },
+        .motor_baseline = output->motor_baseline,
+        .takeoff_leveling_state = output->takeoff_leveling_state,
+        .level_calibration_state =
+            (uint8_t)firmware_level_calibration.state,
         .mixer_output_valid = output->mixer_output_valid,
     };
     if (!imu_processing_pipeline_latest_observation(

@@ -155,6 +155,9 @@ static flight_control_stabilization_t read_stabilization_inputs(
                                 .roll_attitude_controller,
         .pitch_controller = &firmware_flight_configuration_service.active
                                  .pitch_attitude_controller,
+        .easy_mode =
+            &firmware_flight_configuration_service.active.easy_mode,
+        .takeoff_leveling = &firmware_takeoff_leveling,
         .rate_controller =
             &firmware_flight_configuration_service.rate_controller,
         .attitude = attitude_is_current ? attitude : NULL,
