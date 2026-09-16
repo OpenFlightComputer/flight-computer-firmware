@@ -118,17 +118,20 @@ bool takeoff_leveling_apply(takeoff_leveling_t *leveling,
             measured_pitch_degrees - pilot_pitch_degrees;
         leveling->last_sample_at_us = sample_at_us;
         if (throttle > 0.0F) {
-            leveling->state = TAKEOFF_LEVELING_FROZEN;
+            /*
+             * Zero pilot throttle already commands the configured armed-idle
+             * motor output. The first positive throttle value therefore marks
+             * the point at which the motor baseline leaves idle. Freeze the
+             * launch reference and begin leveling immediately so the captured
+             * ground attitude is not still commanded at liftoff.
+             */
+            leveling->state = TAKEOFF_LEVELING_ACTIVE;
         }
     }
 
-    if ((leveling->state == TAKEOFF_LEVELING_FROZEN) &&
-        (throttle >= easy_mode_activation_throttle(config))) {
-        leveling->state = TAKEOFF_LEVELING_ACTIVE;
-        leveling->last_sample_at_us = sample_at_us;
-    } else if ((leveling->state == TAKEOFF_LEVELING_ACTIVE) &&
-               (throttle > 0.0F) &&
-               (sample_at_us > leveling->last_sample_at_us)) {
+    if ((leveling->state == TAKEOFF_LEVELING_ACTIVE) &&
+        (throttle > 0.0F) &&
+        (sample_at_us > leveling->last_sample_at_us)) {
         const uint64_t elapsed_us = sample_at_us - leveling->last_sample_at_us;
         const float leveling_rate_dps =
             (float)config->leveling_rate_decidegrees_per_second /

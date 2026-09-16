@@ -37,12 +37,14 @@ Schema 10 adds the initial `easy_mode` policy. `armed_idle_throttle` is the
 minimum output while receiver control is armed, while an exact zero throttle
 stick still resets the rate controller and commands that equal idle value to
 all motors. Disarming remains the only operation that commands a full motor
-stop. `stabilization_activation_throttle` selects when the launch attitude is
-allowed to begin moving toward level. The launch attitude is captured while
-the shaped throttle is exactly zero, then frozen on its first nonzero value for
-the remainder of that arm session. This prevents motion during spool-up from
-silently redefining the launch reference even when throttle remains below the
-activation threshold. `takeoff_leveling_rate_dps` bounds the transition;
+stop. The launch attitude is captured while the shaped throttle is exactly
+zero, then frozen on its first nonzero value for the remainder of that arm
+session. Leveling begins on that same first nonzero sample, when motor output
+leaves armed idle; `stabilization_activation_throttle` remains in schema 10 for
+stored-configuration compatibility but no longer delays takeoff leveling. This
+prevents motion during spool-up from silently redefining the launch reference
+without carrying a tilted target into liftoff. `takeoff_leveling_rate_dps`
+bounds the transition;
 disabling `takeoff_leveling_enabled` bypasses the launch-offset transition
 without changing the rest of angle mode.
 

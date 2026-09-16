@@ -33,53 +33,45 @@ int main(void)
     assert(close_to(roll, 3.0F));
     assert(close_to(pitch, 8.0F));
 
-    /* First nonzero throttle freezes the launch reference. */
+    /* First nonzero throttle freezes the reference and starts leveling. */
     assert(takeoff_leveling_apply(&leveling, &config, 0.17F,
                                   -2.0F, 1.0F, 4.0F, 7.0F, 2000U,
-                                  &roll, &pitch));
-    assert(leveling.state == TAKEOFF_LEVELING_FROZEN);
-    assert(close_to(roll, 4.0F));
-    assert(close_to(pitch, 7.0F));
-
-    /* Later motion below activation must not redefine the launch attitude. */
-    assert(takeoff_leveling_apply(&leveling, &config, 0.10F,
-                                  -2.0F, 1.0F, -12.0F, -15.0F, 2500U,
-                                  &roll, &pitch));
-    assert(leveling.state == TAKEOFF_LEVELING_FROZEN);
-    assert(close_to(roll, 4.0F));
-    assert(close_to(pitch, 7.0F));
-
-    /* Returning to zero also keeps the frozen reference for this arm. */
-    assert(takeoff_leveling_apply(&leveling, &config, 0.0F,
-                                  0.0F, 0.0F, 20.0F, 20.0F, 2750U,
-                                  &roll, &pitch));
-    assert(leveling.state == TAKEOFF_LEVELING_FROZEN);
-    assert(close_to(roll, 6.0F));
-    assert(close_to(pitch, 6.0F));
-
-    /* Activation begins the transition without changing the frozen offset. */
-    assert(takeoff_leveling_apply(&leveling, &config, 0.18F,
-                                  -2.0F, 1.0F, 4.0F, 7.0F, 3000U,
                                   &roll, &pitch));
     assert(leveling.state == TAKEOFF_LEVELING_ACTIVE);
     assert(close_to(roll, 4.0F));
     assert(close_to(pitch, 7.0F));
 
-    /* Ten degrees per second removes one degree in 100 ms. */
-    assert(takeoff_leveling_apply(&leveling, &config, 0.2F,
-                                  -2.0F, 1.0F, 3.0F, 6.0F, 103000U,
+    /* Leveling proceeds below the legacy activation threshold. */
+    assert(takeoff_leveling_apply(&leveling, &config, 0.10F,
+                                  -2.0F, 1.0F, -12.0F, -15.0F, 102000U,
                                   &roll, &pitch));
-    assert(close_to(leveling.launch_roll_offset_degrees, 5.0F));
-    assert(close_to(leveling.launch_pitch_offset_degrees, 5.0F));
+    assert(leveling.state == TAKEOFF_LEVELING_ACTIVE);
     assert(close_to(roll, 3.0F));
     assert(close_to(pitch, 6.0F));
 
+    /* Returning to zero pauses leveling and preserves the current reference. */
+    assert(takeoff_leveling_apply(&leveling, &config, 0.0F,
+                                  0.0F, 0.0F, 20.0F, 20.0F, 202000U,
+                                  &roll, &pitch));
+    assert(leveling.state == TAKEOFF_LEVELING_ACTIVE);
+    assert(close_to(roll, 5.0F));
+    assert(close_to(pitch, 5.0F));
+
+    /* Ten degrees per second removes another degree in 100 ms. */
+    assert(takeoff_leveling_apply(&leveling, &config, 0.2F,
+                                  -2.0F, 1.0F, 3.0F, 6.0F, 202000U,
+                                  &roll, &pitch));
+    assert(close_to(leveling.launch_roll_offset_degrees, 4.0F));
+    assert(close_to(leveling.launch_pitch_offset_degrees, 4.0F));
+    assert(close_to(roll, 2.0F));
+    assert(close_to(pitch, 5.0F));
+
     /* Exact zero pauses an active transition. */
     assert(takeoff_leveling_apply(&leveling, &config, 0.0F,
-                                  0.0F, 0.0F, 3.0F, 6.0F, 203000U,
+                                  0.0F, 0.0F, 3.0F, 6.0F, 303000U,
                                   &roll, &pitch));
-    assert(close_to(leveling.launch_roll_offset_degrees, 5.0F));
-    assert(close_to(leveling.launch_pitch_offset_degrees, 5.0F));
+    assert(close_to(leveling.launch_roll_offset_degrees, 4.0F));
+    assert(close_to(leveling.launch_pitch_offset_degrees, 4.0F));
 
     assert(takeoff_leveling_apply(&leveling, &config, 0.2F,
                                   0.0F, 0.0F, 0.0F, 0.0F, 703000U,
