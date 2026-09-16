@@ -9,6 +9,18 @@ Run `./ofc --help` from the repository root. Hardware-changing smoke tests are
 safe by default with respect to actuators: they query `status` and `health` but
 never send `arm` or motor commands.
 
+Update a normally running, disarmed flight computer through USB-C with:
+
+```bash
+./ofc firmware flash-usb --profile release
+```
+
+This asks firmware to stop motor output and reset once into the STM32F405 ROM
+DFU loader, programs and verifies only application flash, restarts it, and
+confirms the running build ID. It preserves the configuration sector and never
+requests a mass erase. SWD remains the recovery path. See
+`docs/usb-firmware-update.md`.
+
 Inspect the receiver once or use the tester-style live display with:
 
 ```bash

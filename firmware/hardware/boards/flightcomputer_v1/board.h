@@ -71,6 +71,10 @@ typedef enum {
 
 board_init_result_t board_initialize(void);
 _Noreturn void board_halt(void);
+/* Must be called before normal HAL/application initialization. */
+void board_enter_usb_bootloader_if_requested(void);
+/* Records a one-shot request and resets into the factory ROM USB DFU loader. */
+_Noreturn void board_request_usb_bootloader(void);
 bool board_status_indicator_set_rgb(uint8_t red, uint8_t green, uint8_t blue);
 
 uint32_t board_motor_output_timer_clock_frequency_hz(void);

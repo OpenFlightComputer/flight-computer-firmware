@@ -1027,6 +1027,41 @@ static bool build_command_response(usb_command_processor_t *processor,
             sizeof(processor->pending_response),
             &processor->pending_response_length);
     }
+    case USB_JSON_COMMAND_BOOTLOADER_ENTER: {
+        const bool safe_state =
+            (processor->state_machine->current == SYSTEM_STATE_DISARMED) &&
+            (motor_control_active_source() == MOTOR_CONTROL_SOURCE_NONE) &&
+            (motor_control_pending_source() == MOTOR_CONTROL_SOURCE_NONE);
+        bool accepted = false;
+        const char *error = "state_rejected";
+
+        saturating_increment(&processor->statistics.bootloader_enter_count);
+        if (processor->bootloader_handoff_pending) {
+            error = "handoff_pending";
+        } else if (safe_state) {
+            if (motor_control_force_stop() == MOTOR_CONTROL_STOP_ACCEPTED) {
+                processor->bootloader_handoff_pending = true;
+                accepted = true;
+                error = NULL;
+            } else {
+                error = "motor_stop_failed";
+            }
+        }
+        if (!accepted) {
+            saturating_increment(
+                &processor->statistics.bootloader_enter_rejected_count);
+        }
+        return usb_json_build_transition_response(
+            request->command,
+            request->request_id,
+            accepted,
+            false,
+            system_state_name(processor->state_machine->current),
+            error,
+            processor->pending_response,
+            sizeof(processor->pending_response),
+            &processor->pending_response_length);
+    }
     case USB_JSON_COMMAND_MOTOR_TEST:
         return build_motor_test_response(processor, request);
     case USB_JSON_COMMAND_CONFIG_READ:
@@ -1171,4 +1206,25 @@ usb_command_process_result_t usb_command_processor_process_once(
 
     processor->pending_response_valid = true;
     return try_send_pending_response(processor);
+}
+
+bool usb_command_processor_take_bootloader_handoff(
+    usb_command_processor_t *processor)
+{
+    if ((processor == NULL) || !processor->initialized ||
+        !processor->bootloader_handoff_pending ||
+        processor->pending_response_valid ||
+        (usb_cdc_transport_queued_count() != 0U)) {
+        return false;
+    }
+
+    processor->bootloader_handoff_pending = false;
+    return true;
+}
+
+bool usb_command_processor_bootloader_handoff_pending(
+    const usb_command_processor_t *processor)
+{
+    return (processor != NULL) && processor->initialized &&
+           processor->bootloader_handoff_pending;
 }

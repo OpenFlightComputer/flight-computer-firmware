@@ -34,6 +34,7 @@ from openflightcomputer.protocol import JsonProtocolClient, ProtocolError
 from openflightcomputer.receiver import ReceiverView
 from openflightcomputer.reporting import smoke_report_data, write_smoke_report
 from openflightcomputer.workflows.flash import build_and_flash
+from openflightcomputer.workflows.usb_flash import build_and_flash_usb
 from openflightcomputer.workflows.motor import run_motor_test
 from openflightcomputer.workflows.smoke import run_smoke
 
@@ -98,6 +99,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_profile(build)
     flash = firmware_commands.add_parser("flash", help="build, program, verify, and reset")
     _add_flash_options(flash)
+    flash_usb = firmware_commands.add_parser(
+        "flash-usb", help="build and update through the STM32 factory USB DFU loader"
+    )
+    _add_profile(flash_usb)
+    flash_usb.add_argument("--firmware", type=_firmware_file, metavar="ELF")
+    flash_usb.add_argument("--programmer", type=_existing_file, metavar="PATH")
+    _add_device_options(flash_usb)
+    flash_usb.set_defaults(timeout=20.0)
 
     device = commands.add_parser("device", help="inspect a running flight computer")
     device_commands = device.add_subparsers(dest="device_command", required=True)
@@ -559,6 +568,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Firmware: {artifact.elf_path}")
                 print(f"Version: {artifact.firmware_version or 'unknown'}")
                 print(f"Build ID: {artifact.build_id or 'unknown'}")
+                return 0
+            if arguments.firmware_command == "flash-usb":
+                outcome = build_and_flash_usb(
+                    arguments.profile,
+                    firmware_path=arguments.firmware,
+                    programmer_path=arguments.programmer,
+                    requested_port=arguments.port,
+                    timeout_seconds=arguments.timeout,
+                    progress=_progress,
+                )
+                print(f"Firmware: {outcome.artifact.elf_path}")
+                print(f"DFU port: {outcome.dfu_port}")
+                print(f"Device: {outcome.device_port}")
+                print(f"Build ID: {outcome.status.get('build_id', 'unknown')}")
                 return 0
             outcome = build_and_flash(
                 arguments.profile,

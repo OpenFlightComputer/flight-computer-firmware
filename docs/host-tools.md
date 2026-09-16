@@ -6,6 +6,7 @@ to run the Python package in `host_tools/` and currently provides:
 ```text
 ofc firmware build [--profile debug|release]
 ofc firmware flash [--profile debug|release] [--firmware IMAGE.elf]
+ofc firmware flash-usb [--profile debug|release] [--firmware IMAGE.elf]
 ofc device status [--port PATH]
 ofc device receiver [--watch] [--interval SECONDS] [--port PATH]
 ofc device arm [--port PATH]
@@ -21,6 +22,12 @@ They require exactly one ST-Link or an explicit `--probe-serial`, program and
 read-back verify through STM32CubeProgrammer, then reset the target. The
 programmer can be selected with `--programmer` or
 `STM32CUBE_PROGRAMMER_CLI`.
+
+`firmware flash-usb` instead asks a running, disarmed flight computer to enter
+the STM32F405 factory ROM DFU loader. It rejects an ELF that touches anything
+outside application flash, downloads and verifies without mass erase, starts
+the image, then reconnects over CDC and checks the generated build ID. SWD
+remains the recovery path; see `usb-firmware-update.md`.
 
 USB discovery selects the flight-firmware development identity `CAFE:4002` or
 an explicit `--port`. `device status` makes one correlated request while

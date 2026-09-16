@@ -245,6 +245,7 @@ add_executable(flight_firmware
     peripherals/usb/usb_descriptors.c
     peripherals/usb/usb_json_protocol.c
     hardware/boards/flightcomputer_v1/board.c
+    hardware/boards/flightcomputer_v1/board_bootloader.c
     hardware/boards/flightcomputer_v1/board_imu.c
     hardware/boards/flightcomputer_v1/board_motor_output.c
     hardware/boards/flightcomputer_v1/board_persistent_storage.c

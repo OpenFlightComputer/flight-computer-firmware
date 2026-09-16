@@ -226,11 +226,11 @@ lifecycle state machine.
 
 Simulation, GUI configuration, autonomous navigation, computer vision, and any
 RTOS migration are later evidence-driven work rather than part of the current
-foundation. Add a disarmed-only, authenticated/recoverable USB firmware-update
-path so routine releases do not require physical SWD access. Retain SWD as the
-recovery path for a corrupt updater or interrupted boot-critical update; assess
-the STM32F405 ROM USB DFU entry path versus a small project-owned bootloader
-before assigning flash layout and update-image compatibility rules.
+foundation. A disarmed-only STM32F405 ROM USB DFU update path is complete: it
+stops motor output, uses a reset-safe one-shot handoff, protects persistent
+configuration from the host, verifies the image, and confirms the running
+build ID. Retain SWD as the recovery path. Authentication, signed images,
+rollback, and update-image compatibility rules remain later work.
 
 The manufacturing acceptance run provides implementation evidence that future
 milestones must carry over deliberately: BMI270 SPI3 and BMP388 I2C2 settings,

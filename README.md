@@ -87,6 +87,7 @@ inspection, and repeatable non-arming smoke tests:
 ```bash
 ./ofc firmware build --profile debug
 ./ofc firmware flash --profile release
+./ofc firmware flash-usb --profile release
 ./ofc device status
 ./ofc device receiver --watch
 ./ofc device imu --watch

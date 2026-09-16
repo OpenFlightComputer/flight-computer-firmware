@@ -968,6 +968,8 @@ bool usb_json_parse_request(const char *line,
         request->command = USB_JSON_COMMAND_ARM;
     } else if (token_equals(line, command, "disarm")) {
         request->command = USB_JSON_COMMAND_DISARM;
+    } else if (token_equals(line, command, "bootloader_enter")) {
+        request->command = USB_JSON_COMMAND_BOOTLOADER_ENTER;
     } else if (token_equals(line, command, "motor_test")) {
         request->command = USB_JSON_COMMAND_MOTOR_TEST;
     } else if (token_equals(line, command, "config_read")) {
@@ -1059,6 +1061,8 @@ const char *usb_json_command_name(usb_json_command_t command)
         return "arm";
     case USB_JSON_COMMAND_DISARM:
         return "disarm";
+    case USB_JSON_COMMAND_BOOTLOADER_ENTER:
+        return "bootloader_enter";
     case USB_JSON_COMMAND_MOTOR_TEST:
         return "motor_test";
     case USB_JSON_COMMAND_CONFIG_READ:
@@ -1181,6 +1185,7 @@ bool usb_json_build_transition_response(usb_json_command_t command,
 
     if (((command != USB_JSON_COMMAND_ARM) &&
          (command != USB_JSON_COMMAND_DISARM) &&
+         (command != USB_JSON_COMMAND_BOOTLOADER_ENTER) &&
          (command != USB_JSON_COMMAND_IMU_LEVEL_CALIBRATION_START)) ||
         (state == NULL) || (destination == NULL) || (capacity == 0U) ||
         (length == NULL) || (!accepted && (error == NULL)) ||

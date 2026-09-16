@@ -12,6 +12,7 @@ from openflightcomputer.cli import build_parser
     [
         ["firmware", "build"],
         ["firmware", "flash"],
+        ["firmware", "flash-usb"],
         ["device", "status"],
         ["device", "arm"],
         ["device", "disarm"],

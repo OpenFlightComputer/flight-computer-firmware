@@ -42,12 +42,14 @@ static uint64_t current_time_us;
 static motor_control_submit_result_t motor_submit_result;
 static motor_control_arm_result_t motor_arm_result;
 static motor_control_disarm_result_t motor_disarm_result;
+static motor_control_stop_result_t motor_stop_result;
 static motor_control_source_t active_motor_source;
 static system_state_machine_t *motor_state_machine;
 static motor_command_t captured_motor_command;
 static uint32_t motor_submit_count;
 static bool motor_ready_for_arm;
 static bool motor_outputs_stopped;
+static size_t transport_queued_count;
 static flight_configuration_service_t configuration_service;
 static flight_configuration_service_result_t configuration_write_result;
 static flight_configuration_service_result_t configuration_reset_result;
@@ -187,6 +189,11 @@ motor_control_disarm_result_t motor_control_disarm(void)
     return MOTOR_CONTROL_DISARM_ACCEPTED;
 }
 
+motor_control_stop_result_t motor_control_force_stop(void)
+{
+    return motor_stop_result;
+}
+
 motor_control_source_t motor_control_active_source(void)
 {
     return active_motor_source;
@@ -314,6 +321,11 @@ usb_cdc_write_result_t usb_cdc_transport_try_write(const uint8_t *data,
     return write_result;
 }
 
+size_t usb_cdc_transport_queued_count(void)
+{
+    return transport_queued_count;
+}
+
 static uint64_t fake_clock(void)
 {
     return current_time_us;
@@ -342,12 +354,14 @@ static void reset_fakes(void)
     motor_submit_result = MOTOR_CONTROL_SUBMIT_ACCEPTED;
     motor_arm_result = MOTOR_CONTROL_ARM_ACCEPTED;
     motor_disarm_result = MOTOR_CONTROL_DISARM_ACCEPTED;
+    motor_stop_result = MOTOR_CONTROL_STOP_ACCEPTED;
     active_motor_source = MOTOR_CONTROL_SOURCE_NONE;
     motor_state_machine = NULL;
     motor_command_initialize(&captured_motor_command);
     motor_submit_count = 0U;
     motor_ready_for_arm = true;
     motor_outputs_stopped = false;
+    transport_queued_count = 0U;
     configuration_service = (flight_configuration_service_t){
         .active = {
             .schema_version = 10U,
@@ -1230,6 +1244,49 @@ static void blackbox_management_is_disarmed_only(void)
            NULL);
 }
 
+static void bootloader_handoff_is_disarmed_stopped_and_response_drained(void)
+{
+    usb_command_processor_t processor;
+    system_state_machine_t state_machine;
+    fault_system_t fault_system;
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    queue_input("{\"type\":\"command\",\"request_id\":90,"
+                "\"command\":\"bootloader_enter\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"ok\":false") != NULL);
+    assert(strstr(captured_response, "\"error\":\"state_rejected\"") !=
+           NULL);
+    assert(!usb_command_processor_take_bootloader_handoff(&processor));
+
+    enter_disarmed(&state_machine);
+    queue_input("{\"type\":\"command\",\"request_id\":91,"
+                "\"command\":\"bootloader_enter\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "\"command\":\"bootloader_enter\"") !=
+           NULL);
+    assert(strstr(captured_response, "\"ok\":true") != NULL);
+    transport_queued_count = 1U;
+    assert(!usb_command_processor_take_bootloader_handoff(&processor));
+    transport_queued_count = 0U;
+    assert(usb_command_processor_take_bootloader_handoff(&processor));
+    assert(!usb_command_processor_take_bootloader_handoff(&processor));
+
+    reset_fakes();
+    initialize_system(&processor, &state_machine, &fault_system);
+    enter_disarmed(&state_machine);
+    motor_stop_result = MOTOR_CONTROL_STOP_ERROR;
+    queue_input("{\"type\":\"command\",\"request_id\":92,"
+                "\"command\":\"bootloader_enter\"}");
+    assert(usb_command_processor_process_once(&processor) ==
+           USB_COMMAND_PROCESS_RESPONSE_SENT);
+    assert(strstr(captured_response, "motor_stop_failed") != NULL);
+    assert(!usb_command_processor_take_bootloader_handoff(&processor));
+}
+
 int main(void)
 {
     status_and_health_report_current_summary();
@@ -1246,6 +1303,7 @@ int main(void)
     invalid_unsupported_and_busy_responses_are_bounded();
     control_trace_read_is_transactional_and_start_is_disarmed_only();
     blackbox_management_is_disarmed_only();
+    bootloader_handoff_is_disarmed_stopped_and_response_drained();
     initialization_and_invalid_state_are_checked();
     return 0;
 }

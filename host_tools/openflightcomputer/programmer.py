@@ -21,6 +21,8 @@ from openflightcomputer.models import Probe, ProgressEvent
 ProgressCallback = Callable[[ProgressEvent], None]
 ExecutableLocator = Callable[[str], str | None]
 _STLINK_SERIAL_PATTERN = re.compile(r"ST-LINK\s+SN\s*:\s*([0-9A-Za-z]+)", re.I)
+_DFU_PORT_PATTERN = re.compile(r"Device\s+Index\s*:\s*(USB\d+)", re.I)
+_ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _MACOS_APPLICATION = Path(
     "/Applications/STMicroelectronics/STM32Cube/STM32CubeProgrammer/"
     "STM32CubeProgrammer.app/Contents"
@@ -100,6 +102,37 @@ class Stm32CubeProgrammer:
             Probe(serial_number=serial)
             for serial in dict.fromkeys(_STLINK_SERIAL_PATTERN.findall(result.stdout))
         )
+
+    def discover_dfu_ports(self) -> tuple[str, ...]:
+        result = self._run((str(self._executable), "-l", "usb"), 30)
+        output = _ANSI_ESCAPE_PATTERN.sub("", result.stdout + "\n" + result.stderr)
+        if (result.returncode != 0) and ("No STM32 device" not in output):
+            raise ProgrammingError(
+                "could not list USB DFU devices:\n" + failure_detail(result)
+            )
+        return tuple(dict.fromkeys(_DFU_PORT_PATTERN.findall(output)))
+
+    def program_dfu_and_start(self, port: str, firmware_path: Path) -> None:
+        if re.fullmatch(r"USB\d+", port, re.I) is None:
+            raise ProgrammingError(f"invalid STM32 DFU port: {port}")
+        result = self._run(
+            (
+                str(self._executable),
+                "-c",
+                f"port={port.upper()}",
+                "-d",
+                str(firmware_path),
+                "-v",
+                "-s",
+                "0x08000000",
+            ),
+            120,
+        )
+        if result.returncode != 0:
+            raise ProgrammingError(
+                "USB DFU programming, verification, or start failed:\n"
+                + failure_detail(result)
+            )
 
     def program_and_verify(self, probe: Probe, firmware_path: Path) -> None:
         result = self._run(

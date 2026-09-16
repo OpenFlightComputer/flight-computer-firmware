@@ -23,6 +23,13 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Added routine USB-C firmware updates through the STM32F405 factory ROM DFU
+  loader. The command is disarmed-only, forces motor output stopped, waits for
+  its CDC acknowledgement to drain, and uses a one-shot RTC-backup-register
+  reset handoff consumed before normal initialization. The host validates ELF
+  load ranges, never mass-erases, preserves the `0x080E0000` configuration
+  partition, verifies programming, starts the application, and confirms its
+  build ID. SWD remains the recovery path; physical DFU validation is pending.
 - Added the initial Easy-mode policy to schema 10 of the unified configuration:
   5% armed idle, 18% stabilization activation, takeoff leveling enabled, and a
   10 degree-per-second leveling transition by default. Exact zero stick resets

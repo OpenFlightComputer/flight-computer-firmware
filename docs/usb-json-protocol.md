@@ -34,6 +34,7 @@ The supported commands are:
 | `control_trace_stop` | Stop capture while retaining unread records |
 | `arm` | Apply health admission, then submit `ARM_REQUESTED` to the lifecycle state machine |
 | `disarm` | Submit `DISARM_REQUESTED` to the lifecycle state machine |
+| `bootloader_enter` | While safely disarmed, stop motor output and perform a one-shot reset into STM32 ROM USB DFU |
 | `motor_test` | Submit a leased single-motor command through the production safety gate |
 | `config_read` | Return the complete active flight configuration |
 | `config_write` | Validate, persist, and atomically apply one complete configuration while disarmed |

@@ -90,6 +90,9 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(parse("{\"type\":\"command\",\"request_id\":3,"
                  "\"command\":\"disarm\"}").command ==
            USB_JSON_COMMAND_DISARM);
+    assert(parse("{\"type\":\"command\",\"request_id\":4,"
+                 "\"command\":\"bootloader_enter\"}").command ==
+           USB_JSON_COMMAND_BOOTLOADER_ENTER);
     request = parse("{\"throttle\":0.02,\"motor\":1,"
                     "\"command\":\"motor_test\",\"request_id\":5,"
                     "\"type\":\"command\"}");
@@ -363,6 +366,10 @@ static void response_builders_are_exact_and_bounded(void)
                                               true, "DISARMED", NULL, output,
                                               sizeof(output), &length));
     assert(strstr(output, "\"pending\":true") != NULL);
+    assert(usb_json_build_transition_response(
+        USB_JSON_COMMAND_BOOTLOADER_ENTER, 14U, true, false,
+        "DISARMED", NULL, output, sizeof(output), &length));
+    assert(strstr(output, "\"command\":\"bootloader_enter\"") != NULL);
     assert(usb_json_build_configuration_response(
         USB_JSON_COMMAND_CONFIG_WRITE,
         13U,

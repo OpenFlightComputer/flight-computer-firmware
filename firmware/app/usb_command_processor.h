@@ -49,6 +49,8 @@ typedef struct {
     uint32_t configuration_rejected_count;
     uint32_t transition_accepted_count;
     uint32_t transition_rejected_count;
+    uint32_t bootloader_enter_count;
+    uint32_t bootloader_enter_rejected_count;
     uint32_t response_sent_count;
     uint32_t response_busy_count;
     uint32_t response_error_count;
@@ -76,6 +78,7 @@ typedef struct {
     usb_command_statistics_t statistics;
     system_state_transition_result_t last_transition_result;
     bool pending_response_valid;
+    bool bootloader_handoff_pending;
     bool last_transition_valid;
     bool initialized;
 } usb_command_processor_t;
@@ -103,5 +106,10 @@ usb_command_init_result_t usb_command_processor_initialize(
     const char *build_id);
 usb_command_process_result_t usb_command_processor_process_once(
     usb_command_processor_t *processor);
+/* Returns true once, only after the accepted response has left the CDC queue. */
+bool usb_command_processor_take_bootloader_handoff(
+    usb_command_processor_t *processor);
+bool usb_command_processor_bootloader_handoff_pending(
+    const usb_command_processor_t *processor);
 
 #endif

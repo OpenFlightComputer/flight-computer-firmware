@@ -42,6 +42,14 @@ class FlashOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class UsbFlashOutcome:
+    artifact: FirmwareArtifact
+    dfu_port: str
+    device_port: str
+    status: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class SerialPort:
     device: str
     vid: int | None
