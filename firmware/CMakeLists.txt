@@ -106,6 +106,11 @@ configure_file(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/usb_identity.h"
     @ONLY
 )
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/bootloader_usb_identity.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/bootloader/usb_identity.h"
+    @ONLY
+)
 
 set(FIRMWARE_IDENTITY_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/firmware_identity.c"
@@ -327,4 +332,68 @@ add_custom_command(TARGET flight_firmware POST_BUILD
         "${CMAKE_CURRENT_BINARY_DIR}/${FIRMWARE_OUTPUT_NAME}.bin"
     COMMAND "${CMAKE_SIZE}" --format=berkeley "$<TARGET_FILE:flight_firmware>"
     COMMENT "Generating flashable HEX and BIN images"
+)
+
+add_executable(firmware_bootloader
+    app/runtime_hooks.c
+    bootloader/main.c
+    bootloader/bootloader_crc32.c
+    bootloader/bootloader_image.c
+    bootloader/bootloader_flash.c
+    bootloader/bootloader_protocol.c
+    bootloader/interrupts.c
+    peripherals/usb/newline_framer.c
+    peripherals/usb/usb_cdc_transport.c
+    peripherals/usb/usb_descriptors.c
+    hardware/boards/flightcomputer_v1/usb_device_port.c
+    hardware/mcu/stm32f405/mcu.c
+    hardware/mcu/stm32f405/system_clock.c
+    "${STM32_DEVICE_ROOT}/Source/Templates/gcc/startup_stm32f405xx.s"
+)
+
+target_include_directories(firmware_bootloader PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/bootloader"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hardware"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hardware/boards/flightcomputer_v1"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405"
+    "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/usb"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/bootloader"
+)
+
+target_link_libraries(firmware_bootloader PRIVATE stm32cube_f4)
+target_compile_options(firmware_bootloader PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:-Wall>
+    $<$<COMPILE_LANGUAGE:C>:-Wextra>
+    $<$<COMPILE_LANGUAGE:C>:-Wpedantic>
+    $<$<COMPILE_LANGUAGE:C>:-Werror>
+)
+
+set(BOOTLOADER_LINKER_SCRIPT
+    "${CMAKE_CURRENT_SOURCE_DIR}/hardware/mcu/stm32f405/STM32F405RGTX_BOOTLOADER.ld"
+)
+set(BOOTLOADER_OUTPUT_NAME "openflightcomputer-bootloader")
+target_link_options(firmware_bootloader PRIVATE
+    "-T${BOOTLOADER_LINKER_SCRIPT}"
+    "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/${BOOTLOADER_OUTPUT_NAME}.map"
+    "-Wl,--gc-sections"
+    "-Wl,--print-memory-usage"
+    "--specs=nano.specs"
+    "--specs=nosys.specs"
+    "-nostartfiles"
+)
+set_target_properties(firmware_bootloader PROPERTIES
+    OUTPUT_NAME "${BOOTLOADER_OUTPUT_NAME}"
+    SUFFIX ".elf"
+    LINK_DEPENDS "${BOOTLOADER_LINKER_SCRIPT}"
+)
+add_custom_command(TARGET firmware_bootloader POST_BUILD
+    COMMAND "${CMAKE_OBJCOPY}" -O ihex
+        "$<TARGET_FILE:firmware_bootloader>"
+        "${CMAKE_CURRENT_BINARY_DIR}/${BOOTLOADER_OUTPUT_NAME}.hex"
+    COMMAND "${CMAKE_OBJCOPY}" -O binary
+        "$<TARGET_FILE:firmware_bootloader>"
+        "${CMAKE_CURRENT_BINARY_DIR}/${BOOTLOADER_OUTPUT_NAME}.bin"
+    COMMAND "${CMAKE_SIZE}" --format=berkeley
+        "$<TARGET_FILE:firmware_bootloader>"
+    COMMENT "Generating bootloader images"
 )

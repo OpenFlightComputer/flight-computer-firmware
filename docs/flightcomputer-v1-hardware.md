@@ -144,10 +144,11 @@ GPIO output latch low before enabling output mode, sends one all-zero GRB frame
 to clear state retained across MCU-only resets, and keeps PA1 low. It uses the
 tester-proven DWT/GPIO waveform once before the scheduler and masks interrupts
 for approximately 30 microseconds; it does not assign status meaning to the
-LED. Milestone 0.10 then initializes OTG FS CDC logging on PA11 and PA12. The
-V1 board definition selects assume-present VBUS behavior, so PA9 is not
-configured and OTG hardware VBUS sensing is disabled. A future corrected board
-can select sense-input behavior without changing the transport or application.
+LED. Milestone 0.10 then initializes OTG FS CDC logging on PA11 and PA12. Before
+USB initialization the board port samples PA9 with a pulldown. V1's invalid
+divider reads low and selects assume-present behavior; corrected hardware
+presenting a valid high selects OTG VBUS sensing. The transport and application
+remain independent of the runtime choice.
 Milestone 4.1 separately initializes the BMI270 SPI3 transport and reads one raw
 boot sample. Each remaining external interface will be activated only in its
 approved milestone through the appropriate board and MCU capability boundary.

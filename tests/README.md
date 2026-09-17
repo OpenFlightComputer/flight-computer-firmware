@@ -200,9 +200,9 @@ plus the physical-order-to-CCR-order row transformation and the selected
 168 MHz TIM8 update DMA2 Stream 1/Channel 7 four-register burst. It proves
 recorded configuration and ordering logic, not physical routing or output.
 
-The native `board_usb_tests` target verifies the explicit VBUS-mode semantics
-and that Flight Computer V1 selects assume-present behavior rather than its
-defective PA9 sensing path.
+The native `board_usb_tests` target verifies the two explicit VBUS-mode
+semantics. Runtime PA9 sampling and the resulting V1/V2 selection remain a
+physical-board validation boundary.
 
 The native `uint64_decimal_tests` target verifies zero, decimal boundaries,
 `UINT64_MAX`, bounded zero padding, invalid arguments, and exact-capacity

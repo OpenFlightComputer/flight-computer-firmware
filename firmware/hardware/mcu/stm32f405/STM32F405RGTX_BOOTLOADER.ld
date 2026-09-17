@@ -1,17 +1,15 @@
-/* STM32F405RGT6: 1 MiB Flash, 128 KiB SRAM, and 64 KiB CCM SRAM. */
+/* STM32F405RGT6 bootloader: sectors 0-3, 64 KiB total. */
 
 ENTRY(Reset_Handler)
 
 _estack = ORIGIN(RAM) + LENGTH(RAM);
 _Min_Heap_Size = 0;
-_Min_Stack_Size = 0x800;
+_Min_Stack_Size = 0x400;
 
 MEMORY
 {
-    CCMRAM (xrw) : ORIGIN = 0x10000000, LENGTH = 64K
-    RAM    (xrw) : ORIGIN = 0x20000000, LENGTH = 128K
-    FLASH  (rx)  : ORIGIN = 0x08010000, LENGTH = 0x000CFF00
-    CONFIG (r)   : ORIGIN = 0x080E0000, LENGTH = 128K
+    RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 128K
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 64K
 }
 
 SECTIONS
@@ -47,72 +45,49 @@ SECTIONS
 
     .ARM.extab (READONLY) :
     {
-        . = ALIGN(4);
         *(.ARM.extab* .gnu.linkonce.armextab.*)
-        . = ALIGN(4);
     } > FLASH
 
     .ARM (READONLY) :
     {
-        . = ALIGN(4);
         __exidx_start = .;
         *(.ARM.exidx*)
         __exidx_end = .;
-        . = ALIGN(4);
     } > FLASH
 
     .preinit_array (READONLY) :
     {
-        . = ALIGN(4);
         PROVIDE_HIDDEN(__preinit_array_start = .);
         KEEP(*(.preinit_array*))
         PROVIDE_HIDDEN(__preinit_array_end = .);
-        . = ALIGN(4);
     } > FLASH
 
     .init_array (READONLY) :
     {
-        . = ALIGN(4);
         PROVIDE_HIDDEN(__init_array_start = .);
         KEEP(*(SORT(.init_array.*)))
         KEEP(*(.init_array*))
         PROVIDE_HIDDEN(__init_array_end = .);
-        . = ALIGN(4);
     } > FLASH
 
     .fini_array (READONLY) :
     {
-        . = ALIGN(4);
         PROVIDE_HIDDEN(__fini_array_start = .);
         KEEP(*(SORT(.fini_array.*)))
         KEEP(*(.fini_array*))
         PROVIDE_HIDDEN(__fini_array_end = .);
-        . = ALIGN(4);
     } > FLASH
 
     _sidata = LOADADDR(.data);
-
     .data :
     {
         . = ALIGN(4);
         _sdata = .;
         *(.data)
         *(.data*)
-        *(.RamFunc)
-        *(.RamFunc*)
         . = ALIGN(4);
         _edata = .;
     } > RAM AT > FLASH
-
-    .ccmram (NOLOAD) :
-    {
-        . = ALIGN(4);
-        _sccmram = .;
-        *(.ccmram)
-        *(.ccmram*)
-        . = ALIGN(4);
-        _eccmram = .;
-    } > CCMRAM
 
     .bss (NOLOAD) :
     {

@@ -100,7 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
     flash = firmware_commands.add_parser("flash", help="build, program, verify, and reset")
     _add_flash_options(flash)
     flash_usb = firmware_commands.add_parser(
-        "flash-usb", help="build and update through the STM32 factory USB DFU loader"
+        "flash-usb", help="build and update through the resident USB bootloader"
     )
     _add_profile(flash_usb)
     flash_usb.add_argument("--firmware", type=_firmware_file, metavar="ELF")
@@ -579,7 +579,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     progress=_progress,
                 )
                 print(f"Firmware: {outcome.artifact.elf_path}")
-                print(f"DFU port: {outcome.dfu_port}")
+                print(f"Bootloader port: {outcome.bootloader_port}")
                 print(f"Device: {outcome.device_port}")
                 print(f"Build ID: {outcome.status.get('build_id', 'unknown')}")
                 return 0

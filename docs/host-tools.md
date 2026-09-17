@@ -24,10 +24,12 @@ programmer can be selected with `--programmer` or
 `STM32CUBE_PROGRAMMER_CLI`.
 
 `firmware flash-usb` instead asks a running, disarmed flight computer to enter
-the STM32F405 factory ROM DFU loader. It rejects an ELF that touches anything
-outside application flash, downloads and verifies without mass erase, starts
-the image, then reconnects over CDC and checks the generated build ID. SWD
-remains the recovery path; see `usb-firmware-update.md`.
+the resident OpenFlightComputer loader. It rejects an ELF that touches anything
+outside the relocated application partition, transfers acknowledged chunks,
+commits the image only after CRC verification, then reconnects over CDC and
+checks the generated build ID. If an earlier USB update was interrupted, the
+same command attaches directly to the waiting loader. A full `firmware flash`
+installs both loader and application through SWD; see `usb-firmware-update.md`.
 
 USB discovery selects the flight-firmware development identity `CAFE:4002` or
 an explicit `--port`. `device status` makes one correlated request while

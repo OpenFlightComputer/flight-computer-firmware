@@ -22,7 +22,9 @@ firmware link must not be recorded as proof that the flight image works.
 ## USB enumeration and protocol
 
 - [x] Verify development identity `CAFE:4002`, the flight-firmware product
-  descriptor, V1-disabled VBUS sensing, and CDC enumeration on macOS.
+  descriptor, V1 runtime fallback with VBUS sensing disabled, and CDC
+  enumeration on macOS.
+- [ ] Verify corrected hardware selects PA9 VBUS sensing with the same image.
 - [x] Verify ordinary status uptime and log timestamp/sequence fields are valid
   target-generated JSON integers without target-library `%llu` support.
 - [ ] Force `UINT64_MAX` through a target status/log/health output path and

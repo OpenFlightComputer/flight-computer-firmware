@@ -131,10 +131,11 @@ required before hardware distribution.
 The V1 board's equal 100 kOhm VBUS divider produced about 1 V at PA9. The
 manufacturing firmware failed to enumerate while OTG hardware VBUS sensing was
 enabled and enumerated after setting `vbus_sensing_enable` to `0U`. The flight
-firmware now expresses this as an explicit board capability: V1 selects
-`BOARD_USB_VBUS_MODE_ASSUME_PRESENT`, while a corrected V2 can select
-`BOARD_USB_VBUS_MODE_SENSE_INPUT`. USB transport and application code are
-independent of that choice.
+board port now samples PA9 before USB initialization. A valid high level
+selects `BOARD_USB_VBUS_MODE_SENSE_INPUT`; V1's low divider level selects
+`BOARD_USB_VBUS_MODE_ASSUME_PRESENT`. This keeps one image usable on both the
+existing board and corrected hardware without changing USB transport or
+application code.
 
 ## Physical verification boundary
 

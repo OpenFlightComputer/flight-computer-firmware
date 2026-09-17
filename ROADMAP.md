@@ -226,7 +226,7 @@ lifecycle state machine.
 
 Simulation, GUI configuration, autonomous navigation, computer vision, and any
 RTOS migration are later evidence-driven work rather than part of the current
-foundation. A disarmed-only STM32F405 ROM USB DFU update path is complete: it
+foundation. A disarmed-only resident USB update path is complete: it
 stops motor output, uses a reset-safe one-shot handoff, protects persistent
 configuration from the host, verifies the image, and confirms the running
 build ID. Retain SWD as the recovery path. Authentication, signed images,

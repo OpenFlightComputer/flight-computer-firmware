@@ -1,10 +1,40 @@
 # USB firmware updates
 
-The V1 flight computer can update its application through the existing USB-C
-connector by using the STM32F405 factory ROM DFU bootloader. No project-owned
-bootloader occupies application flash.
+OpenFlightComputer uses a small resident bootloader for routine USB-C updates.
+The same bootloader binary supports both existing V1 hardware with unusable
+VBUS sensing and a later board with corrected VBUS sensing. SWD remains the
+independent first-install, debug, and recovery path.
 
-## Normal workflow
+## Flash layout
+
+| Region | Address | Purpose |
+| --- | --- | --- |
+| Resident bootloader | `0x08000000`–`0x0800FFFF` | Protected by update policy; installed through SWD |
+| Flight application | `0x08010000`–`0x080DFEFF` | Replaceable through USB or SWD |
+| Application metadata | `0x080DFF00`–`0x080DFFFF` | Length and CRC committed after a complete update |
+| Flight configuration | `0x080E0000`–`0x080FFFFF` | Preserved by both update paths |
+
+The metadata magic is written last. Until that final commit, the bootloader
+considers the application invalid and does not jump to it. A reset or cable
+loss during erase, transfer, or verification therefore returns to the USB
+bootloader instead of attempting to execute a partial image.
+
+## First installation and SWD recovery
+
+```bash
+./ofc firmware flash --profile release
+```
+
+This command builds and installs three artifacts through the connected
+ST-Link: the resident bootloader, the relocated application, and the matching
+application metadata. It then resets the target. An existing board that still
+contains the old application at `0x08000000` needs this one SWD installation
+before it can update through USB.
+
+SWD does not depend on either bootloader or USB. It remains able to replace a
+damaged bootloader and is therefore the authoritative recovery path.
+
+## Routine USB update
 
 ```bash
 ./ofc firmware flash-usb --profile release
@@ -12,57 +42,45 @@ bootloader occupies application flash.
 
 The host tool:
 
-1. builds the firmware, unless `--firmware IMAGE.elf` was supplied;
-2. verifies that every file-backed ELF load segment lies in application flash
-   `0x08000000` through `0x080DFFFF`;
-3. connects to the running firmware and sends `bootloader_enter`;
-4. waits for the STM32 factory DFU interface;
-5. downloads and verifies the ELF without mass erase, then starts address
-   `0x08000000`;
-6. waits for flight-firmware USB CDC and confirms the running build ID.
+1. builds the relocated application unless `--firmware IMAGE.elf` is supplied;
+2. validates that all file-backed ELF segments lie in the application region;
+3. asks a running, disarmed application to enter its resident bootloader, or
+   attaches directly when the bootloader is already waiting after a failed
+   update;
+4. sends the exact image length and CRC, then sequential bounded data chunks;
+5. requires an acknowledgement for every chunk;
+6. asks the bootloader to verify flash, commit metadata, and reboot; and
+7. reconnects to the flight application and checks its build ID when known.
 
-The configuration partition begins at `0x080E0000` and is preserved. A
-supplied ELF has no generated host metadata, so status is still read after the
-update but exact build-ID comparison is only available for an image built by
-the same command.
+The loader only erases application sectors 4 through 10. It cannot erase its
+own sectors 0 through 3 and does not touch configuration sector 11.
 
-## Firmware safety contract
+## Runtime VBUS selection
 
-`bootloader_enter` is accepted only in `DISARMED`, with no active or pending
-motor-command owner. Firmware requests a physical motor-output stop before it
-acknowledges the command. The USB service does not reset until the complete
-acknowledgement has left the CDC transmit queue.
+There are not separate V1 and V2 firmware builds. On every boot, the board
+layer samples PA9 before USB initialization:
 
-The handoff stores a one-shot magic value in an RTC backup register and issues
-a system reset. At the beginning of `main`, before HAL or application
-initialization, the board layer consumes and clears that marker, disables
-interrupt state, remaps STM32 system memory, and jumps to the ROM reset vector.
-Because the marker is cleared before the jump, a later reset boots the normal
-application even if the DFU update was interrupted.
+- a valid high level selects hardware VBUS sensing;
+- a low or electrically invalid level selects the assume-present fallback.
 
-This development interface is physically trusted and unauthenticated. It is
-not a remote update or production security mechanism.
+The existing V1 divider falls into the fallback path, so the custom loader can
+enumerate without relying on its faulty sensing voltage. A corrected board
+with a valid PA9 VBUS signal automatically uses normal sensing. The selected
+mode changes only the USB peripheral setup; update validation and flash layout
+are identical.
 
-## Recovery
+## Application handoff and safety
 
-The ROM handoff requires a working application and USB command path. If either
-is damaged, flash over SWD:
+`bootloader_enter` is accepted only while safely disarmed and with no active
+or pending motor owner. The application requests a physical motor stop, waits
+until the complete command acknowledgement leaves the CDC queue, writes a
+one-shot request marker to an RTC backup register, and resets.
 
-```bash
-./ofc firmware flash --profile release
-```
+At reset the resident bootloader consumes that marker. With no request, it
+checks metadata, vector-table addresses, image length, and image CRC before
+jumping to `0x08010000`. With a request or invalid application it exposes the
+bootloader CDC identity `CAFE:4003`; the flight application uses `CAFE:4002`.
 
-SWD remains the authoritative recovery and debugging interface.
-
-## Device basis
-
-ST's current AN2606 lists STM32F40xxx/41xxx ROM DFU on USB OTG FS PA11/PA12,
-with an external clock in whole-MHz steps from 4 through 26 MHz. V1's 16 MHz
-HSE is within that range. The STM32F405 table uses PA9 for USART1 TX rather
-than listing it as USB VBUS, so this path does not depend on the V1
-application's configurable VBUS-sensing workaround. Physical enumeration on
-the assembled V1 board is still required before this becomes the routine
-flashing method.
-
-- [AN2606: STM32 system-memory boot mode](https://www.st.com/resource/en/application_note/an2606-introduction-to-system-memory-boot-mode-on-stm32-mcus-stmicroelectronics.pdf)
-- [AN3156: USB DFU protocol used in STM32 bootloaders](https://www.st.com/resource/en/application_note/an3156-how-to-use-usb-dfu-protocol-in-bootloader-on-stm32-mcus-stmicroelectronics.pdf)
+The application validity check proves integrity, not authenticity. This is a
+physically trusted development update interface; signed production images and
+read/write protection are separate future security work.

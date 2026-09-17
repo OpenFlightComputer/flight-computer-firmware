@@ -26,6 +26,9 @@ class FirmwareArtifact:
     elf_path: Path
     firmware_version: str | None = None
     build_id: str | None = None
+    bootloader_elf_path: Path | None = None
+    application_bin_path: Path | None = None
+    application_metadata_path: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +47,7 @@ class FlashOutcome:
 @dataclass(frozen=True, slots=True)
 class UsbFlashOutcome:
     artifact: FirmwareArtifact
-    dfu_port: str
+    bootloader_port: str
     device_port: str
     status: dict[str, Any]
 

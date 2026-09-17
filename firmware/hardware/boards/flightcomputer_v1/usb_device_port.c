@@ -2,21 +2,59 @@
 #include "usbd_cdc.h"
 
 #include "board_definition.h"
+#include "board_usb.h"
 #include "stm32f4xx_hal.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
 static PCD_HandleTypeDef openflightcomputer_usb_pcd;
-
-_Static_assert(
-    (FLIGHTCOMPUTER_V1_USB_VBUS_MODE == BOARD_USB_VBUS_MODE_ASSUME_PRESENT) ||
-        (FLIGHTCOMPUTER_V1_USB_VBUS_MODE == BOARD_USB_VBUS_MODE_SENSE_INPUT),
-    "Flight Computer V1 must select a supported USB VBUS mode");
+static board_usb_vbus_mode_t selected_vbus_mode =
+    BOARD_USB_VBUS_MODE_ASSUME_PRESENT;
 
 static uint32_t usb_class_storage[
     (sizeof(USBD_CDC_HandleTypeDef) + sizeof(uint32_t) - 1U) / sizeof(uint32_t)
 ];
+
+board_usb_vbus_mode_t board_usb_select_automatic_vbus_mode(void)
+{
+    GPIO_InitTypeDef gpio = {0};
+
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    gpio.Pin = GPIO_PIN_9;
+    gpio.Mode = GPIO_MODE_INPUT;
+    gpio.Pull = GPIO_PULLDOWN;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &gpio);
+    selected_vbus_mode = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9) == GPIO_PIN_SET
+                             ? BOARD_USB_VBUS_MODE_SENSE_INPUT
+                             : BOARD_USB_VBUS_MODE_ASSUME_PRESENT;
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_9);
+    return selected_vbus_mode;
+}
+
+board_usb_vbus_mode_t board_usb_selected_vbus_mode(void)
+{
+    return selected_vbus_mode;
+}
+
+void board_usb_prepare_reenumeration(void)
+{
+    GPIO_InitTypeDef gpio = {0};
+
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_USB_OTG_FS_FORCE_RESET();
+    __HAL_RCC_USB_OTG_FS_RELEASE_RESET();
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11 | GPIO_PIN_12, GPIO_PIN_RESET);
+    gpio.Pin = GPIO_PIN_11 | GPIO_PIN_12;
+    gpio.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &gpio);
+    HAL_Delay(100U);
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
+}
 
 static USBD_StatusTypeDef usbd_status(HAL_StatusTypeDef status)
 {
@@ -59,7 +97,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *pcd)
     gpio.Alternate = GPIO_AF10_OTG_FS;
     HAL_GPIO_Init(GPIOA, &gpio);
 
-    if (board_usb_vbus_sensing_enabled(FLIGHTCOMPUTER_V1_USB_VBUS_MODE)) {
+    if (board_usb_vbus_sensing_enabled(selected_vbus_mode)) {
         gpio.Pin = GPIO_PIN_9;
         gpio.Mode = GPIO_MODE_INPUT;
         gpio.Pull = GPIO_NOPULL;
@@ -83,7 +121,7 @@ void HAL_PCD_MspDeInit(PCD_HandleTypeDef *pcd)
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
     __HAL_RCC_USB_OTG_FS_CLK_DISABLE();
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
-    if (board_usb_vbus_sensing_enabled(FLIGHTCOMPUTER_V1_USB_VBUS_MODE)) {
+    if (board_usb_vbus_sensing_enabled(selected_vbus_mode)) {
         HAL_GPIO_DeInit(GPIOA, GPIO_PIN_9);
     }
 }
@@ -163,8 +201,7 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *device)
     openflightcomputer_usb_pcd.Init.Sof_enable = 0U;
     openflightcomputer_usb_pcd.Init.speed = PCD_SPEED_FULL;
     openflightcomputer_usb_pcd.Init.vbus_sensing_enable =
-        board_usb_vbus_sensing_enabled(FLIGHTCOMPUTER_V1_USB_VBUS_MODE) ? 1U
-                                                                       : 0U;
+        board_usb_vbus_sensing_enabled(selected_vbus_mode) ? 1U : 0U;
 
     openflightcomputer_usb_pcd.pData = device;
     device->pData = &openflightcomputer_usb_pcd;

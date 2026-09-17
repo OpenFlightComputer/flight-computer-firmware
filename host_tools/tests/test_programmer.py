@@ -42,27 +42,16 @@ def test_multiple_probes_require_selection(tmp_path: Path):
         flash_firmware(programmer, image)
 
 
-def test_cube_programmer_discovers_dfu_and_programs_without_mass_erase(
-    tmp_path: Path,
-):
-    image = tmp_path / "flight.elf"
-    image.write_bytes(b"elf")
+def test_cube_programmer_erases_only_selected_application_sectors():
     calls = []
 
     def run(arguments, *, cwd, timeout_seconds):
         calls.append(tuple(arguments))
-        if tuple(arguments[-2:]) == ("-l", "usb"):
-            return CommandResult(
-                tuple(arguments), 0,
-                "\x1b[32mDevice Index : USB1\x1b[0m\n", "",
-            )
         return CommandResult(tuple(arguments), 0, "verified", "")
 
     programmer = Stm32CubeProgrammer(Path("/tool"), command_runner=run)
-    assert programmer.discover_dfu_ports() == ("USB1",)
-    programmer.program_dfu_and_start("USB1", image)
+    programmer.erase_sector_range(Probe("abc"), 4, 10)
     assert calls[-1] == (
-        "/tool", "-c", "port=USB1", "-d", str(image),
-        "-v", "-s", "0x08000000",
+        "/tool", "-c", "port=SWD", "sn=abc", "mode=UR", "freq=1000",
+        "-e", "[4", "10]",
     )
-    assert "-e" not in calls[-1]

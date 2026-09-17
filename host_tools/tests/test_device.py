@@ -1,4 +1,8 @@
-from openflightcomputer.device import UsbCdcConnection, wait_for_flight_port
+from openflightcomputer.device import (
+    UsbCdcConnection,
+    wait_for_bootloader_port,
+    wait_for_flight_port,
+)
 from openflightcomputer.models import SerialPort
 
 
@@ -30,6 +34,17 @@ def test_wait_selects_flight_identity():
         SerialPort("flight", 0xCAFE, 0x4002),
     )
     assert wait_for_flight_port(port_lister=lambda: ports).device == "flight"
+
+
+def test_wait_selects_resident_bootloader_identity():
+    ports = (
+        SerialPort("flight", 0xCAFE, 0x4002),
+        SerialPort("bootloader", 0xCAFE, 0x4003),
+    )
+    assert (
+        wait_for_bootloader_port(port_lister=lambda: ports).device
+        == "bootloader"
+    )
 
 
 def test_connection_frames_partial_io_and_crlf():

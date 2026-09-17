@@ -15,10 +15,11 @@ Update a normally running, disarmed flight computer through USB-C with:
 ./ofc firmware flash-usb --profile release
 ```
 
-This asks firmware to stop motor output and reset once into the STM32F405 ROM
-DFU loader, programs and verifies only application flash, restarts it, and
-confirms the running build ID. It preserves the configuration sector and never
-requests a mass erase. SWD remains the recovery path. See
+This asks firmware to stop motor output and reset into the resident
+OpenFlightComputer loader, transfers and CRC-verifies only the relocated
+application, restarts it, and confirms the running build ID. It preserves the
+configuration sector and can resume from a loader left waiting after an
+interrupted update. A first installation still uses SWD. See
 `docs/usb-firmware-update.md`.
 
 Inspect the receiver once or use the tester-style live display with:

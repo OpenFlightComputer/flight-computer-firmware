@@ -15,6 +15,7 @@ from openflightcomputer.models import SerialPort
 
 FLIGHT_USB_VID = 0xCAFE
 FLIGHT_USB_PID = 0x4002
+BOOTLOADER_USB_PID = 0x4003
 SERIAL_BAUD_RATE = 115200
 SERIAL_READ_SLICE_SECONDS = 0.1
 MAXIMUM_LINE_BYTES = 4096
@@ -93,6 +94,49 @@ def wait_for_flight_port(
             selector = requested or f"VID:PID {FLIGHT_USB_VID:04X}:{FLIGHT_USB_PID:04X}"
             raise DeviceError(
                 f"flight computer {selector} did not appear within "
+                f"{timeout_seconds:g}s"
+            )
+        sleeper(min(poll_seconds, deadline - now))
+
+
+def wait_for_bootloader_port(
+    requested_port: str | Path | None = None,
+    *,
+    timeout_seconds: float = 10.0,
+    poll_seconds: float = 0.25,
+    port_lister: PortLister = list_available_ports,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> SerialPort:
+    if timeout_seconds < 0 or poll_seconds <= 0:
+        raise ValueError("timeout must be non-negative and poll interval positive")
+    requested = str(requested_port) if requested_port is not None else None
+    deadline = monotonic() + timeout_seconds
+    while True:
+        try:
+            ports = tuple(port_lister())
+        except (serial.SerialException, OSError) as error:
+            raise DeviceError(f"could not enumerate USB CDC ports: {error}") from error
+        matches = tuple(
+            port
+            for port in ports
+            if (port.device == requested if requested is not None else
+                port.vid == FLIGHT_USB_VID and port.pid == BOOTLOADER_USB_PID)
+        )
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            devices = ", ".join(port.device for port in matches)
+            raise DeviceError(
+                f"multiple matching bootloaders found ({devices}); use --port"
+            )
+        now = monotonic()
+        if now >= deadline:
+            selector = requested or (
+                f"VID:PID {FLIGHT_USB_VID:04X}:{BOOTLOADER_USB_PID:04X}"
+            )
+            raise DeviceError(
+                f"flight bootloader {selector} did not appear within "
                 f"{timeout_seconds:g}s"
             )
         sleeper(min(poll_seconds, deadline - now))

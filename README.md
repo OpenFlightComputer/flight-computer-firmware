@@ -97,6 +97,11 @@ inspection, and repeatable non-arming smoke tests:
 ./ofc smoke --no-flash
 ```
 
+The normal SWD `firmware flash` installs both the resident USB bootloader and
+the relocated flight application. After that one-time installation,
+`firmware flash-usb` updates only the application while preserving the loader
+and configuration partition.
+
 `./ofc smoke` builds, programs, verifies, resets, checks `DISARMED` status and
 `OK` health, and writes a machine-readable JSON report. It never arms the
 flight computer. The CLI is a thin wrapper over reusable Python services in

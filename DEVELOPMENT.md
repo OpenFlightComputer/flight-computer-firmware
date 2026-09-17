@@ -23,13 +23,17 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
-- Added routine USB-C firmware updates through the STM32F405 factory ROM DFU
-  loader. The command is disarmed-only, forces motor output stopped, waits for
-  its CDC acknowledgement to drain, and uses a one-shot RTC-backup-register
-  reset handoff consumed before normal initialization. The host validates ELF
-  load ranges, never mass-erases, preserves the `0x080E0000` configuration
-  partition, verifies programming, starts the application, and confirms its
-  build ID. SWD remains the recovery path; physical DFU validation is pending.
+- Added one universal resident USB-C update loader. A full SWD flash installs
+  its protected 64 KiB partition, the relocated application at `0x08010000`,
+  and length/CRC metadata immediately before the `0x080E0000` configuration
+  partition. Routine USB updates erase only application sectors, acknowledge
+  bounded sequential chunks, verify CRC, and commit metadata magic last, so an
+  interrupted update returns to the loader. Both loader and application sample
+  PA9 at runtime: a valid high level enables VBUS sensing on corrected hardware,
+  while V1's invalid divider selects assume-present behavior. The same build
+  therefore supports USB with or without valid VBUS sensing, while SWD remains
+  the independent first-install and recovery path. Physical USB-loader
+  validation is pending.
 - Added the initial Easy-mode policy to schema 10 of the unified configuration:
   5% armed idle, 18% stabilization activation, takeoff leveling enabled, and a
   10 degree-per-second leveling transition by default. Exact zero stick resets

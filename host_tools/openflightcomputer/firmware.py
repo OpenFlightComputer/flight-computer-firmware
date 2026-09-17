@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 import shutil
+import struct
+import zlib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -84,16 +86,32 @@ def build_firmware(
 
     build_directory = repository_root / "build" / preset / "firmware"
     elf_path = build_directory / "openflightcomputer-flight-firmware.elf"
-    if not elf_path.is_file():
+    bootloader_elf_path = build_directory / "openflightcomputer-bootloader.elf"
+    application_bin_path = build_directory / "openflightcomputer-flight-firmware.bin"
+    if (
+        not elf_path.is_file()
+        or not bootloader_elf_path.is_file()
+        or not application_bin_path.is_file()
+    ):
         raise FirmwareBuildError(
             f"firmware build completed without producing the expected ELF: {elf_path}"
         )
     version, build_id = _read_generated_identity(
         build_directory / "generated" / "firmware_identity.c"
     )
+    application = application_bin_path.read_bytes()
+    metadata_path = build_directory / "openflightcomputer-application-metadata.bin"
+    metadata_path.write_bytes(
+        struct.pack(
+            "<IIII", 0x4F464341, 1, len(application), zlib.crc32(application)
+        )
+    )
     artifact = FirmwareArtifact(
         profile=profile,
         elf_path=elf_path.resolve(),
+        bootloader_elf_path=bootloader_elf_path.resolve(),
+        application_bin_path=application_bin_path.resolve(),
+        application_metadata_path=metadata_path.resolve(),
         firmware_version=version,
         build_id=build_id,
     )

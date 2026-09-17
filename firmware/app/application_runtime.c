@@ -4,6 +4,7 @@
 #include "application_tasks.h"
 #include "bmi270_driver.h"
 #include "board.h"
+#include "board_usb.h"
 #include "board_flight_configuration_storage.h"
 #include "board_imu.h"
 #include "board_receiver.h"
@@ -405,6 +406,7 @@ static bool initialize_receiver(void)
 
 static bool initialize_usb(void)
 {
+    (void)board_usb_select_automatic_vbus_mode();
     const usb_cdc_init_result_t result = usb_cdc_transport_initialize();
 
     firmware_usb_initialization_result = (uint32_t)result;

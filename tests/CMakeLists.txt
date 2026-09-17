@@ -16,6 +16,18 @@ target_compile_options(timebase_snapshot_tests PRIVATE
 
 add_test(NAME timebase_snapshot COMMAND timebase_snapshot_tests)
 
+add_executable(bootloader_crc32_tests
+    bootloader_crc32_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/bootloader/bootloader_crc32.c"
+)
+target_include_directories(bootloader_crc32_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/bootloader"
+)
+target_compile_options(bootloader_crc32_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME bootloader_crc32 COMMAND bootloader_crc32_tests)
+
 add_executable(spi_device_tests
     spi_device_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/hardware/spi_device.c"
