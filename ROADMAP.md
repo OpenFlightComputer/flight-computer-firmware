@@ -197,6 +197,24 @@ and position control also remain deferred until after first-flight capability.
 The combined receiver/control/motor debugger view remains deferred as recorded
 in Phase 3.
 
+## Flight-control architecture evolution
+
+1. Canonical control boundary — implemented in software. The central 1 kHz
+   control core consumes `vehicle_state_t`, `control_objective_t`, and a
+   `prepared_control_profile_t`, then produces controller and mixer output
+   without depending on the receiver or motor authority layer. The current
+   receiver path is retained as the first behavior adapter so this refactor
+   does not intentionally change physical motor behavior.
+2. Manual receiver behavior — next. Move remaining receiver failsafe,
+   takeoff-leveling, and Easy-mode objective policy behind an explicit behavior
+   producer while keeping arming and safety authority outside the core.
+3. Behavior arbitration — planned. Select exactly one valid objective producer
+   (manual, assisted, autonomous, or recovery) with explicit freshness,
+   priority, ownership, and transition rules.
+4. Initial autonomous behavior — planned after the manual path proves the
+   arbitration boundary. It will use the same vehicle state, objectives,
+   profiles, central control core, motor gate, and diagnostics.
+
 ## Later phases
 
 | Phase | Objective |
@@ -209,12 +227,13 @@ in Phase 3.
 | 6 | Optional external peripherals such as GPS |
 | 7 | Evidence-driven Flight Computer V2 review |
 
-Phase 5 must replace the current fixed 16-log failure behavior with a bounded
-retention policy. Reaching the log-index capacity must never leave blackbox
-storage in a terminal error state or prevent existing logs from being read.
-The selected policy should safely reclaim the oldest completed log, preserve
-recoverable in-progress data across power loss, expose every overwrite through
-diagnostics, and remain compatible with host-side download and archival.
+The blackbox catalog no longer has the former fixed 16-log terminal failure:
+format 2 pages 20,480 descriptors from the card while retaining one catalog
+page in RAM, exposes catalog-full explicitly, and never silently overwrites a
+completed log. Phase 5 may add an opt-in bounded retention policy that safely
+reclaims the oldest completed log, exposes every overwrite through diagnostics,
+preserves recoverable in-progress data across power loss, and remains
+compatible with host-side download and archival.
 
 After first-flight capability exists, add a separate evidence-driven vehicle
 condition and flight-phase layer. It may infer conditions such as `LANDED`,

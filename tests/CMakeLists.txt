@@ -561,10 +561,13 @@ add_executable(flight_configuration_service_tests
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/flight_control_core.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/yaw_attitude_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/takeoff_leveling.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
@@ -677,12 +680,34 @@ target_compile_options(takeoff_leveling_tests PRIVATE
 )
 add_test(NAME takeoff_leveling COMMAND takeoff_leveling_tests)
 
+add_executable(flight_control_core_tests
+    flight_control_core_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/flight_control_core.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/yaw_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+)
+target_include_directories(flight_control_core_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+)
+target_link_libraries(flight_control_core_tests PRIVATE m)
+target_compile_options(flight_control_core_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME flight_control_core COMMAND flight_control_core_tests)
+
 add_executable(flight_control_tests
     flight_control_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_control.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/flight_control_core.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/yaw_attitude_controller.c"

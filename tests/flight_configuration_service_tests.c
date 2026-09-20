@@ -164,6 +164,7 @@ int main(void)
     assert(service.active.propeller_layout == PROPELLER_LAYOUT_PROPS_IN);
     assert(service.prepared_control.initialized);
     assert(service.prepared_mixer.initialized);
+    assert(service.prepared_control_profile.initialized);
     assert(service.rate_controller.initialized);
     assert(level_calibration.initialized);
     assert(level_calibration.state == LEVEL_CALIBRATION_UNCALIBRATED);

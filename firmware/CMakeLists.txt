@@ -222,6 +222,7 @@ add_executable(flight_firmware
     flight/control/yaw_attitude_controller.c
     flight/control/control_curve.c
     flight/control/control_input_shaping.c
+    flight/control/flight_control_core.c
     flight/control/rate_pid.c
     flight/control/rate_controller.c
     flight/control/takeoff_leveling.c

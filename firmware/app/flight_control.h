@@ -3,6 +3,7 @@
 
 #include "flight_configuration.h"
 #include "control_input_shaping.h"
+#include "flight_control_core.h"
 #include "imu_processing_pipeline.h"
 #include "receiver_failsafe.h"
 
@@ -35,14 +36,14 @@ typedef struct {
     float motor_baseline;
     takeoff_leveling_state_t takeoff_leveling_state;
     bool mixer_output_valid;
-} flight_control_output_t;
+} receiver_flight_control_output_t;
 
 typedef struct {
-    const roll_attitude_controller_config_t *roll_controller;
-    const pitch_attitude_controller_config_t *pitch_controller;
     const easy_mode_config_t *easy_mode;
     takeoff_leveling_t *takeoff_leveling;
-    rate_controller_t *rate_controller;
+    flight_control_core_t *core;
+    const prepared_control_profile_t *profile;
+    const vehicle_state_t *vehicle_state;
     const attitude_snapshot_t *attitude;
     imu_freshness_t imu_freshness;
     flight_control_desired_rates_t *desired_rates;
@@ -52,11 +53,10 @@ typedef struct {
 
 flight_control_result_t flight_control_process_receiver(
     const prepared_control_input_shaping_t *control,
-    const prepared_quad_x_mixer_t *mixer,
     const receiver_failsafe_decision_t *decision,
     flight_control_stabilization_t *stabilization,
     /* Optional observation of values produced by this control step. */
-    flight_control_output_t *output,
+    receiver_flight_control_output_t *output,
     uint64_t now_us);
 flight_control_result_t flight_control_recover_receiver(
     receiver_failsafe_t *failsafe);

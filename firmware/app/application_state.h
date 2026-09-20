@@ -38,6 +38,7 @@ extern level_calibration_t firmware_level_calibration;
 extern imu_processing_pipeline_t firmware_imu_processing_pipeline;
 extern control_trace_t firmware_control_trace;
 extern blackbox_t firmware_blackbox;
+extern flight_control_core_t firmware_flight_control_core;
 extern flight_control_desired_rates_t
     firmware_flight_control_desired_rates;
 extern rate_controller_output_t firmware_rate_controller_output;

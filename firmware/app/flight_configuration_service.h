@@ -3,6 +3,7 @@
 
 #include "flight_configuration_storage.h"
 #include "control_input_shaping.h"
+#include "flight_control_core.h"
 #include "imu_processing_pipeline.h"
 #include "level_calibration.h"
 #include "receiver_failsafe.h"
@@ -38,6 +39,7 @@ typedef struct {
     rate_controller_t rate_controller;
     prepared_control_input_shaping_t prepared_control;
     prepared_quad_x_mixer_t prepared_mixer;
+    prepared_control_profile_t prepared_control_profile;
     flight_configuration_clock_t clock;
     flight_configuration_source_t source;
     bool initialized;

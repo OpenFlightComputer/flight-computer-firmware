@@ -94,7 +94,13 @@ static bool apply_runtime(flight_configuration_service_t *service,
 {
     prepared_control_input_shaping_t prepared_control;
     prepared_quad_x_mixer_t prepared_mixer;
+    prepared_control_profile_t prepared_control_profile;
     rate_controller_t rate_controller;
+    const float maximum_rate_dps[RATE_CONTROLLER_AXIS_COUNT] = {
+        configuration->control.roll.maximum_rate_dps,
+        configuration->control.pitch.maximum_rate_dps,
+        configuration->control.yaw.maximum_rate_dps,
+    };
     const receiver_freshness_config_t freshness = {
         .fresh_through_us = configuration->receiver_failsafe.stale_after_us,
         .lost_after_us =
@@ -105,6 +111,13 @@ static bool apply_runtime(flight_configuration_service_t *service,
                                        &prepared_control) ||
         !quad_x_mixer_prepare(configuration->propeller_layout,
                               &prepared_mixer) ||
+        !flight_control_profile_prepare(
+            &configuration->roll_attitude_controller,
+            &configuration->pitch_attitude_controller,
+            maximum_rate_dps,
+            &prepared_mixer,
+            easy_mode_armed_idle(&configuration->easy_mode),
+            &prepared_control_profile) ||
         !rate_controller_initialize(
             &rate_controller, &configuration->rate_controller) ||
         !apply_imu_processing_configuration(
@@ -121,6 +134,7 @@ static bool apply_runtime(flight_configuration_service_t *service,
     }
     service->prepared_control = prepared_control;
     service->prepared_mixer = prepared_mixer;
+    service->prepared_control_profile = prepared_control_profile;
     service->rate_controller = rate_controller;
     if (!service->receiver_service->initialized) {
         return true;
@@ -178,6 +192,17 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
                                        &service->prepared_control) ||
         !quad_x_mixer_prepare(service->active.propeller_layout,
                               &service->prepared_mixer) ||
+        !flight_control_profile_prepare(
+            &service->active.roll_attitude_controller,
+            &service->active.pitch_attitude_controller,
+            (const float[RATE_CONTROLLER_AXIS_COUNT]){
+                service->active.control.roll.maximum_rate_dps,
+                service->active.control.pitch.maximum_rate_dps,
+                service->active.control.yaw.maximum_rate_dps,
+            },
+            &service->prepared_mixer,
+            easy_mode_armed_idle(&service->active.easy_mode),
+            &service->prepared_control_profile) ||
         !rate_controller_initialize(
             &service->rate_controller,
             &service->active.rate_controller) ||

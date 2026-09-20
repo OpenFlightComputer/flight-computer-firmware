@@ -6,14 +6,17 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Milestone 4.10 — constrained first-hover preparation — is implemented in
-software and awaiting propeller-free physical validation. The initial
-always-selected Easy mode adds configurable armed idle and a bounded transition
-from the actual launch attitude to level. Blackbox capture now begins before
-arming so startup calibration, pre-arm attitude, and the full arm transition
-are available when diagnosing a failed launch. A configured USB CDC host now
-closes and suspends the SD blackbox, leaving bench diagnosis to the USB control
-trace and keeping completed standalone logs available for retrieval.
+Flight-architecture Milestone 1 establishes a source-independent control core.
+The 1 kHz flight task now converts the latest estimator result into a canonical
+`vehicle_state_t`; the temporary receiver adapter converts shaped manual input
+and takeoff-leveling policy into a canonical `control_objective_t`; and
+`flight_control_update()` owns the attitude-to-rate, rate-PID, and Quad-X mixer
+pipeline. A prepared control profile contains immutable controller limits,
+mixer coefficients, and the armed-idle policy. The core has no receiver,
+failsafe, motor-authority, or motor-submission dependency, so later manual and
+autonomous behaviors can produce the same objective type without duplicating
+the flight-control math. Existing receiver behavior and motor output are kept
+unchanged for this milestone.
 
 ## Last completed milestone
 
@@ -22,6 +25,14 @@ that the controller can arm and drive the secured, propeller-free motors through
 the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
+
+- Added the canonical vehicle-state, control-objective, prepared-profile,
+  control-core, and control-output boundary. Roll and pitch objectives support
+  angle or rate control; yaw currently supports rate control or disabled,
+  deliberately matching the estimator's lack of a heading reference. Direct
+  core tests cover angle and rate objectives, PID seeding, armed idle, mixing,
+  and invalid-state rejection. The existing receiver integration remains an
+  adapter and continues through the same motor authority and failsafe gates.
 
 - Added one universal resident USB-C update loader. A full SWD flash installs
   its protected 64 KiB partition, the relocated application at `0x08010000`,

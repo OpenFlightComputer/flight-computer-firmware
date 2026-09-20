@@ -135,7 +135,8 @@ static flight_control_result_t recover_receiver_control(void)
 
 static flight_control_stabilization_t read_stabilization_inputs(
     attitude_snapshot_t *attitude,
-    imu_service_state_t *imu_state)
+    imu_service_state_t *imu_state,
+    vehicle_state_t *vehicle_state)
 {
     bool attitude_is_current;
 
@@ -147,19 +148,34 @@ static flight_control_stabilization_t read_stabilization_inputs(
     attitude_is_current = attitude->valid && imu_state->snapshot.valid &&
                           (attitude->source_sequence ==
                            imu_state->snapshot.sequence) &&
-                          (attitude->acquired_at_us ==
+                           (attitude->acquired_at_us ==
                            imu_state->snapshot.acquired_at_us);
 
+    *vehicle_state = (vehicle_state_t){0};
+    if (attitude_is_current) {
+        vehicle_state->attitude_degrees[RATE_CONTROLLER_AXIS_ROLL] =
+            attitude->roll_degrees;
+        vehicle_state->attitude_degrees[RATE_CONTROLLER_AXIS_PITCH] =
+            attitude->pitch_degrees;
+        vehicle_state->angular_rate_dps[RATE_CONTROLLER_AXIS_ROLL] =
+            attitude->filtered_gyroscope_dps[RATE_CONTROLLER_AXIS_ROLL];
+        vehicle_state->angular_rate_dps[RATE_CONTROLLER_AXIS_PITCH] =
+            attitude->filtered_gyroscope_dps[RATE_CONTROLLER_AXIS_PITCH];
+        vehicle_state->angular_rate_dps[RATE_CONTROLLER_AXIS_YAW] =
+            attitude->filtered_gyroscope_dps[RATE_CONTROLLER_AXIS_YAW];
+        vehicle_state->acquired_at_us = attitude->acquired_at_us;
+        vehicle_state->source_sequence = attitude->source_sequence;
+        vehicle_state->valid = true;
+    }
+
     return (flight_control_stabilization_t){
-        .roll_controller = &firmware_flight_configuration_service.active
-                                .roll_attitude_controller,
-        .pitch_controller = &firmware_flight_configuration_service.active
-                                 .pitch_attitude_controller,
         .easy_mode =
             &firmware_flight_configuration_service.active.easy_mode,
         .takeoff_leveling = &firmware_takeoff_leveling,
-        .rate_controller =
-            &firmware_flight_configuration_service.rate_controller,
+        .core = &firmware_flight_control_core,
+        .profile = &firmware_flight_configuration_service
+                        .prepared_control_profile,
+        .vehicle_state = attitude_is_current ? vehicle_state : NULL,
         .attitude = attitude_is_current ? attitude : NULL,
         .imu_freshness = imu_state->freshness,
         .desired_rates = &firmware_flight_control_desired_rates,
@@ -171,12 +187,11 @@ static flight_control_stabilization_t read_stabilization_inputs(
 static flight_control_result_t execute_receiver_control(
     const receiver_failsafe_decision_t *decision,
     flight_control_stabilization_t *stabilization,
-    flight_control_output_t *output,
+    receiver_flight_control_output_t *output,
     uint64_t now_us)
 {
     return flight_control_process_receiver(
         &firmware_flight_configuration_service.prepared_control,
-        &firmware_flight_configuration_service.prepared_mixer,
         decision,
         stabilization,
         output,
@@ -190,9 +205,10 @@ static task_callback_result_t run_flight_control_task(void *context)
     receiver_failsafe_decision_t decision;
     const receiver_control_snapshot_t *control_snapshot;
     attitude_snapshot_t attitude = {0};
+    vehicle_state_t vehicle_state;
     imu_service_state_t imu_state;
     flight_control_stabilization_t stabilization;
-    flight_control_output_t output = {0};
+    receiver_flight_control_output_t output = {0};
     flight_control_result_t result;
     const uint64_t now_us = time_us();
 
@@ -211,7 +227,8 @@ static task_callback_result_t run_flight_control_task(void *context)
     if (decision.recovery_ready) {
         result = recover_receiver_control();
     } else {
-        stabilization = read_stabilization_inputs(&attitude, &imu_state);
+        stabilization = read_stabilization_inputs(
+            &attitude, &imu_state, &vehicle_state);
         result = execute_receiver_control(
             &decision, &stabilization, &output, now_us);
     }

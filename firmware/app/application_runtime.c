@@ -230,6 +230,14 @@ static void initialize_motor_control(void)
     takeoff_leveling_reset(
         &firmware_takeoff_leveling,
         &firmware_flight_configuration_service.active.easy_mode);
+    if (!flight_control_core_initialize(
+            &firmware_flight_control_core,
+            &firmware_flight_configuration_service.rate_controller)) {
+        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
+                        FAULT_ID_MOTOR_INITIALIZATION,
+                        false,
+                        0U);
+    }
     LOG_INFO(LOG_MODULE_SYSTEM, "four-channel DShot300 output initialized");
 }
 
