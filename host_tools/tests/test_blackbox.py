@@ -3,7 +3,7 @@ import zlib
 
 import pytest
 
-from openflightcomputer.blackbox import decode_log, select_log
+from openflightcomputer.blackbox import decode_log, list_logs, select_log
 
 
 def _block(block_type, sequence, payload, *, item_count=1, log_id=4, version=1):
@@ -88,3 +88,21 @@ def test_select_log_supports_latest_and_explicit_id():
     logs = [{"id": 2}, {"id": 8}, {"id": 3}]
     assert select_log(logs, "latest")["id"] == 8
     assert select_log(logs, "3")["id"] == 3
+
+
+def test_list_logs_collects_all_catalog_pages():
+    class Client:
+        def request(self, command, *, parameters, timeout_seconds):
+            assert command == "flight_log_list"
+            assert timeout_seconds == 2.0
+            offset = parameters["offset"]
+            page = [{"id": value + 1} for value in range(offset, min(offset + 16, 25))]
+            return {
+                "logs": page,
+                "total_log_count": 25,
+                "next_offset": offset + 16 if offset + 16 < 25 else None,
+            }
+
+    response, logs = list_logs(Client(), timeout=2.0)
+    assert response["next_offset"] is None
+    assert [entry["id"] for entry in logs] == list(range(1, 26))

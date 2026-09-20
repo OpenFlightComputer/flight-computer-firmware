@@ -23,6 +23,7 @@ from openflightcomputer.blackbox import (
     decode_log,
     default_log_path,
     download_log,
+    list_logs,
     select_log,
     write_decoded_json,
 )
@@ -540,11 +541,12 @@ def _flight_log_request(arguments: argparse.Namespace) -> int:
     port = wait_for_flight_port(arguments.port, timeout_seconds=arguments.timeout)
     with UsbCdcConnection.open(port) as connection:
         client = JsonProtocolClient(connection)
-        response = client.request("flight_log_list", timeout_seconds=arguments.timeout)
-        logs = response.get("logs")
-        if not isinstance(logs, list):
-            raise ProtocolError("flight computer returned an invalid log list")
+        response, logs = list_logs(client, timeout=arguments.timeout)
         if arguments.flight_log_command == "list":
+            response = dict(response)
+            response["offset"] = 0
+            response["logs"] = logs
+            response["next_offset"] = None
             print(json.dumps(response, indent=2, sort_keys=True))
             return 0
         log = select_log(logs, arguments.log)

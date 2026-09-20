@@ -906,6 +906,8 @@ bool usb_json_parse_request(const char *line,
     const jsmntok_t *level;
     const jsmntok_t *log_id;
     const jsmntok_t *sector_offset;
+    const jsmntok_t *offset;
+    const jsmntok_t *limit;
     int token_count;
 
     if ((line == NULL) || (request == NULL) || (line_length == 0U)) {
@@ -918,6 +920,8 @@ bool usb_json_parse_request(const char *line,
     request->throttle_millionths = 0U;
     request->log_id = 0U;
     request->sector_offset = 0U;
+    request->list_offset = 0U;
+    request->list_limit = 16U;
     request->configuration = (usb_json_configuration_t){0};
     jsmn_init(&parser);
     token_count = jsmn_parse(&parser,
@@ -941,6 +945,8 @@ bool usb_json_parse_request(const char *line,
     log_id = object_member(line, tokens, token_count, 0, "log_id");
     sector_offset = object_member(line, tokens, token_count, 0,
                                   "sector_offset");
+    offset = object_member(line, tokens, token_count, 0, "offset");
+    limit = object_member(line, tokens, token_count, 0, "limit");
     if (!token_equals(line, type, "command") || (command == NULL) ||
         (command->type != JSMN_STRING) || (request_id == NULL) ||
         !parse_uint32(line, request_id, &request->request_id)) {
@@ -1032,6 +1038,20 @@ bool usb_json_parse_request(const char *line,
                parse_uint32(line, sector_offset, &request->sector_offset) &&
                (motor == NULL) && (throttle == NULL) &&
                (configuration == NULL) && (level == NULL);
+    }
+    if (request->command == USB_JSON_COMMAND_FLIGHT_LOG_LIST) {
+        if ((offset == NULL) && (limit == NULL)) {
+            return tokens[0].size == 6;
+        }
+        return (tokens[0].size == 10) && (offset != NULL) &&
+               parse_uint32(line, offset, &request->list_offset) &&
+               (limit != NULL) &&
+               parse_uint32(line, limit, &request->list_limit) &&
+               (request->list_limit > 0U) &&
+               (request->list_limit <= 16U) && (motor == NULL) &&
+               (throttle == NULL) && (configuration == NULL) &&
+               (level == NULL) && (log_id == NULL) &&
+               (sector_offset == NULL);
     }
     return (tokens[0].size == 6) && (motor == NULL) &&
            (throttle == NULL) && (configuration == NULL) &&

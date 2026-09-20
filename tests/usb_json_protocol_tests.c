@@ -120,6 +120,12 @@ static void valid_commands_and_key_order_are_accepted(void)
     assert(parse("{\"type\":\"command\",\"request_id\":12,"
                  "\"command\":\"flight_log_list\"}").command ==
            USB_JSON_COMMAND_FLIGHT_LOG_LIST);
+    request = parse("{\"type\":\"command\",\"request_id\":12,"
+                    "\"command\":\"flight_log_list\",\"offset\":16,"
+                    "\"limit\":16}");
+    assert(request.command == USB_JSON_COMMAND_FLIGHT_LOG_LIST);
+    assert(request.list_offset == 16U);
+    assert(request.list_limit == 16U);
     request = parse("{\"type\":\"command\",\"request_id\":13,"
                     "\"command\":\"flight_log_read\",\"log_id\":7,"
                     "\"sector_offset\":19}");

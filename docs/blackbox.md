@@ -44,9 +44,10 @@ DMA stream.
 ## Raw format
 
 This first-flight implementation deliberately uses raw sectors rather than a
-filesystem. Sectors 0 and 1 contain redundant, CRC-protected index copies.
-Flight data begins at sector 2 and consists of independently CRC-protected,
-versioned blocks:
+filesystem. Sectors 0 and 1 contain redundant, CRC-protected superblocks.
+Sectors 2 through 1025 contain an append-only, CRC-protected paged catalogue
+with 20 descriptors per sector. Flight data begins at sector 1026 and consists
+of independently CRC-protected, versioned blocks:
 
 1. flight header with format version, sample interval, firmware version/build,
    start time, and configuration length/CRC;
@@ -62,7 +63,7 @@ The numeric takeoff-leveling states are stable within format 2: `0` disabled,
 complete, and `4` frozen after the first nonzero throttle but still below the
 configured transition threshold.
 
-`storage initialize` writes only the two blackbox index sectors. It does not
+`storage initialize` writes only the two blackbox superblock sectors. It does not
 format a filesystem or require firmware to be copied to the card, but it makes
 previous raw blackbox logs unreachable and therefore requires explicit host
 confirmation. Normal firmware flashing does not erase the SD card.
@@ -80,7 +81,9 @@ Storage management is disarmed-only:
 ./ofc flight-log decode flight-3.ofcb
 ```
 
-Downloads read one sector per correlated JSON request. The raw `.ofcb` file
+Log listing is paginated in bounded groups of 16 descriptors; the CLI follows
+all pages automatically. Downloads read one sector per correlated JSON request.
+The raw `.ofcb` file
 preserves the exact versioned on-card bytes; decoding validates every block
 CRC before producing JSON. The host decoder accepts both the prior version-1
 sample layout and the current version-2 layout. The SD card therefore remains
@@ -99,10 +102,8 @@ run; power-loss recovery remains a hardware-validation item before first
 flight. A future batched multi-block writer may restore the 500 Hz target
 without changing the on-card format or flight capture boundary.
 
-The current format indexes at most 16 logs. Physical testing showed that
-attempting a seventeenth recording enters `ERROR` before capturing data and
-also prevents log reads until reboot. Development workflows must archive and
-initialize storage before reaching that limit. Phase 5 must replace this with
-a bounded retention policy that safely reclaims the oldest completed log,
-reports every overwrite, and never sacrifices read access merely because the
-index is full.
+The catalogue indexes at most 20,480 logs while retaining only one 512-byte
+catalogue page in RAM. It never silently overwrites an earlier flight. Reaching
+the catalogue limit or the physical end of the card produces the explicit
+`FULL` state while completed logs remain readable; archiving and explicitly
+initializing storage starts a new catalogue.

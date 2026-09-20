@@ -99,11 +99,12 @@ the receiver, mixer, authority gate, and DShot output path.
   microsecond median control interval, no control gap over 1,004 microseconds,
   and a terminal `DISARMED` sample with four zero motor commands. The SD queue
   peaked at 5 of 32 entries and fully drained before power removal.
-- Reaching the fixed 16-log index capacity caused the next recording attempt
-  to enter terminal blackbox `ERROR` before capturing a sample. All 16 complete
-  logs were CRC-decoded and archived locally before the index was reset. Phase
-  5 now explicitly requires bounded oldest-complete-log reclamation rather
-  than loss of recording and read access at capacity.
+- Replaced the fixed 16-log index after it prevented two hop tests from being
+  recorded. All 16 complete logs were CRC-decoded and archived locally first.
+  Storage format 2 reserves a 1,024-sector paged catalogue for 20,480
+  append-only descriptors, caches only one page in fixed RAM, lists through
+  bounded USB pages, and reports `FULL` without sacrificing completed-log read
+  access. It deliberately does not silently reclaim older flights.
 
 - Added an opt-in fixed 64-record flight-control trace with event-only, 10 Hz,
   100 Hz, and 1 kHz levels. It is off after reset, starts only while disarmed,

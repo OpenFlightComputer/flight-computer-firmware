@@ -92,6 +92,8 @@ typedef struct {
     uint8_t motor;
     uint32_t log_id;
     uint32_t sector_offset;
+    uint32_t list_offset;
+    uint32_t list_limit;
     usb_json_trace_level_t trace_level;
     usb_json_configuration_t configuration;
 } usb_json_request_t;

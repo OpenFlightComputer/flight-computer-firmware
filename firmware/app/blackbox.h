@@ -9,9 +9,12 @@
 #include <stdint.h>
 
 #define BLACKBOX_FORMAT_VERSION 2U
-#define BLACKBOX_STORAGE_FORMAT_VERSION 1U
+#define BLACKBOX_STORAGE_FORMAT_VERSION 2U
 #define BLACKBOX_QUEUE_CAPACITY 32U
-#define BLACKBOX_LOG_CAPACITY 16U
+#define BLACKBOX_CATALOG_PAGE_COUNT 1024U
+#define BLACKBOX_CATALOG_ENTRIES_PER_PAGE 20U
+#define BLACKBOX_LOG_CAPACITY \
+    (BLACKBOX_CATALOG_PAGE_COUNT * BLACKBOX_CATALOG_ENTRIES_PER_PAGE)
 #define BLACKBOX_SAMPLE_RATE_HZ 100U
 #define BLACKBOX_SAMPLE_INTERVAL_US UINT32_C(10000)
 #define BLACKBOX_CONFIGURATION_CAPACITY 512U
@@ -31,6 +34,7 @@ typedef enum {
     BLACKBOX_STATUS_READY,
     BLACKBOX_STATUS_RECORDING,
     BLACKBOX_STATUS_FINISHING,
+    BLACKBOX_STATUS_FULL,
     BLACKBOX_STATUS_ERROR,
 } blackbox_status_t;
 
@@ -46,7 +50,8 @@ typedef struct {
     const char *build_id;
     size_t configuration_length;
     blackbox_queued_sector_t queue[BLACKBOX_QUEUE_CAPACITY];
-    blackbox_log_information_t logs[BLACKBOX_LOG_CAPACITY];
+    blackbox_log_information_t active_log;
+    uint8_t catalog_page[SD_CARD_SECTOR_SIZE];
     uint8_t sample_block[SD_CARD_SECTOR_SIZE];
     uint64_t next_sample_at_us;
     uint64_t captured_sample_count;
@@ -60,7 +65,8 @@ typedef struct {
     uint32_t next_sector;
     uint32_t next_log_id;
     uint32_t generation;
-    uint32_t active_log_index;
+    uint32_t log_count;
+    uint32_t catalog_page_index;
     uint32_t active_block_sequence;
     uint32_t queue_head;
     uint32_t queue_count;
@@ -69,6 +75,7 @@ typedef struct {
     blackbox_status_t status;
     system_state_t previous_system_state;
     bool sector_write_active;
+    bool catalog_page_valid;
     bool armed_seen;
     bool initialized;
 } blackbox_t;
@@ -92,7 +99,7 @@ void blackbox_finish_recording(blackbox_t *blackbox,
                                const control_trace_sample_t *sample);
 void blackbox_service(blackbox_t *blackbox);
 size_t blackbox_log_count(const blackbox_t *blackbox);
-bool blackbox_log_information(const blackbox_t *blackbox,
+bool blackbox_log_information(blackbox_t *blackbox,
                               size_t index,
                               blackbox_log_information_t *information);
 bool blackbox_read_log_sector(blackbox_t *blackbox,

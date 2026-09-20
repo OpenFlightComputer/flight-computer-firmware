@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <string.h>
 
-#define TEST_SECTOR_COUNT 1024U
+#define TEST_SECTOR_COUNT 8192U
 
 static uint8_t storage[TEST_SECTOR_COUNT][SD_CARD_SECTOR_SIZE];
 static uint8_t pending[SD_CARD_SECTOR_SIZE];
@@ -214,5 +214,33 @@ int main(void)
     assert(blackbox.status == BLACKBOX_STATUS_FINISHING);
     service_until_idle(&blackbox);
     assert(blackbox.status == BLACKBOX_STATUS_READY);
+
+    /* The on-card catalogue crosses page boundaries without increasing the
+       fixed RAM footprint or losing earlier descriptors. */
+    assert(blackbox_storage_initialize(&blackbox));
+    for (uint32_t index = 0U; index < 25U; index++) {
+        current = sample(4000000U + (uint64_t)index * 100000U,
+                         SYSTEM_STATE_DISARMED);
+        blackbox_capture(&blackbox, &current);
+        assert(blackbox.status == BLACKBOX_STATUS_RECORDING);
+        blackbox_finish_recording(&blackbox, &current);
+        assert(blackbox.status == BLACKBOX_STATUS_FINISHING);
+        service_until_idle(&blackbox);
+    }
+    assert(blackbox_log_count(&blackbox) == 25U);
+    assert(blackbox_log_information(&blackbox, 0U, &log));
+    assert(log.id == 1U);
+    assert(blackbox_log_information(&blackbox, 19U, &log));
+    assert(log.id == 20U);
+    assert(blackbox_log_information(&blackbox, 20U, &log));
+    assert(log.id == 21U);
+    assert(blackbox_log_information(&blackbox, 24U, &log));
+    assert(log.id == 25U);
+    blackbox_initialize(&mounted, &card, configuration,
+                        sizeof(configuration), "0.1.0", "test-build");
+    assert(mounted.status == BLACKBOX_STATUS_READY);
+    assert(blackbox_log_count(&mounted) == 25U);
+    assert(blackbox_log_information(&mounted, 20U, &log));
+    assert(log.id == 21U);
     return 0;
 }

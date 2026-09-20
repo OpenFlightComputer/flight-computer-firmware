@@ -234,12 +234,14 @@ static bool build_blackbox_response(usb_command_processor_t *processor,
     }
     case USB_JSON_COMMAND_FLIGHT_LOG_LIST:
         if ((processor->blackbox->status != BLACKBOX_STATUS_READY) &&
+            (processor->blackbox->status != BLACKBOX_STATUS_FULL) &&
             (processor->blackbox->status != BLACKBOX_STATUS_UNINITIALIZED)) {
             return build_error(processor, true, request->request_id,
                                "storage_unavailable");
         }
         return usb_blackbox_log_list_response_build(
             request->request_id, processor->blackbox,
+            request->list_offset, request->list_limit,
             processor->pending_response, sizeof(processor->pending_response),
             &processor->pending_response_length);
     case USB_JSON_COMMAND_FLIGHT_LOG_READ:

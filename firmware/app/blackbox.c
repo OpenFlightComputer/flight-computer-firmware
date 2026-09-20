@@ -14,9 +14,12 @@
 #define BLACKBOX_SAMPLES_PER_BLOCK 2U
 #define BLACKBOX_CHECKPOINT_SAMPLE_INTERVAL UINT64_C(500)
 #define BLACKBOX_CONFIGURATION_CHUNK_SIZE BLACKBOX_BLOCK_PAYLOAD_CAPACITY
-#define BLACKBOX_FIRST_DATA_SECTOR UINT32_C(2)
-#define BLACKBOX_SUPERBLOCK_LOG_OFFSET 32U
-#define BLACKBOX_SUPERBLOCK_LOG_SIZE 24U
+#define BLACKBOX_CATALOG_MAGIC UINT32_C(0x4343464F) /* OFCC */
+#define BLACKBOX_FIRST_CATALOG_SECTOR UINT32_C(2)
+#define BLACKBOX_FIRST_DATA_SECTOR \
+    (BLACKBOX_FIRST_CATALOG_SECTOR + BLACKBOX_CATALOG_PAGE_COUNT)
+#define BLACKBOX_CATALOG_HEADER_SIZE 16U
+#define BLACKBOX_CATALOG_LOG_SIZE 24U
 #define BLACKBOX_IDLE_SAMPLE_INTERVAL_US UINT32_C(100000)
 #define BLACKBOX_POST_DISARM_DURATION_US UINT64_C(1000000)
 
@@ -26,6 +29,10 @@ typedef enum {
     BLACKBOX_BLOCK_SAMPLES = 3,
     BLACKBOX_BLOCK_FLIGHT_FOOTER = 4,
 } blackbox_block_type_t;
+
+static bool queue_sector(blackbox_t *blackbox,
+                         uint32_t target_sector,
+                         const uint8_t sector[SD_CARD_SECTOR_SIZE]);
 
 static uint32_t crc32(const uint8_t *data, size_t length)
 {
@@ -99,25 +106,13 @@ static bool superblock_valid(const uint8_t sector[SD_CARD_SECTOR_SIZE])
 static void build_superblock(const blackbox_t *blackbox,
                              uint8_t sector[SD_CARD_SECTOR_SIZE])
 {
-    size_t index;
     memset(sector, 0, SD_CARD_SECTOR_SIZE);
     put_u32(sector, BLACKBOX_SUPERBLOCK_MAGIC);
     put_u32(sector + 4U, BLACKBOX_STORAGE_FORMAT_VERSION);
     put_u32(sector + 8U, blackbox->generation);
     put_u32(sector + 12U, blackbox->next_sector);
     put_u32(sector + 16U, blackbox->next_log_id);
-    put_u32(sector + 20U, (uint32_t)blackbox_log_count(blackbox));
-    for (index = 0U; index < BLACKBOX_LOG_CAPACITY; index++) {
-        const size_t offset = BLACKBOX_SUPERBLOCK_LOG_OFFSET +
-                              index * BLACKBOX_SUPERBLOCK_LOG_SIZE;
-        const blackbox_log_information_t *log = &blackbox->logs[index];
-        put_u32(sector + offset, log->id);
-        put_u32(sector + offset + 4U, log->start_sector);
-        put_u32(sector + offset + 8U, log->end_sector);
-        put_u32(sector + offset + 12U, log->sample_count);
-        put_u32(sector + offset + 16U, log->dropped_sample_count);
-        put_u32(sector + offset + 20U, log->complete ? 1U : 0U);
-    }
+    put_u32(sector + 20U, blackbox->log_count);
     put_u32(sector + BLACKBOX_BLOCK_CRC_OFFSET,
             crc32(sector, BLACKBOX_BLOCK_CRC_OFFSET));
 }
@@ -125,22 +120,103 @@ static void build_superblock(const blackbox_t *blackbox,
 static void load_superblock(blackbox_t *blackbox,
                             const uint8_t sector[SD_CARD_SECTOR_SIZE])
 {
-    size_t index;
     blackbox->generation = get_u32(sector + 8U);
     blackbox->next_sector = get_u32(sector + 12U);
     blackbox->next_log_id = get_u32(sector + 16U);
-    for (index = 0U; index < BLACKBOX_LOG_CAPACITY; index++) {
-        const size_t offset = BLACKBOX_SUPERBLOCK_LOG_OFFSET +
-                              index * BLACKBOX_SUPERBLOCK_LOG_SIZE;
-        blackbox->logs[index] = (blackbox_log_information_t){
-            .id = get_u32(sector + offset),
-            .start_sector = get_u32(sector + offset + 4U),
-            .end_sector = get_u32(sector + offset + 8U),
-            .sample_count = get_u32(sector + offset + 12U),
-            .dropped_sample_count = get_u32(sector + offset + 16U),
-            .complete = get_u32(sector + offset + 20U) != 0U,
-        };
+    blackbox->log_count = get_u32(sector + 20U);
+}
+
+static size_t catalog_log_offset(uint32_t slot)
+{
+    return BLACKBOX_CATALOG_HEADER_SIZE +
+           (size_t)slot * BLACKBOX_CATALOG_LOG_SIZE;
+}
+
+static bool catalog_page_valid(const uint8_t sector[SD_CARD_SECTOR_SIZE],
+                               uint32_t page_index)
+{
+    return (get_u32(sector) == BLACKBOX_CATALOG_MAGIC) &&
+           (get_u32(sector + 4U) == BLACKBOX_STORAGE_FORMAT_VERSION) &&
+           (get_u32(sector + 8U) == page_index) &&
+           (get_u32(sector + BLACKBOX_BLOCK_CRC_OFFSET) ==
+            crc32(sector, BLACKBOX_BLOCK_CRC_OFFSET));
+}
+
+static void catalog_page_initialize(blackbox_t *blackbox,
+                                    uint32_t page_index)
+{
+    memset(blackbox->catalog_page, 0, sizeof(blackbox->catalog_page));
+    put_u32(blackbox->catalog_page, BLACKBOX_CATALOG_MAGIC);
+    put_u32(blackbox->catalog_page + 4U, BLACKBOX_STORAGE_FORMAT_VERSION);
+    put_u32(blackbox->catalog_page + 8U, page_index);
+    blackbox->catalog_page_index = page_index;
+    blackbox->catalog_page_valid = true;
+}
+
+static bool catalog_page_load(blackbox_t *blackbox, uint32_t page_index)
+{
+    if (blackbox->catalog_page_valid &&
+        (blackbox->catalog_page_index == page_index)) {
+        return true;
     }
+    if ((blackbox->card == NULL) ||
+        (sd_card_read_sector(blackbox->card,
+                             BLACKBOX_FIRST_CATALOG_SECTOR + page_index,
+                             blackbox->catalog_page) != SD_CARD_RESULT_OK) ||
+        !catalog_page_valid(blackbox->catalog_page, page_index)) {
+        blackbox->catalog_page_valid = false;
+        return false;
+    }
+    blackbox->catalog_page_index = page_index;
+    blackbox->catalog_page_valid = true;
+    return true;
+}
+
+static void catalog_log_encode(blackbox_t *blackbox,
+                               uint32_t slot,
+                               const blackbox_log_information_t *log)
+{
+    const size_t offset = catalog_log_offset(slot);
+    put_u32(blackbox->catalog_page + offset, log->id);
+    put_u32(blackbox->catalog_page + offset + 4U, log->start_sector);
+    put_u32(blackbox->catalog_page + offset + 8U, log->end_sector);
+    put_u32(blackbox->catalog_page + offset + 12U, log->sample_count);
+    put_u32(blackbox->catalog_page + offset + 16U,
+            log->dropped_sample_count);
+    put_u32(blackbox->catalog_page + offset + 20U,
+            log->complete ? 1U : 0U);
+}
+
+static void catalog_log_decode(const uint8_t sector[SD_CARD_SECTOR_SIZE],
+                               uint32_t slot,
+                               blackbox_log_information_t *log)
+{
+    const size_t offset = catalog_log_offset(slot);
+    *log = (blackbox_log_information_t){
+        .id = get_u32(sector + offset),
+        .start_sector = get_u32(sector + offset + 4U),
+        .end_sector = get_u32(sector + offset + 8U),
+        .sample_count = get_u32(sector + offset + 12U),
+        .dropped_sample_count = get_u32(sector + offset + 16U),
+        .complete = get_u32(sector + offset + 20U) != 0U,
+    };
+}
+
+static bool enqueue_catalog_page(blackbox_t *blackbox)
+{
+    uint32_t entry_count =
+        blackbox->log_count % BLACKBOX_CATALOG_ENTRIES_PER_PAGE;
+    if ((entry_count == 0U) && (blackbox->log_count != 0U)) {
+        entry_count = BLACKBOX_CATALOG_ENTRIES_PER_PAGE;
+    }
+    put_u32(blackbox->catalog_page + 12U,
+            entry_count);
+    put_u32(blackbox->catalog_page + BLACKBOX_BLOCK_CRC_OFFSET,
+            crc32(blackbox->catalog_page, BLACKBOX_BLOCK_CRC_OFFSET));
+    return queue_sector(blackbox,
+                        BLACKBOX_FIRST_CATALOG_SECTOR +
+                            blackbox->catalog_page_index,
+                        blackbox->catalog_page);
 }
 
 static void finalize_block(uint8_t sector[SD_CARD_SECTOR_SIZE],
@@ -187,15 +263,14 @@ static bool allocate_and_queue(blackbox_t *blackbox,
         !queue_sector(blackbox, blackbox->next_sector, sector)) {
         return false;
     }
-    blackbox->logs[blackbox->active_log_index].end_sector =
-        blackbox->next_sector;
+    blackbox->active_log.end_sector = blackbox->next_sector;
     blackbox->next_sector++;
     return true;
 }
 
 static uint32_t active_log_id(const blackbox_t *blackbox)
 {
-    return blackbox->logs[blackbox->active_log_index].id;
+    return blackbox->active_log.id;
 }
 
 static bool enqueue_superblocks(blackbox_t *blackbox)
@@ -206,16 +281,32 @@ static bool enqueue_superblocks(blackbox_t *blackbox)
            queue_sector(blackbox, 1U, sector);
 }
 
+static bool enqueue_metadata(blackbox_t *blackbox)
+{
+    catalog_log_encode(
+        blackbox,
+        (blackbox->log_count - 1U) % BLACKBOX_CATALOG_ENTRIES_PER_PAGE,
+        &blackbox->active_log);
+    return enqueue_catalog_page(blackbox) && enqueue_superblocks(blackbox);
+}
+
 static bool start_flight(blackbox_t *blackbox, uint64_t timestamp_us)
 {
     uint8_t sector[SD_CARD_SECTOR_SIZE];
-    size_t log_index = blackbox_log_count(blackbox);
+    const uint32_t log_index = blackbox->log_count;
+    const uint32_t page_index =
+        log_index / BLACKBOX_CATALOG_ENTRIES_PER_PAGE;
     size_t offset = 0U;
     uint32_t chunk_index = 0U;
 
     if ((log_index >= BLACKBOX_LOG_CAPACITY) ||
         (blackbox->next_sector >= blackbox->card->sector_count) ||
         (blackbox->queue_count != 0U)) {
+        return false;
+    }
+    if ((log_index % BLACKBOX_CATALOG_ENTRIES_PER_PAGE) == 0U) {
+        catalog_page_initialize(blackbox, page_index);
+    } else if (!catalog_page_load(blackbox, page_index)) {
         return false;
     }
     blackbox->captured_sample_count = 0U;
@@ -225,11 +316,11 @@ static bool start_flight(blackbox_t *blackbox, uint64_t timestamp_us)
     blackbox->maximum_sector_write_time_us = 0U;
     blackbox->sector_write_started_at_us = 0U;
     blackbox->maximum_queue_depth = 0U;
-    blackbox->active_log_index = (uint32_t)log_index;
-    blackbox->logs[log_index] = (blackbox_log_information_t){
+    blackbox->active_log = (blackbox_log_information_t){
         .id = blackbox->next_log_id,
         .start_sector = blackbox->next_sector,
     };
+    blackbox->log_count++;
     if (blackbox->next_log_id < UINT32_MAX) {
         blackbox->next_log_id++;
     }
@@ -268,7 +359,7 @@ static bool start_flight(blackbox_t *blackbox, uint64_t timestamp_us)
         offset += chunk;
     }
     blackbox->generation++;
-    if (!enqueue_superblocks(blackbox)) {
+    if (!enqueue_metadata(blackbox)) {
         return false;
     }
     blackbox->next_sample_at_us = timestamp_us;
@@ -283,17 +374,17 @@ static bool start_flight(blackbox_t *blackbox, uint64_t timestamp_us)
 
 static void checkpoint_flight(blackbox_t *blackbox)
 {
-    blackbox_log_information_t *log;
     if ((blackbox->captured_sample_count <
          blackbox->next_checkpoint_at_sample) ||
-        (blackbox->queue_count > BLACKBOX_QUEUE_CAPACITY - 2U)) {
+        (blackbox->queue_count > BLACKBOX_QUEUE_CAPACITY - 3U)) {
         return;
     }
-    log = &blackbox->logs[blackbox->active_log_index];
-    log->sample_count = (uint32_t)blackbox->captured_sample_count;
-    log->dropped_sample_count = (uint32_t)blackbox->dropped_sample_count;
+    blackbox->active_log.sample_count =
+        (uint32_t)blackbox->captured_sample_count;
+    blackbox->active_log.dropped_sample_count =
+        (uint32_t)blackbox->dropped_sample_count;
     blackbox->generation++;
-    if (enqueue_superblocks(blackbox)) {
+    if (enqueue_metadata(blackbox)) {
         blackbox->next_checkpoint_at_sample +=
             BLACKBOX_CHECKPOINT_SAMPLE_INTERVAL;
     }
@@ -487,7 +578,6 @@ static bool flush_sample_block(blackbox_t *blackbox)
 static void finish_flight(blackbox_t *blackbox, const control_trace_sample_t *sample)
 {
     uint8_t sector[SD_CARD_SECTOR_SIZE];
-    blackbox_log_information_t *log = &blackbox->logs[blackbox->active_log_index];
 
     if (!flush_sample_block(blackbox)) {
         blackbox->status = BLACKBOX_STATUS_ERROR;
@@ -505,11 +595,13 @@ static void finish_flight(blackbox_t *blackbox, const control_trace_sample_t *sa
                    active_log_id(blackbox), blackbox->active_block_sequence++,
                    1U, 20U);
     if (allocate_and_queue(blackbox, sector)) {
-        log->sample_count = (uint32_t)blackbox->captured_sample_count;
-        log->dropped_sample_count = (uint32_t)blackbox->dropped_sample_count;
-        log->complete = true;
+        blackbox->active_log.sample_count =
+            (uint32_t)blackbox->captured_sample_count;
+        blackbox->active_log.dropped_sample_count =
+            (uint32_t)blackbox->dropped_sample_count;
+        blackbox->active_log.complete = true;
         blackbox->generation++;
-        if (!enqueue_superblocks(blackbox)) {
+        if (!enqueue_metadata(blackbox)) {
             blackbox->status = BLACKBOX_STATUS_ERROR;
             return;
         }
@@ -561,8 +653,13 @@ void blackbox_initialize(blackbox_t *blackbox,
         }
         load_superblock(blackbox, newest);
         if ((blackbox->next_sector >= BLACKBOX_FIRST_DATA_SECTOR) &&
-            ((uint64_t)blackbox->next_sector < card->sector_count)) {
-            blackbox->status = BLACKBOX_STATUS_READY;
+            ((uint64_t)blackbox->next_sector <= card->sector_count) &&
+            (blackbox->log_count <= BLACKBOX_LOG_CAPACITY)) {
+            blackbox->status =
+                ((blackbox->next_sector == card->sector_count) ||
+                 (blackbox->log_count == BLACKBOX_LOG_CAPACITY))
+                    ? BLACKBOX_STATUS_FULL
+                    : BLACKBOX_STATUS_READY;
         } else {
             blackbox->status = BLACKBOX_STATUS_ERROR;
         }
@@ -598,7 +695,14 @@ bool blackbox_storage_initialize(blackbox_t *blackbox)
         (blackbox->status == BLACKBOX_STATUS_FINISHING)) {
         return false;
     }
-    memset(blackbox->logs, 0, sizeof(blackbox->logs));
+    memset(&blackbox->active_log, 0, sizeof(blackbox->active_log));
+    memset(blackbox->catalog_page, 0, sizeof(blackbox->catalog_page));
+    memset(blackbox->queue, 0, sizeof(blackbox->queue));
+    blackbox->catalog_page_valid = false;
+    blackbox->queue_head = 0U;
+    blackbox->queue_count = 0U;
+    blackbox->sector_write_active = false;
+    blackbox->log_count = 0U;
     blackbox->next_sector = BLACKBOX_FIRST_DATA_SECTOR;
     blackbox->next_log_id = 1U;
     blackbox->generation++;
@@ -622,6 +726,7 @@ bool blackbox_capture_due(const blackbox_t *blackbox,
         (blackbox->status == BLACKBOX_STATUS_NO_MEDIA) ||
         (blackbox->status == BLACKBOX_STATUS_UNINITIALIZED) ||
         (blackbox->status == BLACKBOX_STATUS_FINISHING) ||
+        (blackbox->status == BLACKBOX_STATUS_FULL) ||
         (blackbox->status == BLACKBOX_STATUS_ERROR)) {
         return false;
     }
@@ -648,6 +753,7 @@ void blackbox_capture(blackbox_t *blackbox,
     if ((blackbox == NULL) || !blackbox->initialized || (sample == NULL) ||
         (blackbox->status == BLACKBOX_STATUS_NO_MEDIA) ||
         (blackbox->status == BLACKBOX_STATUS_UNINITIALIZED) ||
+        (blackbox->status == BLACKBOX_STATUS_FULL) ||
         (blackbox->status == BLACKBOX_STATUS_ERROR)) {
         return;
     }
@@ -659,7 +765,11 @@ void blackbox_capture(blackbox_t *blackbox,
         }
         blackbox->active_block_sequence = 0U;
         if (!start_flight(blackbox, sample->timestamp_us)) {
-            blackbox->status = BLACKBOX_STATUS_ERROR;
+            blackbox->status =
+                ((blackbox->log_count >= BLACKBOX_LOG_CAPACITY) ||
+                 (blackbox->next_sector >= blackbox->card->sector_count))
+                    ? BLACKBOX_STATUS_FULL
+                    : BLACKBOX_STATUS_ERROR;
             return;
         }
     }
@@ -795,18 +905,10 @@ void blackbox_service(blackbox_t *blackbox)
 
 size_t blackbox_log_count(const blackbox_t *blackbox)
 {
-    size_t count = 0U;
-    if (blackbox == NULL) {
-        return 0U;
-    }
-    while ((count < BLACKBOX_LOG_CAPACITY) &&
-           (blackbox->logs[count].id != 0U)) {
-        count++;
-    }
-    return count;
+    return blackbox != NULL ? blackbox->log_count : 0U;
 }
 
-bool blackbox_log_information(const blackbox_t *blackbox,
+bool blackbox_log_information(blackbox_t *blackbox,
                               size_t index,
                               blackbox_log_information_t *information)
 {
@@ -814,7 +916,26 @@ bool blackbox_log_information(const blackbox_t *blackbox,
         (index >= blackbox_log_count(blackbox))) {
         return false;
     }
-    *information = blackbox->logs[index];
+    if ((blackbox->status == BLACKBOX_STATUS_RECORDING) &&
+        (index == blackbox->log_count - 1U)) {
+        *information = blackbox->active_log;
+        return true;
+    }
+    if (!catalog_page_load(
+            blackbox,
+            (uint32_t)index / BLACKBOX_CATALOG_ENTRIES_PER_PAGE)) {
+        return false;
+    }
+    catalog_log_decode(
+        blackbox->catalog_page,
+        (uint32_t)index % BLACKBOX_CATALOG_ENTRIES_PER_PAGE,
+        information);
+    if ((information->id == 0U) ||
+        (information->start_sector < BLACKBOX_FIRST_DATA_SECTOR) ||
+        (information->end_sector < information->start_sector) ||
+        ((uint64_t)information->end_sector >= blackbox->card->sector_count)) {
+        return false;
+    }
     return true;
 }
 
@@ -823,18 +944,23 @@ bool blackbox_read_log_sector(blackbox_t *blackbox,
                               uint32_t sector_offset,
                               uint8_t destination[SD_CARD_SECTOR_SIZE])
 {
+    blackbox_log_information_t log;
     size_t index;
     if ((blackbox == NULL) || (destination == NULL) ||
-        (blackbox->status != BLACKBOX_STATUS_READY)) {
+        ((blackbox->status != BLACKBOX_STATUS_READY) &&
+         (blackbox->status != BLACKBOX_STATUS_FULL))) {
         return false;
     }
-    for (index = 0U; index < blackbox_log_count(blackbox); index++) {
-        const blackbox_log_information_t *log = &blackbox->logs[index];
-        const uint32_t sector_count = log->end_sector - log->start_sector + 1U;
-        if ((log->id == log_id) && (sector_offset < sector_count)) {
+    if ((log_id > 0U) && (log_id < blackbox->next_log_id)) {
+        index = (size_t)(log_id - 1U);
+        if (blackbox_log_information(blackbox, index, &log)) {
+            const uint32_t sector_count =
+                log.end_sector - log.start_sector + 1U;
+            if ((log.id == log_id) && (sector_offset < sector_count)) {
             return sd_card_read_sector(blackbox->card,
-                                       log->start_sector + sector_offset,
+                                       log.start_sector + sector_offset,
                                        destination) == SD_CARD_RESULT_OK;
+            }
         }
     }
     return false;
@@ -848,6 +974,7 @@ const char *blackbox_status_name(blackbox_status_t status)
     case BLACKBOX_STATUS_READY: return "READY";
     case BLACKBOX_STATUS_RECORDING: return "RECORDING";
     case BLACKBOX_STATUS_FINISHING: return "FINISHING";
+    case BLACKBOX_STATUS_FULL: return "FULL";
     case BLACKBOX_STATUS_ERROR: return "ERROR";
     }
     return "INVALID";

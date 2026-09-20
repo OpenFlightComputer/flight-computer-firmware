@@ -102,7 +102,7 @@ size_t blackbox_log_count(const blackbox_t *instance)
     return 0U;
 }
 
-bool blackbox_log_information(const blackbox_t *instance,
+bool blackbox_log_information(blackbox_t *instance,
                               size_t index,
                               blackbox_log_information_t *information)
 {

@@ -15,6 +15,31 @@ SECTOR_SIZE = 512
 BLOCK_MAGIC = b"OFCB"
 FORMAT_VERSION = 2
 SAMPLE_SIZES = {1: 232, 2: 244}
+LOG_LIST_PAGE_SIZE = 16
+
+
+def list_logs(client: JsonProtocolClient, *, timeout: float) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    offset = 0
+    logs: list[dict[str, Any]] = []
+    last_response: dict[str, Any] = {}
+    while True:
+        response = client.request(
+            "flight_log_list",
+            parameters={"offset": offset, "limit": LOG_LIST_PAGE_SIZE},
+            timeout_seconds=timeout,
+        )
+        page = response.get("logs")
+        if not isinstance(page, list):
+            raise ProtocolError("flight computer returned an invalid log list")
+        logs.extend(page)
+        last_response = response
+        next_offset = response.get("next_offset")
+        if next_offset is None:
+            break
+        if not isinstance(next_offset, int) or next_offset <= offset:
+            raise ProtocolError("flight computer returned invalid log pagination")
+        offset = next_offset
+    return last_response, logs
 
 
 def select_log(logs: list[dict[str, Any]], identifier: str) -> dict[str, Any]:

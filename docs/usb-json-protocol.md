@@ -28,7 +28,7 @@ The supported commands are:
 | `control_trace_start` | Start a bounded event/10 Hz/100 Hz/1 kHz control trace while disarmed |
 | `storage_status` | Report SD media, blackbox sampling interval, queue high-water mark, sector-write timing, and drop status while disarmed |
 | `storage_initialize` | Explicitly initialize the raw blackbox index while disarmed |
-| `flight_log_list` | List indexed flight logs while disarmed |
+| `flight_log_list` | List indexed flight logs while disarmed, optionally using `offset` and a `limit` of at most 16 |
 | `flight_log_read` | Read one 512-byte log sector as hexadecimal using `log_id` and `sector_offset` |
 | `control_trace_read` | Read the next bounded trace chunk without changing flight behavior |
 | `control_trace_stop` | Stop capture while retaining unread records |

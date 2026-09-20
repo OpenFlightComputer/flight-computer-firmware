@@ -20,7 +20,9 @@ bool usb_blackbox_initialize_response_build(uint32_t request_id,
                                             size_t capacity,
                                             size_t *length);
 bool usb_blackbox_log_list_response_build(uint32_t request_id,
-                                          const blackbox_t *blackbox,
+                                          blackbox_t *blackbox,
+                                          uint32_t offset,
+                                          uint32_t limit,
                                           char *destination,
                                           size_t capacity,
                                           size_t *length);

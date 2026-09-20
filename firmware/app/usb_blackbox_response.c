@@ -76,13 +76,17 @@ static void append_common_status(json_writer_t *writer,
                            ? blackbox->card->sector_count
                            : 0U);
     append_format(writer,
-                  ",\"format_version\":%u,\"sample_interval_us\":%lu,"
-                  "\"log_count\":%lu,\"queue_depth\":%lu,"
+                  ",\"format_version\":%u,\"storage_format_version\":%u,"
+                  "\"sample_interval_us\":%lu,"
+                  "\"log_count\":%lu,\"log_capacity\":%u,"
+                  "\"queue_depth\":%lu,"
                   "\"queue_capacity\":%u,\"maximum_queue_depth\":%lu,"
                   "\"captured_samples\":",
                   (unsigned int)BLACKBOX_FORMAT_VERSION,
+                  (unsigned int)BLACKBOX_STORAGE_FORMAT_VERSION,
                   (unsigned long)BLACKBOX_SAMPLE_INTERVAL_US,
                   (unsigned long)blackbox_log_count(blackbox),
+                  (unsigned int)BLACKBOX_LOG_CAPACITY,
                   (unsigned long)blackbox->queue_count,
                   (unsigned int)BLACKBOX_QUEUE_CAPACITY,
                   (unsigned long)blackbox->maximum_queue_depth);
@@ -147,7 +151,9 @@ bool usb_blackbox_initialize_response_build(uint32_t request_id,
 }
 
 bool usb_blackbox_log_list_response_build(uint32_t request_id,
-                                          const blackbox_t *blackbox,
+                                          blackbox_t *blackbox,
+                                          uint32_t offset,
+                                          uint32_t limit,
                                           char *destination,
                                           size_t capacity,
                                           size_t *length)
@@ -155,16 +161,24 @@ bool usb_blackbox_log_list_response_build(uint32_t request_id,
     json_writer_t writer = {destination, capacity, 0U,
                             destination != NULL && capacity > 0U &&
                             blackbox != NULL};
+    const size_t total = blackbox_log_count(blackbox);
     size_t index;
+    size_t end;
     if (!writer.valid) {
         return false;
     }
     destination[0] = '\0';
     append_format(&writer,
                   "{\"type\":\"response\",\"command\":\"flight_log_list\","
-                  "\"request_id\":%lu,\"ok\":true,\"logs\":[",
-                  (unsigned long)request_id);
-    for (index = 0U; index < blackbox_log_count(blackbox); index++) {
+                  "\"request_id\":%lu,\"ok\":true,\"total_log_count\":%lu,"
+                  "\"offset\":%lu,\"logs\":[",
+                  (unsigned long)request_id, (unsigned long)total,
+                  (unsigned long)offset);
+    end = (size_t)offset + limit;
+    if (end > total) {
+        end = total;
+    }
+    for (index = offset; index < end; index++) {
         blackbox_log_information_t log;
         if (!blackbox_log_information(blackbox, index, &log)) {
             writer.valid = false;
@@ -175,7 +189,7 @@ bool usb_blackbox_log_list_response_build(uint32_t request_id,
                       "\"end_sector\":%lu,\"sector_count\":%lu,"
                       "\"sample_count\":%lu,\"dropped_sample_count\":%lu,"
                       "\"complete\":%s}",
-                      index == 0U ? "" : ",",
+                      index == offset ? "" : ",",
                       (unsigned long)log.id,
                       (unsigned long)log.start_sector,
                       (unsigned long)log.end_sector,
@@ -184,7 +198,13 @@ bool usb_blackbox_log_list_response_build(uint32_t request_id,
                       (unsigned long)log.dropped_sample_count,
                       log.complete ? "true" : "false");
     }
-    append_format(&writer, "]}\n");
+    append_format(&writer, "],\"next_offset\":");
+    if (end < total) {
+        append_format(&writer, "%lu", (unsigned long)end);
+    } else {
+        append_format(&writer, "null");
+    }
+    append_format(&writer, "}\n");
     return finish(&writer, length);
 }
 
