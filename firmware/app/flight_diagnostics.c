@@ -8,7 +8,7 @@ void flight_diagnostics_capture(
     uint64_t now_us,
     const receiver_failsafe_decision_t *decision,
     const attitude_snapshot_t *attitude,
-    const receiver_flight_control_output_t *output,
+    const flight_diagnostic_control_t *output,
     flight_control_result_t control_result)
 {
     control_trace_sample_t sample;
@@ -45,16 +45,16 @@ void flight_diagnostics_capture(
         .attitude = *attitude,
         .desired_rates = firmware_flight_control_desired_rates,
         .rate_output = firmware_rate_controller_output,
-        .mixer_output = output->mixer_output,
+        .mixer_output = output->control.mixer_output,
         .effective_attitude_target_degrees = {
             output->effective_roll_degrees,
             output->effective_pitch_degrees,
         },
-        .motor_baseline = output->motor_baseline,
+        .motor_baseline = output->control.motor_baseline,
         .takeoff_leveling_state = output->takeoff_leveling_state,
         .level_calibration_state =
             (uint8_t)firmware_level_calibration.state,
-        .mixer_output_valid = output->mixer_output_valid,
+        .mixer_output_valid = output->control.mixer_output_valid,
     };
     if (!imu_processing_pipeline_latest_observation(
             &firmware_imu_processing_pipeline, &sample.imu_observation) ||

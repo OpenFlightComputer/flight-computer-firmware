@@ -6,17 +6,16 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Flight-architecture Milestone 1 establishes a source-independent control core.
-The 1 kHz flight task now converts the latest estimator result into a canonical
-`vehicle_state_t`; the temporary receiver adapter converts shaped manual input
-and takeoff-leveling policy into a canonical `control_objective_t`; and
-`flight_control_update()` owns the attitude-to-rate, rate-PID, and Quad-X mixer
-pipeline. A prepared control profile contains immutable controller limits,
-mixer coefficients, and the armed-idle policy. The core has no receiver,
-failsafe, motor-authority, or motor-submission dependency, so later manual and
-autonomous behaviors can produce the same objective type without duplicating
-the flight-control math. Existing receiver behavior and motor output are kept
-unchanged for this milestone.
+Flight-architecture Milestone 2 establishes the first explicit behavior. The
+current receiver-controlled Easy policy now lives in
+`flight/behavior/manual_easy` and accepts only the receiver, failsafe,
+vehicle-state, configuration, and timing inputs it needs. Its only flight
+command output is the same canonical `control_objective_t` consumed by the
+source-independent core. The application coordinator retains arming, lifecycle
+authority, behavior-result handling, core execution, motor submission, and
+diagnostics. Manual Easy remains selected unconditionally, preserving current
+motor behavior while making room for later behaviors with completely different
+input signatures.
 
 ## Last completed milestone
 
@@ -26,6 +25,14 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Added `flight/behavior/common` for the small result contract shared by
+  behavior producers and `flight/behavior/manual_easy` for the current complete
+  receiver/Easy policy. The behavior owns its takeoff-leveling state, applies
+  receiver shaping and the configured Stage 1 fallback, rejects unusable state,
+  and produces only a timestamped canonical objective. It has no motor-control,
+  lifecycle, application-global, or hardware dependency. The coordinator now
+  executes an objective through the core and motor authority gate without
+  interpreting receiver channels or Easy-mode policy.
 - Added the canonical vehicle-state, control-objective, prepared-profile,
   control-core, and control-output boundary. Roll and pitch objectives support
   angle or rate control; yaw currently supports rate control or disabled,

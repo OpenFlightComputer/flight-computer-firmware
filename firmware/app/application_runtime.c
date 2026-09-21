@@ -226,10 +226,14 @@ static void initialize_motor_control(void)
                         false,
                         0U);
     }
-    takeoff_leveling_initialize(&firmware_takeoff_leveling);
-    takeoff_leveling_reset(
-        &firmware_takeoff_leveling,
-        &firmware_flight_configuration_service.active.easy_mode);
+    if (!manual_easy_behavior_initialize(
+            &firmware_manual_easy_behavior,
+            &firmware_flight_configuration_service.active.easy_mode)) {
+        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
+                        FAULT_ID_MOTOR_INITIALIZATION,
+                        false,
+                        0U);
+    }
     if (!flight_control_core_initialize(
             &firmware_flight_control_core,
             &firmware_flight_configuration_service.rate_controller)) {

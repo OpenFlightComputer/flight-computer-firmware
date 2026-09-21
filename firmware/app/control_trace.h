@@ -1,8 +1,11 @@
 #ifndef OPENFLIGHTCOMPUTER_CONTROL_TRACE_H
 #define OPENFLIGHTCOMPUTER_CONTROL_TRACE_H
 
+#include "control_input_shaping.h"
 #include "flight_control.h"
+#include "imu_processing_pipeline.h"
 #include "motor_control.h"
+#include "takeoff_leveling.h"
 #include "system_state.h"
 
 #include <stdbool.h>

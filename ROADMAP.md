@@ -205,9 +205,12 @@ in Phase 3.
    without depending on the receiver or motor authority layer. The current
    receiver path is retained as the first behavior adapter so this refactor
    does not intentionally change physical motor behavior.
-2. Manual receiver behavior — next. Move remaining receiver failsafe,
-   takeoff-leveling, and Easy-mode objective policy behind an explicit behavior
-   producer while keeping arming and safety authority outside the core.
+2. Manual receiver behavior — implemented in software. Manual Easy has its own
+   receiver/failsafe/vehicle-state input signature, owns takeoff-leveling state,
+   and produces only the canonical objective. Arming, lifecycle transitions,
+   core execution, motor authority, submission, and diagnostics remain outside
+   the behavior. It remains the only selected behavior, so this extraction does
+   not intentionally change motor output.
 3. Behavior arbitration — planned. Select exactly one valid objective producer
    (manual, assisted, autonomous, or recovery) with explicit freshness,
    priority, ownership, and transition rules.

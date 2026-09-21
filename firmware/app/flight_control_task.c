@@ -169,33 +169,91 @@ static flight_control_stabilization_t read_stabilization_inputs(
     }
 
     return (flight_control_stabilization_t){
-        .easy_mode =
-            &firmware_flight_configuration_service.active.easy_mode,
-        .takeoff_leveling = &firmware_takeoff_leveling,
         .core = &firmware_flight_control_core,
         .profile = &firmware_flight_configuration_service
                         .prepared_control_profile,
         .vehicle_state = attitude_is_current ? vehicle_state : NULL,
-        .attitude = attitude_is_current ? attitude : NULL,
-        .imu_freshness = imu_state->freshness,
         .desired_rates = &firmware_flight_control_desired_rates,
         .rate_output = &firmware_rate_controller_output,
         .rate_result = &firmware_rate_controller_result,
     };
 }
 
-static flight_control_result_t execute_receiver_control(
+static void capture_manual_behavior_observation(
+    flight_diagnostic_control_t *diagnostic)
+{
+    diagnostic->setpoint = firmware_manual_easy_behavior.last_setpoint;
+    diagnostic->effective_roll_degrees = firmware_manual_easy_behavior
+                                             .takeoff_leveling
+                                             .effective_roll_degrees;
+    diagnostic->effective_pitch_degrees = firmware_manual_easy_behavior
+                                              .takeoff_leveling
+                                              .effective_pitch_degrees;
+    diagnostic->takeoff_leveling_state =
+        firmware_manual_easy_behavior.takeoff_leveling.state;
+}
+
+static flight_control_result_t execute_manual_easy_behavior(
     const receiver_failsafe_decision_t *decision,
+    imu_freshness_t imu_freshness,
     flight_control_stabilization_t *stabilization,
-    receiver_flight_control_output_t *output,
+    flight_diagnostic_control_t *diagnostic,
     uint64_t now_us)
 {
-    return flight_control_process_receiver(
+    control_objective_t objective;
+    flight_behavior_result_t behavior_result;
+
+    if (motor_control_active_source() != MOTOR_CONTROL_SOURCE_RECEIVER) {
+        manual_easy_behavior_reset(
+            &firmware_manual_easy_behavior,
+            &firmware_flight_configuration_service.active.easy_mode);
+        flight_control_reset(stabilization);
+        return FLIGHT_CONTROL_IDLE;
+    }
+    behavior_result = manual_easy_behavior_update(
+        &firmware_manual_easy_behavior,
         &firmware_flight_configuration_service.prepared_control,
+        &firmware_flight_configuration_service.active.easy_mode,
         decision,
-        stabilization,
-        output,
-        now_us);
+        stabilization->vehicle_state,
+        imu_freshness,
+        now_us,
+        &objective);
+    capture_manual_behavior_observation(diagnostic);
+    if (behavior_result == FLIGHT_BEHAVIOR_INACTIVE) {
+        flight_control_reset(stabilization);
+        return FLIGHT_CONTROL_IDLE;
+    }
+    if (behavior_result == FLIGHT_BEHAVIOR_STOP_REQUESTED) {
+        return flight_control_enter_failsafe(
+            stabilization, FLIGHT_CONTROL_FAILSAFE_ENTERED);
+    }
+    if (behavior_result == FLIGHT_BEHAVIOR_WAITING_FOR_STATE) {
+        return FLIGHT_CONTROL_WAITING_FOR_IMU;
+    }
+    if (behavior_result == FLIGHT_BEHAVIOR_INVALID_STATE) {
+        return flight_control_enter_failsafe(
+            stabilization, FLIGHT_CONTROL_IMU_FAILSAFE_ENTERED);
+    }
+    if (behavior_result != FLIGHT_BEHAVIOR_OBJECTIVE_READY) {
+        return flight_control_enter_failsafe(
+            stabilization, FLIGHT_CONTROL_CONTROL_FAILSAFE_ENTERED);
+    }
+    {
+        const flight_control_result_t result =
+            flight_control_execute_objective(
+                MOTOR_CONTROL_SOURCE_RECEIVER,
+                &objective,
+                stabilization,
+                &diagnostic->control,
+                now_us);
+
+        if (diagnostic->control.rate_result ==
+            RATE_CONTROLLER_RESULT_SEEDED) {
+            diagnostic->setpoint.throttle = 0.0F;
+        }
+        return result;
+    }
 }
 
 static task_callback_result_t run_flight_control_task(void *context)
@@ -208,7 +266,7 @@ static task_callback_result_t run_flight_control_task(void *context)
     vehicle_state_t vehicle_state;
     imu_service_state_t imu_state;
     flight_control_stabilization_t stabilization;
-    receiver_flight_control_output_t output = {0};
+    flight_diagnostic_control_t output = {0};
     flight_control_result_t result;
     const uint64_t now_us = time_us();
 
@@ -229,8 +287,12 @@ static task_callback_result_t run_flight_control_task(void *context)
     } else {
         stabilization = read_stabilization_inputs(
             &attitude, &imu_state, &vehicle_state);
-        result = execute_receiver_control(
-            &decision, &stabilization, &output, now_us);
+        result = execute_manual_easy_behavior(
+            &decision,
+            imu_state.freshness,
+            &stabilization,
+            &output,
+            now_us);
     }
     firmware_flight_control_submit_last_result = (uint32_t)result;
     flight_diagnostics_capture(

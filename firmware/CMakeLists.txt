@@ -215,6 +215,7 @@ add_executable(flight_firmware
     flight/actuators/motor_configuration.c
     flight/actuators/motor_mapping.c
     flight/actuators/motor_output.c
+    flight/behavior/manual_easy/manual_easy_behavior.c
     flight/configuration/flight_configuration.c
     flight/control/quad_x_mixer.c
     flight/control/roll_attitude_controller.c
@@ -276,6 +277,8 @@ add_dependencies(flight_firmware generate_firmware_identity)
 target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/app"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/actuators"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/behavior/common"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flight/behavior/manual_easy"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/configuration"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/control"
     "${CMAKE_CURRENT_SOURCE_DIR}/flight/estimation"

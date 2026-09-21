@@ -701,6 +701,27 @@ target_compile_options(flight_control_core_tests PRIVATE
 )
 add_test(NAME flight_control_core COMMAND flight_control_core_tests)
 
+add_executable(manual_easy_behavior_tests
+    manual_easy_behavior_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/manual_easy/manual_easy_behavior.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/takeoff_leveling.c"
+)
+target_include_directories(manual_easy_behavior_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/manual_easy"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+target_link_libraries(manual_easy_behavior_tests PRIVATE m)
+target_compile_options(manual_easy_behavior_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME manual_easy_behavior COMMAND manual_easy_behavior_tests)
+
 add_executable(flight_control_tests
     flight_control_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_control.c"

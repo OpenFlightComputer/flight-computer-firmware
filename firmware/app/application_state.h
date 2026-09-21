@@ -10,6 +10,7 @@
 #include "imu_service.h"
 #include "gyro_calibration.h"
 #include "level_calibration.h"
+#include "manual_easy_behavior.h"
 #include "imu_processing_pipeline.h"
 #include "receiver_arming.h"
 #include "receiver_failsafe.h"
@@ -39,10 +40,10 @@ extern imu_processing_pipeline_t firmware_imu_processing_pipeline;
 extern control_trace_t firmware_control_trace;
 extern blackbox_t firmware_blackbox;
 extern flight_control_core_t firmware_flight_control_core;
+extern manual_easy_behavior_t firmware_manual_easy_behavior;
 extern flight_control_desired_rates_t
     firmware_flight_control_desired_rates;
 extern rate_controller_output_t firmware_rate_controller_output;
-extern takeoff_leveling_t firmware_takeoff_leveling;
 extern volatile uint32_t firmware_rate_controller_result;
 
 extern volatile uint32_t firmware_flight_control_task_executions;

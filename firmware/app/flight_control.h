@@ -1,10 +1,8 @@
 #ifndef OPENFLIGHTCOMPUTER_FLIGHT_CONTROL_H
 #define OPENFLIGHTCOMPUTER_FLIGHT_CONTROL_H
 
-#include "flight_configuration.h"
-#include "control_input_shaping.h"
 #include "flight_control_core.h"
-#include "imu_processing_pipeline.h"
+#include "motor_control.h"
 #include "receiver_failsafe.h"
 
 #include <stdbool.h>
@@ -29,34 +27,23 @@ typedef struct {
 } flight_control_desired_rates_t;
 
 typedef struct {
-    control_setpoint_t setpoint;
-    quad_x_mixer_output_t mixer_output;
-    float effective_roll_degrees;
-    float effective_pitch_degrees;
-    float motor_baseline;
-    takeoff_leveling_state_t takeoff_leveling_state;
-    bool mixer_output_valid;
-} receiver_flight_control_output_t;
-
-typedef struct {
-    const easy_mode_config_t *easy_mode;
-    takeoff_leveling_t *takeoff_leveling;
     flight_control_core_t *core;
     const prepared_control_profile_t *profile;
     const vehicle_state_t *vehicle_state;
-    const attitude_snapshot_t *attitude;
-    imu_freshness_t imu_freshness;
     flight_control_desired_rates_t *desired_rates;
     rate_controller_output_t *rate_output;
     volatile uint32_t *rate_result;
 } flight_control_stabilization_t;
 
-flight_control_result_t flight_control_process_receiver(
-    const prepared_control_input_shaping_t *control,
-    const receiver_failsafe_decision_t *decision,
+void flight_control_reset(flight_control_stabilization_t *stabilization);
+flight_control_result_t flight_control_enter_failsafe(
     flight_control_stabilization_t *stabilization,
-    /* Optional observation of values produced by this control step. */
-    receiver_flight_control_output_t *output,
+    flight_control_result_t accepted_result);
+flight_control_result_t flight_control_execute_objective(
+    motor_control_source_t authority,
+    const control_objective_t *objective,
+    flight_control_stabilization_t *stabilization,
+    flight_control_output_t *output,
     uint64_t now_us);
 flight_control_result_t flight_control_recover_receiver(
     receiver_failsafe_t *failsafe);
