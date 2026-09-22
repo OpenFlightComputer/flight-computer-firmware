@@ -562,6 +562,8 @@ static bool parse_configuration(const char *line,
         "stage_one_throttle", "recovery_throttle_maximum",
     };
     const jsmntok_t *schema;
+    const jsmntok_t *behavior;
+    const jsmntok_t *behavior_settings;
     const jsmntok_t *motors;
     const jsmntok_t *easy_mode;
     const jsmntok_t *failsafe;
@@ -578,11 +580,13 @@ static bool parse_configuration(const char *line,
     size_t index;
 
     if ((object == NULL) || (object->type != JSMN_OBJECT) ||
-        (object->size != 12)) {
+        (object->size != 14)) {
         return false;
     }
     schema = object_member(line, tokens, token_count,
                            token_index(tokens, object), "schema_version");
+    behavior = object_member(line, tokens, token_count,
+                             token_index(tokens, object), "behavior");
     motors = object_member(line, tokens, token_count,
                            token_index(tokens, object), "motors");
     easy_mode = object_member(line, tokens, token_count,
@@ -595,7 +599,14 @@ static bool parse_configuration(const char *line,
     control = object_member(line, tokens, token_count,
                             token_index(tokens, object), "control");
     if ((schema == NULL) || !parse_uint32(line, schema, &schema_value) ||
-        (schema_value != 10U) || (motors == NULL) ||
+        (schema_value != 11U) || (behavior == NULL) ||
+        (behavior->type != JSMN_OBJECT) || (behavior->size != 4) ||
+        !token_equals(
+            line,
+            object_member(line, tokens, token_count,
+                          token_index(tokens, behavior), "name"),
+            "manual_easy") ||
+        (motors == NULL) ||
         (motors->type != JSMN_OBJECT) || (motors->size != 4) ||
         (easy_mode == NULL) || (easy_mode->type != JSMN_OBJECT) ||
         (easy_mode->size != 8) ||
@@ -606,7 +617,15 @@ static bool parse_configuration(const char *line,
                                      configuration)) {
         return false;
     }
+    behavior_settings = object_member(
+        line, tokens, token_count, token_index(tokens, behavior), "settings");
+    if ((behavior_settings == NULL) ||
+        (behavior_settings->type != JSMN_OBJECT) ||
+        (behavior_settings->size != 0)) {
+        return false;
+    }
     configuration->schema_version = schema_value;
+    configuration->behavior = 0U;
 
     if (!parse_normalized_millionths(
             line,
@@ -1282,7 +1301,8 @@ bool usb_json_build_configuration_response(
         (configuration->gyro_filter_type != 0U) ||
         (configuration->accelerometer_filter_type != 0U) ||
         (configuration->attitude_estimator_type != 0U) ||
-        (configuration->rate_controller_type != 0U)) {
+        (configuration->rate_controller_type != 0U) ||
+        (configuration->behavior != 0U)) {
         return false;
     }
     for (index = 0U; index < USB_JSON_CONFIGURATION_CURVE_COUNT; index++) {
@@ -1340,7 +1360,9 @@ bool usb_json_build_configuration_response(
         "{\"type\":\"response\",\"request_id\":%lu,"
         "\"command\":\"%s\",\"ok\":%s,\"state\":\"%s\","
         "\"source\":\"%s\",\"configuration\":{"
-        "\"schema_version\":%lu,\"motors\":{"
+        "\"schema_version\":%lu,"
+        "\"behavior\":{\"name\":\"manual_easy\",\"settings\":{}},"
+        "\"motors\":{"
         "\"propeller_layout\":\"%s\",\"directions\":["
         "\"%s\",\"%s\",\"%s\",\"%s\"]},"
         "\"easy_mode\":{\"armed_idle_throttle\":%lu.%06lu,"

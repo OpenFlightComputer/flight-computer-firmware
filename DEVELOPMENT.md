@@ -6,16 +6,14 @@ Phase 4 — stabilization and first hover.
 
 ## Current milestone
 
-Flight-architecture Milestone 2 establishes the first explicit behavior. The
-current receiver-controlled Easy policy now lives in
-`flight/behavior/manual_easy` and accepts only the receiver, failsafe,
-vehicle-state, configuration, and timing inputs it needs. Its only flight
-command output is the same canonical `control_objective_t` consumed by the
-source-independent core. The application coordinator retains arming, lifecycle
-authority, behavior-result handling, core execution, motor submission, and
-diagnostics. Manual Easy remains selected unconditionally, preserving current
-motor behavior while making room for later behaviors with completely different
-input signatures.
+Flight-architecture Milestone 3 establishes configuration-driven behavior
+selection. Unified configuration schema 11 contains an extensible `behavior`
+object with a required name and behavior-specific settings object. The active
+configuration remains the single source of truth; whole-document writes are
+accepted only while disarmed. The flight task observes the configuration
+revision, reinitializes behavior state, resets the control core, and explicitly
+dispatches the selected behavior. Manual Easy is currently the only valid
+choice, so this milestone does not intentionally change motor behavior.
 
 ## Last completed milestone
 
@@ -25,6 +23,12 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Added fixed-capacity behavior configuration with a tagged settings union.
+  JSON exposes `{"behavior":{"name":"manual_easy","settings":{}}}` and
+  rejects unknown names or settings. The selector reads only
+  `flight_configuration_service.active.behavior`; it does not maintain a
+  duplicate configured-versus-active value. Schema-10 persistent records
+  migrate to Manual Easy without increasing the 512-byte payload.
 - Added `flight/behavior/common` for the small result contract shared by
   behavior producers and `flight/behavior/manual_easy` for the current complete
   receiver/Easy policy. The behavior owns its takeoff-leveling state, applies
@@ -80,9 +84,10 @@ the receiver, mixer, authority gate, and DShot output path.
   control trace remains the opt-in diagnostic path for USB-connected tests. A
   two-second enumeration grace avoids creating a throwaway SD log during an
   ordinary USB-powered boot; armed/failsafe/fault capture bypasses the grace.
-- Unified configuration schema 10 uses the full 512-byte persistent payload.
-  Schema-9 and all older supported records migrate with compiled Easy-mode
-  defaults; corrupt current records still fail startup closed.
+- Unified configuration schema 11 uses the full 512-byte persistent payload.
+  Schema-10 records migrate with the default behavior, schema-9 and older
+  supported records migrate with subsequent compiled defaults, and corrupt
+  current records still fail startup closed.
 - The first brief lift-off exposed yaw positive feedback. Blackbox log 6 from
   Release build `78e82a0-dirty` recorded an exactly zero shaped yaw request
   while measured yaw accelerated to `+376.95 deg/s`. The yaw PID correctly

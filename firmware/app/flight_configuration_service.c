@@ -7,6 +7,13 @@
 
 #define BMI270_GYROSCOPE_COUNTS_PER_DPS 16.384F
 
+static void advance_revision(flight_configuration_service_t *service)
+{
+    service->revision = service->revision == UINT32_MAX
+                            ? UINT32_C(1)
+                            : service->revision + UINT32_C(1);
+}
+
 static bool apply_imu_processing_configuration(
     imu_processing_pipeline_t *pipeline,
     const flight_configuration_t *configuration)
@@ -213,6 +220,7 @@ flight_configuration_service_result_t flight_configuration_service_initialize(
         return FLIGHT_CONFIGURATION_SERVICE_APPLY_ERROR;
     }
     service->initialized = true;
+    service->revision = UINT32_C(1);
     return FLIGHT_CONFIGURATION_SERVICE_OK;
 }
 
@@ -236,6 +244,7 @@ flight_configuration_service_result_t flight_configuration_service_write(
     }
     service->active = *configuration;
     service->source = FLIGHT_CONFIGURATION_SOURCE_PERSISTENT;
+    advance_revision(service);
     return FLIGHT_CONFIGURATION_SERVICE_OK;
 }
 
@@ -260,6 +269,7 @@ flight_configuration_service_result_t flight_configuration_service_reset(
     }
     service->active = defaults;
     service->source = FLIGHT_CONFIGURATION_SOURCE_DEFAULT;
+    advance_revision(service);
     return FLIGHT_CONFIGURATION_SERVICE_OK;
 }
 

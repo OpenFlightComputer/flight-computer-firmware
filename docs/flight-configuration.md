@@ -11,7 +11,11 @@ validate, and write one complete snapshot.
 compiled defaults. CMake validates its basic shape and generates C constants at
 configure time. A new board, an explicitly reset board, or a mass-erased board
 therefore starts with `PROPS_IN`, four `NORMAL` ESC direction settings, and the
-reviewed receiver-failsafe values in that file. Schema 10 carries the startup gyro-calibration policy, the selected gyro
+reviewed receiver-failsafe values in that file. Schema 11 adds an extensible
+`behavior` object. Its `name` selects one complete behavior and its `settings`
+object is reserved for that behavior's fixed-schema parameters. The only
+currently accepted value is `{"name":"manual_easy","settings":{}}`.
+Schema 10 introduced the startup gyro-calibration policy, the selected gyro
 and accelerometer filters and cutoffs, and the selected attitude estimator, correction time
 constant, and maximum accepted sample gap. It adds control-input deadbands,
 angle/rate limits, maximum throttle, four bounded control-point curves,
@@ -71,7 +75,9 @@ Write and reset require lifecycle `DISARMED` with no pending arm. A successful
 write is persisted before the active snapshot is replaced. Runtime application
 updates all four motor directions, receiver freshness thresholds, receiver
 failsafe policy, prepared input shaping and mixer signs, and the IMU processing
-pipeline as one operation. Replacing
+pipeline as one operation. The flight task then observes the configuration
+revision, reinitializes the selected behavior, and resets controller history
+before producing another objective. Replacing
 the filter or estimator configuration clears its history so the next fresh IMU
 sample seeds a new estimate instead of mixing two configurations. Direction
 changes start a ten-frame DShot configuration sequence, and all four directions
@@ -102,7 +108,9 @@ append-only records. Each record has a format version, sequence, payload
 length, CRC32, and a commit word programmed last. The sector holds 244 full
 configuration records before an explicit reset is needed.
 
-The loader migrates the 508-byte schema-9 payload by supplying the default
+The loader migrates schema 10 by selecting Manual Easy from the compiled
+defaults without changing the 512-byte payload size. It migrates the 508-byte
+schema-9 payload by supplying the default
 Easy-mode policy. It migrates the 500-byte schema-8 payload by supplying the default
 accelerometer cutoff and integral-activation threshold. It also migrates the
 488-byte schema-6/schema-7 payload by ignoring its

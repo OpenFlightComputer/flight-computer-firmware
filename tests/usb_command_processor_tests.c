@@ -364,7 +364,7 @@ static void reset_fakes(void)
     transport_queued_count = 0U;
     configuration_service = (flight_configuration_service_t){
         .active = {
-            .schema_version = 10U,
+            .schema_version = 11U,
             .propeller_layout = PROPELLER_LAYOUT_PROPS_IN,
             .motors = {.direction = {
                 MOTOR_DIRECTION_NORMAL, MOTOR_DIRECTION_NORMAL,
@@ -932,7 +932,8 @@ static void complete_configuration_commands_replace_singular_commands(void)
 
     queue_input(
         "{\"type\":\"command\",\"request_id\":61,\"command\":"
-        "\"config_write\",\"configuration\":{\"schema_version\":10,"
+        "\"config_write\",\"configuration\":{\"schema_version\":11,"
+        "\"behavior\":{\"name\":\"manual_easy\",\"settings\":{}},"
         "\"motors\":{\"propeller_layout\":\"PROPS_OUT\","
         "\"directions\":[\"REVERSED\",\"REVERSED\",\"REVERSED\","
         "\"REVERSED\"]},"

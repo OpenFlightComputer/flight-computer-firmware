@@ -439,6 +439,7 @@ static void configuration_to_usb(
 
     *usb = (usb_json_configuration_t){
         .schema_version = configuration->schema_version,
+        .behavior = (uint8_t)configuration->behavior.id,
         .easy_mode_armed_idle_millionths =
             (uint32_t)configuration->easy_mode.armed_idle_permille * 1000U,
         .easy_mode_activation_throttle_millionths =
@@ -630,6 +631,9 @@ static void configuration_from_usb(
 
     *configuration = (flight_configuration_t){
         .schema_version = usb->schema_version,
+        .behavior = {
+            .id = (flight_behavior_id_t)usb->behavior,
+        },
         .propeller_layout = (propeller_layout_t)usb->propeller_layout,
         .easy_mode = {
             .armed_idle_permille = (uint16_t)(

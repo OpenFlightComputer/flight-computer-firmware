@@ -2,6 +2,7 @@
 #define OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_H
 
 #include "control_input_shaping.h"
+#include "flight_behavior_configuration.h"
 #include "motor_configuration.h"
 #include "pitch_attitude_controller.h"
 #include "quad_x_mixer.h"
@@ -63,6 +64,7 @@ typedef struct {
 
 typedef struct {
     uint32_t schema_version;
+    flight_behavior_configuration_t behavior;
     propeller_layout_t propeller_layout;
     easy_mode_config_t easy_mode;
     motor_configuration_t motors;

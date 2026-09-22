@@ -30,13 +30,13 @@
 static void assert_valid_json_line(const char *line, size_t length)
 {
     jsmn_parser parser;
-    jsmntok_t tokens[320];
+    jsmntok_t tokens[340];
     int token_count;
 
     assert(length > 1U);
     assert(line[length - 1U] == '\n');
     jsmn_init(&parser);
-    token_count = jsmn_parse(&parser, line, length - 1U, tokens, 320U);
+    token_count = jsmn_parse(&parser, line, length - 1U, tokens, 340U);
     assert(token_count > 0);
     assert(tokens[0].type == JSMN_OBJECT);
     assert(tokens[0].start == 0);
@@ -135,7 +135,9 @@ static void valid_commands_and_key_order_are_accepted(void)
     request = parse(
         "{\"type\":\"command\",\"request_id\":8,"
         "\"command\":\"config_write\",\"configuration\":{"
-        "\"schema_version\":10,\"motors\":{\"propeller_layout\":"
+        "\"schema_version\":11,"
+        "\"behavior\":{\"name\":\"manual_easy\",\"settings\":{}},"
+        "\"motors\":{\"propeller_layout\":"
         "\"PROPS_OUT\",\"directions\":[\"REVERSED\",\"NORMAL\","
         "\"NORMAL\",\"REVERSED\"]},"
         "\"easy_mode\":{\"armed_idle_throttle\":0.05,"
@@ -174,6 +176,7 @@ static void valid_commands_and_key_order_are_accepted(void)
         "\"accelerometer_correction_time_constant_s\":0.5,"
         "\"maximum_gap_us\":10000}}}}");
     assert(request.command == USB_JSON_COMMAND_CONFIG_WRITE);
+    assert(request.configuration.behavior == 0U);
     assert(request.configuration.propeller_layout == 1U);
     assert(request.configuration.directions[0] == 1U);
     assert(request.configuration.easy_mode_armed_idle_millionths == 50000U);
@@ -297,7 +300,7 @@ static void response_builders_are_exact_and_bounded(void)
         "\"state\":\"DISARMED\",\"motor\":2,"
         "\"throttle\":0.100000,\"error\":\"motor_not_allowed\"}\n";
     const usb_json_configuration_t configuration = {
-        .schema_version = 10U,
+        .schema_version = 11U,
         .easy_mode_armed_idle_millionths = 50000U,
         .easy_mode_activation_throttle_millionths = 180000U,
         .easy_mode_leveling_rate_millionths = 10000000U,
@@ -388,6 +391,9 @@ static void response_builders_are_exact_and_bounded(void)
         sizeof(output),
         &length));
     assert(strstr(output, "\"command\":\"config_write\"") != NULL);
+    assert(strstr(output,
+                  "\"behavior\":{\"name\":\"manual_easy\","
+                  "\"settings\":{}}") != NULL);
     assert(strstr(output, "\"propeller_layout\":\"PROPS_IN\"") != NULL);
     assert(strstr(output,
                   "\"directions\":[\"NORMAL\",\"NORMAL\","
@@ -444,7 +450,7 @@ static void response_builders_are_exact_and_bounded(void)
 static void maximum_curve_response_fits_transport_capacity(void)
 {
     usb_json_configuration_t configuration = {
-        .schema_version = 10U,
+        .schema_version = 11U,
         .easy_mode_armed_idle_millionths = 50000U,
         .easy_mode_activation_throttle_millionths = 180000U,
         .easy_mode_leveling_rate_millionths = 10000000U,

@@ -176,6 +176,7 @@ add_executable(control_trace_tests
 target_include_directories(control_trace_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
@@ -514,6 +515,7 @@ add_test(NAME motor_configuration COMMAND motor_configuration_tests)
 add_executable(board_flight_configuration_storage_tests
     board_flight_configuration_storage_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/board_flight_configuration_storage.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common/flight_behavior_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
@@ -533,6 +535,7 @@ add_executable(board_flight_configuration_storage_tests
 target_include_directories(board_flight_configuration_storage_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
@@ -557,6 +560,7 @@ add_test(NAME board_flight_configuration_storage
 add_executable(flight_configuration_service_tests
     flight_configuration_service_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_configuration_service.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common/flight_behavior_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
@@ -580,6 +584,7 @@ add_executable(flight_configuration_service_tests
 target_include_directories(flight_configuration_service_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
@@ -740,6 +745,7 @@ add_executable(flight_control_tests
 target_include_directories(flight_control_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
@@ -1091,6 +1097,7 @@ add_executable(usb_command_processor_tests
 target_include_directories(usb_command_processor_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
@@ -1135,6 +1142,7 @@ add_executable(blackbox_tests
 target_include_directories(blackbox_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/app"
     "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"

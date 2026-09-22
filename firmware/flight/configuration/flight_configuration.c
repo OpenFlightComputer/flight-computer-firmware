@@ -28,6 +28,9 @@ void flight_configuration_defaults(flight_configuration_t *configuration)
 
     *configuration = (flight_configuration_t){
         .schema_version = OFC_DEFAULT_CONFIGURATION_SCHEMA_VERSION,
+        .behavior = {
+            .id = OFC_DEFAULT_FLIGHT_BEHAVIOR,
+        },
         .propeller_layout = OFC_DEFAULT_PROPELLER_LAYOUT,
         .easy_mode = {
             .armed_idle_permille =
@@ -198,6 +201,7 @@ bool flight_configuration_is_valid(
     return (configuration != NULL) &&
            (configuration->schema_version ==
             OFC_DEFAULT_CONFIGURATION_SCHEMA_VERSION) &&
+           flight_behavior_configuration_is_valid(&configuration->behavior) &&
            (configuration->propeller_layout < PROPELLER_LAYOUT_COUNT) &&
            (configuration->easy_mode.armed_idle_permille > 0U) &&
            (configuration->easy_mode.armed_idle_permille < 1000U) &&

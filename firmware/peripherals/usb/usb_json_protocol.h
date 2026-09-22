@@ -47,6 +47,7 @@ typedef enum {
 
 typedef struct {
     uint32_t schema_version;
+    uint8_t behavior;
     uint64_t timing_us[USB_JSON_CONFIGURATION_TIMING_COUNT];
     int32_t failsafe_control_millionths[
         USB_JSON_CONFIGURATION_CONTROL_COUNT];

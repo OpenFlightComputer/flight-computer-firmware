@@ -6,7 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(9)
+#define FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(10)
+#define SCHEMA_TEN_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(9)
 #define SCHEMA_NINE_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(8)
 #define SCHEMA_EIGHT_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(7)
 #define SCHEMA_SEVEN_FLIGHT_CONFIGURATION_PAYLOAD_VERSION UINT32_C(6)
@@ -46,7 +47,8 @@ typedef struct {
     uint32_t rate_controller_maximum_gap_us;
     uint8_t rate_controller_type;
     uint8_t acceleration_filter_type;
-    uint8_t rate_controller_reserved[2];
+    uint8_t behavior_id;
+    uint8_t behavior_settings_version;
     float rate_pid_parameters[RATE_CONTROLLER_AXIS_COUNT][5];
     float attitude_angle_gain_per_s[2];
     uint32_t level_sample_duration_us;
@@ -269,6 +271,8 @@ static void encode(const flight_configuration_t *configuration,
             (uint8_t)configuration->rate_controller.type,
         .acceleration_filter_type =
             (uint8_t)configuration->acceleration_filter.type,
+        .behavior_id = (uint8_t)configuration->behavior.id,
+        .behavior_settings_version = UINT8_C(0),
         .attitude_angle_gain_per_s = {
             configuration->roll_attitude_controller.gain_per_s,
             configuration->pitch_attitude_controller.gain_per_s,
@@ -352,12 +356,16 @@ static bool decode(const flight_configuration_payload_t *payload,
     size_t motor;
 
     if ((payload->version != FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
-        (payload->schema_version != 10U)) {
+        (payload->schema_version != 11U) ||
+        (payload->behavior_settings_version != 0U)) {
         return false;
     }
     flight_configuration_defaults(&defaults);
     *configuration = (flight_configuration_t){
         .schema_version = defaults.schema_version,
+        .behavior = {
+            .id = (flight_behavior_id_t)payload->behavior_id,
+        },
         .propeller_layout = (propeller_layout_t)payload->propeller_layout,
         .easy_mode = {
             .takeoff_leveling_enabled =
@@ -490,6 +498,27 @@ static bool decode(const flight_configuration_payload_t *payload,
         };
     }
     return flight_configuration_is_valid(configuration);
+}
+
+static bool decode_schema_ten(
+    const flight_configuration_payload_t *payload,
+    flight_configuration_t *configuration)
+{
+    flight_configuration_payload_t upgraded;
+    flight_configuration_t defaults;
+
+    if ((payload->version !=
+         SCHEMA_TEN_FLIGHT_CONFIGURATION_PAYLOAD_VERSION) ||
+        (payload->schema_version != 10U)) {
+        return false;
+    }
+    upgraded = *payload;
+    flight_configuration_defaults(&defaults);
+    upgraded.version = FLIGHT_CONFIGURATION_PAYLOAD_VERSION;
+    upgraded.schema_version = defaults.schema_version;
+    upgraded.behavior_id = (uint8_t)defaults.behavior.id;
+    upgraded.behavior_settings_version = UINT8_C(0);
+    return decode(&upgraded, configuration);
 }
 
 static bool decode_schema_nine(
@@ -791,9 +820,10 @@ static flight_configuration_load_result_t load_configuration(
         return FLIGHT_CONFIGURATION_LOAD_EMPTY;
     }
     if (result == BOARD_PERSISTENT_STORAGE_READ_OK) {
-        return decode(&payload, configuration)
-                   ? FLIGHT_CONFIGURATION_LOAD_OK
-                   : FLIGHT_CONFIGURATION_LOAD_ERROR;
+        if (decode(&payload, configuration) ||
+            decode_schema_ten(&payload, configuration)) {
+            return FLIGHT_CONFIGURATION_LOAD_OK;
+        }
     }
     {
         schema_nine_flight_configuration_payload_t schema_nine;

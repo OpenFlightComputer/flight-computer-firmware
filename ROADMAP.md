@@ -211,9 +211,12 @@ in Phase 3.
    core execution, motor authority, submission, and diagnostics remain outside
    the behavior. It remains the only selected behavior, so this extraction does
    not intentionally change motor output.
-3. Behavior arbitration — planned. Select exactly one valid objective producer
-   (manual, assisted, autonomous, or recovery) with explicit freshness,
-   priority, ownership, and transition rules.
+3. Behavior selection — implemented in software. Schema 11 selects exactly one
+   named behavior through the complete JSON profile while disarmed. The flight
+   task resets behavior/core state after an accepted profile replacement and
+   explicitly dispatches the selection; every behavior still produces only a
+   canonical objective. Manual Easy is the sole valid selection until another
+   complete behavior is introduced.
 4. Initial autonomous behavior — planned after the manual path proves the
    arbitration boundary. It will use the same vehicle state, objectives,
    profiles, central control core, motor gate, and diagnostics.

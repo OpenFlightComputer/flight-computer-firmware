@@ -196,6 +196,20 @@ int main(void)
     assert(loaded.easy_mode.activation_throttle_permille == 180U);
     assert(loaded.easy_mode.leveling_rate_decidegrees_per_second == 100U);
     assert(loaded.easy_mode.takeoff_leveling_enabled);
+    assert(loaded.behavior.id == FLIGHT_BEHAVIOR_MANUAL_EASY);
+
+    /* Schema 10 used the same payload size and receives behavior defaults. */
+    {
+        const uint32_t prior_version = 9U;
+        const uint32_t schema_ten = 10U;
+
+        memcpy(payload, &prior_version, sizeof(prior_version));
+        memcpy(payload + sizeof(uint32_t), &schema_ten, sizeof(schema_ten));
+        assert(storage.load(storage.context, &loaded) ==
+               FLIGHT_CONFIGURATION_LOAD_OK);
+        assert(loaded.schema_version == 11U);
+        assert(loaded.behavior.id == FLIGHT_BEHAVIOR_MANUAL_EASY);
+    }
 
     /* Schema 9 occupied the first 508 bytes and receives Easy-mode defaults. */
     {
@@ -210,7 +224,7 @@ int main(void)
         schema_nine_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 10U);
+        assert(loaded.schema_version == 11U);
         assert(loaded.easy_mode.armed_idle_permille == 50U);
     }
 
@@ -228,7 +242,7 @@ int main(void)
         schema_eight_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 10U);
+        assert(loaded.schema_version == 11U);
         assert(loaded.acceleration_filter.cutoff_hz == 20.0F);
         assert(loaded.rate_controller.integral_activation_throttle == 0.2F);
     }
@@ -247,7 +261,7 @@ int main(void)
         schema_seven_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 10U);
+        assert(loaded.schema_version == 11U);
         assert(!loaded.level_calibration.calibrated);
         assert(loaded.control.yaw.maximum_rate_dps == 140.0F);
     }
@@ -267,7 +281,7 @@ int main(void)
     previous_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_OK);
-    assert(loaded.schema_version == 10U);
+    assert(loaded.schema_version == 11U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
     assert(loaded.roll_attitude_controller.gain_per_s == 4.0F);
@@ -288,7 +302,7 @@ int main(void)
     schema_four_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     assert(storage.load(storage.context, &loaded) ==
            FLIGHT_CONFIGURATION_LOAD_OK);
-    assert(loaded.schema_version == 10U);
+    assert(loaded.schema_version == 11U);
     assert(loaded.control.roll.curve.points[1].output == 0.35F);
     assert(loaded.rate_controller.axis[0].kp == 0.002F);
     assert(loaded.roll_attitude_controller.gain_per_s == 4.0F);
@@ -332,7 +346,7 @@ int main(void)
         older_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 10U);
+        assert(loaded.schema_version == 11U);
         assert(loaded.gyro_filter.cutoff_hz == 90.0F);
         assert(loaded.control.throttle.maximum == 1.0F);
     }
@@ -371,7 +385,7 @@ int main(void)
         oldest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 10U);
+        assert(loaded.schema_version == 11U);
         assert(loaded.propeller_layout == PROPELLER_LAYOUT_PROPS_OUT);
         assert(loaded.motors.direction[1] == MOTOR_DIRECTION_REVERSED);
         assert(loaded.gyro_calibration.sample_duration_us == 600000U);
@@ -409,7 +423,7 @@ int main(void)
         earliest_read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
         assert(storage.load(storage.context, &loaded) ==
                FLIGHT_CONFIGURATION_LOAD_OK);
-        assert(loaded.schema_version == 10U);
+        assert(loaded.schema_version == 11U);
         assert(loaded.gyro_filter.cutoff_hz == 80.0F);
     }
 

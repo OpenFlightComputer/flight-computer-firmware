@@ -12,6 +12,7 @@
 static receiver_failsafe_state_t logged_failsafe_state =
     RECEIVER_FAILSAFE_UNAVAILABLE;
 static bool receiver_connection_fault_reported;
+static uint32_t applied_configuration_revision;
 
 static void log_arming_result(receiver_arming_result_t result)
 {
@@ -193,6 +194,32 @@ static void capture_manual_behavior_observation(
         firmware_manual_easy_behavior.takeoff_leveling.state;
 }
 
+static bool synchronize_behavior_configuration(
+    flight_control_stabilization_t *stabilization)
+{
+    const uint32_t revision = firmware_flight_configuration_service.revision;
+    bool initialized = false;
+
+    if (applied_configuration_revision == revision) {
+        return true;
+    }
+    switch (firmware_flight_configuration_service.active.behavior.id) {
+    case FLIGHT_BEHAVIOR_MANUAL_EASY:
+        initialized = manual_easy_behavior_initialize(
+            &firmware_manual_easy_behavior,
+            &firmware_flight_configuration_service.active.easy_mode);
+        break;
+    case FLIGHT_BEHAVIOR_COUNT:
+        break;
+    }
+    flight_control_reset(stabilization);
+    if (!initialized) {
+        return false;
+    }
+    applied_configuration_revision = revision;
+    return true;
+}
+
 static flight_control_result_t execute_manual_easy_behavior(
     const receiver_failsafe_decision_t *decision,
     imu_freshness_t imu_freshness,
@@ -256,6 +283,24 @@ static flight_control_result_t execute_manual_easy_behavior(
     }
 }
 
+static flight_control_result_t execute_selected_behavior(
+    const receiver_failsafe_decision_t *decision,
+    imu_freshness_t imu_freshness,
+    flight_control_stabilization_t *stabilization,
+    flight_diagnostic_control_t *diagnostic,
+    uint64_t now_us)
+{
+    switch (firmware_flight_configuration_service.active.behavior.id) {
+    case FLIGHT_BEHAVIOR_MANUAL_EASY:
+        return execute_manual_easy_behavior(
+            decision, imu_freshness, stabilization, diagnostic, now_us);
+    case FLIGHT_BEHAVIOR_COUNT:
+        break;
+    }
+    return flight_control_enter_failsafe(
+        stabilization, FLIGHT_CONTROL_CONTROL_FAILSAFE_ENTERED);
+}
+
 static task_callback_result_t run_flight_control_task(void *context)
 {
     receiver_service_t *service = context;
@@ -287,12 +332,18 @@ static task_callback_result_t run_flight_control_task(void *context)
     } else {
         stabilization = read_stabilization_inputs(
             &attitude, &imu_state, &vehicle_state);
-        result = execute_manual_easy_behavior(
-            &decision,
-            imu_state.freshness,
-            &stabilization,
-            &output,
-            now_us);
+        if (!synchronize_behavior_configuration(&stabilization)) {
+            result = flight_control_enter_failsafe(
+                &stabilization,
+                FLIGHT_CONTROL_CONTROL_FAILSAFE_ENTERED);
+        } else {
+            result = execute_selected_behavior(
+                &decision,
+                imu_state.freshness,
+                &stabilization,
+                &output,
+                now_us);
+        }
     }
     firmware_flight_control_submit_last_result = (uint32_t)result;
     flight_diagnostics_capture(

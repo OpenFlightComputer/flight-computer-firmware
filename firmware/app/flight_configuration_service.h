@@ -41,6 +41,7 @@ typedef struct {
     prepared_quad_x_mixer_t prepared_mixer;
     prepared_control_profile_t prepared_control_profile;
     flight_configuration_clock_t clock;
+    uint32_t revision;
     flight_configuration_source_t source;
     bool initialized;
 } flight_configuration_service_t;

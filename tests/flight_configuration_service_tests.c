@@ -166,6 +166,8 @@ int main(void)
     assert(service.prepared_mixer.initialized);
     assert(service.prepared_control_profile.initialized);
     assert(service.rate_controller.initialized);
+    assert(service.revision == 1U);
+    assert(service.active.behavior.id == FLIGHT_BEHAVIOR_MANUAL_EASY);
     assert(level_calibration.initialized);
     assert(level_calibration.state == LEVEL_CALIBRATION_UNCALIBRATED);
 
@@ -197,6 +199,7 @@ int main(void)
                .accelerometer_correction_time_constant_s == 0.75F);
     assert(failsafe.initialized_at_us == 123U);
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_PERSISTENT);
+    assert(service.revision == 2U);
     assert(service.prepared_control.roll.curve.segments[0].coefficient[1] ==
            0.5F);
     assert(service.prepared_mixer.coefficient[0][1] == 1.0F);
@@ -215,6 +218,7 @@ int main(void)
     assert(flight_configuration_service_write(&service, &configuration) ==
            FLIGHT_CONFIGURATION_SERVICE_UNSAFE_STATE);
     assert(storage.save_count == 1U);
+    assert(service.revision == 2U);
     state_machine.current = SYSTEM_STATE_DISARMED;
     pending_source = MOTOR_CONTROL_SOURCE_RECEIVER;
     assert(flight_configuration_service_reset(&service) ==
@@ -226,6 +230,7 @@ int main(void)
            FLIGHT_CONFIGURATION_SERVICE_OK);
     assert(storage.clear_count == 1U);
     assert(service.source == FLIGHT_CONFIGURATION_SOURCE_DEFAULT);
+    assert(service.revision == 3U);
     assert(service.active.propeller_layout == PROPELLER_LAYOUT_PROPS_IN);
     assert(service.active.motors.direction[2] == MOTOR_DIRECTION_NORMAL);
     assert(imu_processing_pipeline.config.gyro_filter.cutoff_hz == 80.0F);
@@ -244,6 +249,12 @@ int main(void)
     assert(strcmp(flight_configuration_source_name(
                       FLIGHT_CONFIGURATION_SOURCE_PERSISTENT),
                   "PERSISTENT") == 0);
+
+    configuration = service.active;
+    configuration.behavior.id = FLIGHT_BEHAVIOR_COUNT;
+    assert(flight_configuration_service_write(&service, &configuration) ==
+           FLIGHT_CONFIGURATION_SERVICE_INVALID_ARGUMENT);
+    assert(service.revision == 3U);
 
     storage.save_result = FLIGHT_CONFIGURATION_SAVE_ERROR;
     configuration = service.active;

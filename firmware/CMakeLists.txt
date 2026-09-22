@@ -215,6 +215,7 @@ add_executable(flight_firmware
     flight/actuators/motor_configuration.c
     flight/actuators/motor_mapping.c
     flight/actuators/motor_output.c
+    flight/behavior/common/flight_behavior_configuration.c
     flight/behavior/manual_easy/manual_easy_behavior.c
     flight/configuration/flight_configuration.c
     flight/control/quad_x_mixer.c
