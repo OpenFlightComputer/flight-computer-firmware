@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenFlightComputer Blackbox Download"
+  short_description: "Download and decode OFC flight logs over USB"
+  default_prompt: "Use $ofc-blackbox-download to download and decode the latest OpenFlightComputer blackbox log."

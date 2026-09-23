@@ -42,6 +42,7 @@ static void test_default_configuration_is_valid_and_copied(void)
     assert(config.pitch.minimum == 175U);
     assert(config.pitch.center == 992U);
     assert(config.pitch.maximum == 1811U);
+    assert(config.pitch.reversed);
     assert(config.throttle.minimum == 174U);
     assert(config.throttle.maximum == 1785U);
     assert(config.yaw.minimum == 355U);
@@ -116,7 +117,8 @@ static void test_default_endpoints_center_and_metadata(void)
     assert(receiver_normalize(&normalizer, &frame, 456U, 8U, &snapshot) ==
            RECEIVER_NORMALIZATION_OK);
     assert_close(snapshot.roll, -1.0f);
-    assert_close(snapshot.pitch, 1.0f);
+    /* The physically observed raw-high forward stick commands nose-down. */
+    assert_close(snapshot.pitch, -1.0f);
     assert_close(snapshot.yaw, -1.0f);
     assert_close(snapshot.throttle, 1.0f);
     assert(snapshot.arm_switch_high);
@@ -145,7 +147,7 @@ static void test_clamping_reversal_and_asymmetric_centers(void)
     assert(receiver_normalize(&normalizer, &frame, 0U, 0U, &snapshot) ==
            RECEIVER_NORMALIZATION_OK);
     assert_close(snapshot.roll, 1.0f);
-    assert_close(snapshot.pitch, 0.5f);
+    assert_close(snapshot.pitch, -0.5f);
     assert_close(snapshot.yaw, 1.0f);
     assert_close(snapshot.throttle, 1.0f);
 }

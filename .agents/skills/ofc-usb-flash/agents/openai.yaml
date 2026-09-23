@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenFlightComputer USB Flash"
+  short_description: "Build, flash, and verify OFC firmware over USB"
+  default_prompt: "Use $ofc-usb-flash to flash the current OpenFlightComputer firmware over USB-C."

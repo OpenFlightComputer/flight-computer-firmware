@@ -118,6 +118,8 @@ void receiver_normalization_default_config(
             .minimum = RECEIVER_DEFAULT_PITCH_MINIMUM,
             .center = RECEIVER_DEFAULT_PITCH_CENTER,
             .maximum = RECEIVER_DEFAULT_PITCH_MAXIMUM,
+            /* Raw-high is stick-forward; nose-down is negative pitch. */
+            .reversed = true,
         },
         .yaw = {
             .channel = 3U,

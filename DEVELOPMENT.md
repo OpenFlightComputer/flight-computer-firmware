@@ -23,6 +23,13 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Physical blackbox log 12 isolated the transmitter pitch convention: the
+  RadioMaster's raw-high pitch endpoint is right-stick forward, while the
+  firmware body convention defines nose-down as negative pitch. The default
+  receiver calibration now reverses pitch so forward produces a negative
+  normalized input and negative attitude target. The IMU, attitude controller,
+  mixer, and motor signs were left unchanged because the same log showed them
+  consistently executing the former positive/nose-up request.
 - Added the simulator-facing testability boundaries requested by
   `flight-simulation/docs/DEVELOPMENT_GUIDE.md` Section 5.3. The default-
   configuration generator is importable from another CMake project and honors
@@ -431,6 +438,19 @@ Physically validate the Milestone 4.10 Easy-mode changes without propellers:
 confirm equal armed idle at zero stick, a complete stop on disarm, the expected
 launch-offset transition in a recovered format-2 blackbox, and unchanged
 negative roll/pitch/yaw feedback before the next constrained lift-off.
+
+After Phase 4 validation, implement the supervised autonomous-hop behavior
+recorded in `ROADMAP.md`. The receiver arm switch remains the unconditional
+immediate-stop control and a separate AUX switch starts one sequence from
+armed idle. The sequence uses a configurable measured-time linear throttle
+ramp, configurable ceiling, optional bounded hold, and ramp back to armed
+idle; it does not jump directly to a guessed liftoff throttle. Initial tests
+must remain below liftoff, and each increase in the ceiling requires an
+explicit disarmed configuration update after reviewing the preceding log.
+Only after propeller-free, abort-path, below-liftoff, and barely-light tests
+pass should a short physical hop be attempted. Once representative hop data
+has been captured, freeze behavior and perform the planned firmware cleanup
+before adding further flight capability.
 
 ## Historical milestone record
 

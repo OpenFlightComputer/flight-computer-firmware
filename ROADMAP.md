@@ -217,9 +217,62 @@ in Phase 3.
    explicitly dispatches the selection; every behavior still produces only a
    canonical objective. Manual Easy is the sole valid selection until another
    complete behavior is introduced.
-4. Initial autonomous behavior — planned after the manual path proves the
-   arbitration boundary. It will use the same vehicle state, objectives,
-   profiles, central control core, motor gate, and diagnostics.
+4. Supervised autonomous hop — planned after the manual path proves the
+   arbitration boundary. This is deliberately only partly autonomous: the
+   receiver remains connected and the pilot retains unconditional arm/disarm
+   authority. A dedicated start AUX switch begins one bounded hop while the
+   arm switch remains the immediate cancellation control. The behavior uses
+   the same vehicle state, objectives, profiles, central control core, motor
+   gate, and diagnostics as Manual Easy.
+
+   The behavior starts in armed idle and requires a fresh low-to-high edge on
+   the dedicated start switch. Arming alone must never begin the sequence. It
+   then observes a configurable start delay, increases throttle linearly from
+   armed idle using elapsed monotonic time and a configurable rate, stops at a
+   separately configurable maximum, optionally holds that maximum for a
+   bounded interval, and ramps back to armed idle. It requests level roll and
+   pitch and zero yaw rate throughout. Completion leaves the vehicle at armed
+   idle until the pilot moves the arm switch to disarmed; another run requires
+   a deliberate new start edge and must not retrigger from a switch that was
+   already high.
+
+   Moving the arm switch to disarmed at any point bypasses the ramp and causes
+   the existing lifecycle and motor-safety path to command an immediate motor
+   stop. Receiver loss, stale/invalid IMU data, excessive attitude, an invalid
+   objective, or expiration of a hard sequence deadline must also abort rather
+   than applying the ordinary receiver flight-fallback throttle. No behavior
+   state may delay or veto those decisions.
+
+   Initial settings are intentionally incapable of takeoff. Validation first
+   proves the state machine, measured-time ramp, limits, logging, and every
+   abort path with propellers removed. Propeller-equipped tests then begin
+   with a maximum safely below expected liftoff and raise that maximum only
+   through an explicit disarmed configuration change after the previous log
+   has been reviewed. Later tests progress to making the vehicle barely light
+   and only then to a short hop. The firmware never learns or raises the
+   maximum automatically. Without altitude feedback this produces a
+   reproducible command profile, not a guaranteed repeatable altitude.
+
+## Near-term completion plan
+
+1. Finish physical Phase 4 validation without adding unrelated capability.
+   Confirm estimator and feedback signs, timing and freshness gates, receiver
+   normalization, motor mapping, armed idle, disarm, receiver loss, and
+   complete blackbox capture.
+2. Implement the supervised autonomous-hop behavior and its fixed-capacity
+   configuration, keeping lifecycle ownership and the central flight core
+   outside the behavior.
+3. Validate it progressively: host tests, propeller-free tests, below-liftoff
+   tests, barely-light tests, and finally short hops. Preserve representative
+   configuration/build/log sets as physical reference data.
+4. Freeze the resulting observable behavior and perform a dedicated cleanup:
+   remove obsolete experiments, correct stale documentation, simplify
+   coordinators, strengthen module boundaries, and retain the reference tests
+   and blackbox behavior as regression evidence.
+
+Simulation work proceeds separately and does not expand these firmware
+milestones. The hop data is intended to provide a deterministic input schedule
+and physical output evidence for later simulator comparison.
 
 ## Later phases
 

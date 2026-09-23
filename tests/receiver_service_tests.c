@@ -154,7 +154,7 @@ static void test_complete_frame_is_copied_timestamped_and_replaced(void)
     assert(receiver_service_control_state(&service, &control));
     assert(control.snapshot.valid);
     assert(control.snapshot.roll == 0.0f);
-    assert(control.snapshot.pitch == 1.0f);
+    assert(control.snapshot.pitch == -1.0f);
     assert(control.snapshot.yaw == -1.0f);
     assert(control.snapshot.throttle == 0.0f);
     assert(control.snapshot.arm_switch_high);
