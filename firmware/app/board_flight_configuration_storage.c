@@ -1,6 +1,7 @@
 #include "board_flight_configuration_storage.h"
 
 #include "board.h"
+#include "flight_configuration_snapshot.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -333,17 +334,8 @@ bool board_flight_configuration_snapshot_encode(
     size_t capacity,
     size_t *length)
 {
-    flight_configuration_payload_t payload;
-
-    if ((configuration == NULL) || (destination == NULL) ||
-        (capacity < sizeof(payload)) || (length == NULL) ||
-        !flight_configuration_is_valid(configuration)) {
-        return false;
-    }
-    encode(configuration, &payload);
-    memcpy(destination, &payload, sizeof(payload));
-    *length = sizeof(payload);
-    return true;
+    return flight_configuration_snapshot_encode(
+        configuration, destination, capacity, length);
 }
 
 static bool decode(const flight_configuration_payload_t *payload,
@@ -820,7 +812,10 @@ static flight_configuration_load_result_t load_configuration(
         return FLIGHT_CONFIGURATION_LOAD_EMPTY;
     }
     if (result == BOARD_PERSISTENT_STORAGE_READ_OK) {
-        if (decode(&payload, configuration) ||
+        if (flight_configuration_snapshot_decode(
+                (const uint8_t *)&payload,
+                sizeof(payload),
+                configuration) ||
             decode_schema_ten(&payload, configuration)) {
             return FLIGHT_CONFIGURATION_LOAD_OK;
         }

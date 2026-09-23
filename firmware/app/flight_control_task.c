@@ -6,6 +6,7 @@
 #include "flight_control.h"
 #include "logging.h"
 #include "time.h"
+#include "vehicle_state.h"
 
 #define FLIGHT_CONTROL_TASK_PERIOD_US UINT32_C(1000)
 
@@ -146,28 +147,8 @@ static flight_control_stabilization_t read_stabilization_inputs(
     (void)imu_service_state(&firmware_imu_service, imu_state);
     (void)imu_processing_pipeline_latest(
         &firmware_imu_processing_pipeline, attitude);
-    attitude_is_current = attitude->valid && imu_state->snapshot.valid &&
-                          (attitude->source_sequence ==
-                           imu_state->snapshot.sequence) &&
-                           (attitude->acquired_at_us ==
-                           imu_state->snapshot.acquired_at_us);
-
-    *vehicle_state = (vehicle_state_t){0};
-    if (attitude_is_current) {
-        vehicle_state->attitude_degrees[RATE_CONTROLLER_AXIS_ROLL] =
-            attitude->roll_degrees;
-        vehicle_state->attitude_degrees[RATE_CONTROLLER_AXIS_PITCH] =
-            attitude->pitch_degrees;
-        vehicle_state->angular_rate_dps[RATE_CONTROLLER_AXIS_ROLL] =
-            attitude->filtered_gyroscope_dps[RATE_CONTROLLER_AXIS_ROLL];
-        vehicle_state->angular_rate_dps[RATE_CONTROLLER_AXIS_PITCH] =
-            attitude->filtered_gyroscope_dps[RATE_CONTROLLER_AXIS_PITCH];
-        vehicle_state->angular_rate_dps[RATE_CONTROLLER_AXIS_YAW] =
-            attitude->filtered_gyroscope_dps[RATE_CONTROLLER_AXIS_YAW];
-        vehicle_state->acquired_at_us = attitude->acquired_at_us;
-        vehicle_state->source_sequence = attitude->source_sequence;
-        vehicle_state->valid = true;
-    }
+    attitude_is_current = vehicle_state_from_imu(
+        attitude, &imu_state->snapshot, vehicle_state);
 
     return (flight_control_stabilization_t){
         .core = &firmware_flight_control_core,

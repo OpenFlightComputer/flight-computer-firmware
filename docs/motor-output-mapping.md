@@ -101,8 +101,26 @@ are separate concepts. Expected direction belongs to the later aircraft/mixer
 configuration. ESC-stored direction is now an explicit logical-motor setting,
 persisted by the FC and applied through a disarmed DShot command sequence. The
 logical-to-physical mapping is applied before output, so the direction follows
-the logical aircraft position. Propeller-free confirmation remains required;
-see `docs/flight-configuration.md`.
+the logical aircraft position.
+
+Propeller-free tests on the assembled V1 aircraft physically established the
+following geometry and rotation directions. Position coordinates use the
+firmware body frame: +X forward, +Y right, and +Z down. Rotation sign is about
++Z, so clockwise when viewed from above is positive.
+
+| Logical index | Aircraft position | Body X | Body Y | Rotation viewed from above | Rotation sign about +Z |
+| --- | --- | ---: | ---: | --- | ---: |
+| 0 / M1 | Front left | positive | negative | Clockwise | +1 |
+| 1 / M2 | Rear left | negative | negative | Counter-clockwise | -1 |
+| 2 / M3 | Front right | positive | positive | Counter-clockwise | -1 |
+| 3 / M4 | Rear right | negative | positive | Clockwise | +1 |
+
+This is the verified `PROPS_IN` vehicle arrangement used by the mixer and is
+the physical source of truth for simulation geometry. A different airframe,
+logical-to-physical permutation, ESC direction configuration, or propeller
+arrangement must be verified independently rather than inheriting this table.
+See `docs/flight-configuration.md` for the distinction between propeller layout
+and the absolute direction stored by each ESC.
 
 ## Resource review
 
@@ -122,8 +140,8 @@ Host tests prove the recorded route table, selected grouped resources,
 permutation validation, disarmed configuration gate, atomic rejection,
 and complete command reordering. Physical testing with the initial SpeedyBee
 ESC confirmed DShot acceptance, DMA-driven output, synchronized four-channel
-operation, and motor order. Exact waveform measurement, voltage margin, and
-motor direction remain open.
+operation, motor order, and the four rotation directions recorded above. Exact
+waveform measurement and voltage margin remain open.
 
 Physical validation remains staged and propeller-free: the implementation
 always runs one synchronized four-channel transaction, while the host-side
@@ -143,5 +161,5 @@ Physical identification has established:
 All four physical positions therefore match the default identity mapping. The
 bench command accepts any motor from 1 through 4 while still constructing
 exactly one nonzero logical command entry. Runtime direction settings now avoid
-recompilation or wiring changes; each physical direction still needs to be
-observed and recorded.
+recompilation or wiring changes. The verified physical directions are recorded
+in the motor-direction table above.

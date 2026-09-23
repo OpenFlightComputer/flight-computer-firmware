@@ -218,6 +218,8 @@ add_executable(flight_firmware
     flight/behavior/common/flight_behavior_configuration.c
     flight/behavior/manual_easy/manual_easy_behavior.c
     flight/configuration/flight_configuration.c
+    flight/configuration/flight_configuration_snapshot.c
+    flight/configuration/flight_runtime_configuration.c
     flight/control/quad_x_mixer.c
     flight/control/roll_attitude_controller.c
     flight/control/pitch_attitude_controller.c
@@ -228,6 +230,7 @@ add_executable(flight_firmware
     flight/control/rate_pid.c
     flight/control/rate_controller.c
     flight/control/takeoff_leveling.c
+    flight/control/vehicle_state.c
     flight/estimation/accelerometer_attitude.c
     flight/estimation/attitude_estimator.c
     flight/estimation/imu_processing_pipeline.c

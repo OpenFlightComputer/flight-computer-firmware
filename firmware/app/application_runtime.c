@@ -2,6 +2,7 @@
 
 #include "application_state.h"
 #include "application_tasks.h"
+#include "bmi270_configuration.h"
 #include "bmi270_driver.h"
 #include "board.h"
 #include "board_usb.h"
@@ -566,7 +567,7 @@ void application_runtime_initialize(void)
             .maximum_rate_dps = configuration->maximum_rate_dps,
             .maximum_standard_deviation_dps =
                 configuration->maximum_standard_deviation_dps,
-            .counts_per_dps = 16.384F,
+            .counts_per_dps = BMI270_GYROSCOPE_COUNTS_PER_DPS,
         };
 
         if (!gyro_calibration_initialize(&firmware_gyro_calibration,

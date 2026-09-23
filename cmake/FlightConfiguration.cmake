@@ -1,5 +1,9 @@
-set(OFC_DEFAULT_CONFIGURATION_FILE
-    "${PROJECT_SOURCE_DIR}/config/default-flight-configuration.json")
+get_filename_component(OFC_FIRMWARE_ROOT
+    "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+if(NOT DEFINED OFC_DEFAULT_CONFIGURATION_FILE)
+    set(OFC_DEFAULT_CONFIGURATION_FILE
+        "${OFC_FIRMWARE_ROOT}/config/default-flight-configuration.json")
+endif()
 file(READ "${OFC_DEFAULT_CONFIGURATION_FILE}" OFC_DEFAULT_CONFIGURATION_JSON)
 
 function(ofc_json_get output)
@@ -300,6 +304,6 @@ endif()
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 configure_file(
-    "${PROJECT_SOURCE_DIR}/cmake/flight_configuration_defaults.h.in"
+    "${OFC_FIRMWARE_ROOT}/cmake/flight_configuration_defaults.h.in"
     "${CMAKE_BINARY_DIR}/generated/flight_configuration_defaults.h"
     @ONLY)

@@ -145,8 +145,10 @@ int main(void)
 {
     const flight_configuration_storage_t storage =
         board_flight_configuration_storage();
+    uint8_t snapshot[FLIGHT_CONFIGURATION_SNAPSHOT_CAPACITY];
     flight_configuration_t original;
     flight_configuration_t loaded;
+    size_t snapshot_length = 0U;
 
     read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
     schema_nine_read_result = BOARD_PERSISTENT_STORAGE_READ_EMPTY;
@@ -175,6 +177,10 @@ int main(void)
     assert(storage.save(storage.context, &original) ==
            FLIGHT_CONFIGURATION_SAVE_OK);
     assert(write_length == EXPECTED_PAYLOAD_LENGTH);
+    assert(board_flight_configuration_snapshot_encode(
+        &original, snapshot, sizeof(snapshot), &snapshot_length));
+    assert(snapshot_length == write_length);
+    assert(memcmp(snapshot, payload, snapshot_length) == 0);
 
     read_result = BOARD_PERSISTENT_STORAGE_READ_OK;
     assert(storage.load(storage.context, &loaded) ==

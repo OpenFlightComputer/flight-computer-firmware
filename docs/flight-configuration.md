@@ -56,6 +56,9 @@ For the physically verified props-in layout, positive yaw correction raises
 the counter-clockwise M2/M3 pair and lowers the clockwise M1/M4 pair. The
 props-out layout uses the inverse diagonal. This sign is defined against the
 standard body convention where positive yaw rotates the nose right.
+The complete verified corner coordinates and rotation-sign table are recorded
+in `docs/motor-output-mapping.md` and are the firmware-side physical reference
+for simulation models.
 
 ## Runtime commands
 
@@ -123,6 +126,23 @@ recognizes the previous 120-byte record format. During migration it preserves
 all fields that existed in the old payload and fills new fields from the
 canonical JSON defaults.
 Corrupt or unknown nonempty storage still fails startup closed.
+
+The current 512-byte representation has a hardware-independent codec in
+`flight/configuration/flight_configuration_snapshot.*`. Both encode and decode
+validate the complete configuration. Host tools and simulation can therefore
+decode the `configuration_snapshot_hex` embedded in a blackbox log without
+linking board flash storage. Historical-schema migration remains a board-load
+responsibility; the public snapshot decoder intentionally accepts only the
+current version so replay cannot silently reinterpret an unknown format.
+
+Runtime derivation is likewise centralized in
+`flight/configuration/flight_runtime_configuration.*`. Given a validated
+configuration and explicit sensor scale factors, it prepares input shaping,
+mixer signs, the central control profile, rate-controller state, receiver
+freshness thresholds, IMU processing configuration, and level-calibration
+configuration. The application service applies the resulting values to the
+live hardware-facing services. A host simulator can consume the same prepared
+values without copying application code or depending on the BMI270 transport.
 
 ## Control input configuration
 

@@ -23,6 +23,15 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Added the simulator-facing testability boundaries requested by
+  `flight-simulation/docs/DEVELOPMENT_GUIDE.md` Section 5.3. The default-
+  configuration generator is importable from another CMake project and honors
+  a caller-provided JSON path. Pure flight-layer APIs now own runtime
+  configuration preparation, exact current-snapshot encoding/decoding, and
+  conversion of a matching IMU sample/attitude estimate into canonical vehicle
+  state. The BMI270 gyroscope scale is recorded beside its acceleration scale,
+  and the physically verified motor corner/direction table is documented.
+  None of these interfaces changes control policy or motor authority.
 - Added fixed-capacity behavior configuration with a tagged settings union.
   JSON exposes `{"behavior":{"name":"manual_easy","settings":{}}}` and
   rejects unknown names or settings. The selector reads only

@@ -517,6 +517,7 @@ add_executable(board_flight_configuration_storage_tests
     "${PROJECT_SOURCE_DIR}/firmware/app/board_flight_configuration_storage.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common/flight_behavior_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration_snapshot.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
@@ -557,11 +558,56 @@ target_compile_options(board_flight_configuration_storage_tests PRIVATE
 add_test(NAME board_flight_configuration_storage
          COMMAND board_flight_configuration_storage_tests)
 
+add_executable(flight_configuration_snapshot_tests
+    flight_configuration_snapshot_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common/flight_behavior_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration_snapshot.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/acceleration_filter.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
+)
+target_include_directories(flight_configuration_snapshot_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+    "${CMAKE_BINARY_DIR}/generated"
+)
+target_compile_options(flight_configuration_snapshot_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+target_link_libraries(flight_configuration_snapshot_tests PRIVATE m)
+add_test(NAME flight_configuration_snapshot
+         COMMAND flight_configuration_snapshot_tests)
+
+add_test(
+    NAME flight_configuration_cmake_import
+    COMMAND "${CMAKE_COMMAND}"
+        "-DSOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DIMPORT_BINARY_ROOT=${CMAKE_BINARY_DIR}/cmake-import-test"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/check_flight_configuration_import.cmake"
+)
+
 add_executable(flight_configuration_service_tests
     flight_configuration_service_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/flight_configuration_service.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common/flight_behavior_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_runtime_configuration.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
     "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
@@ -599,6 +645,63 @@ target_compile_options(flight_configuration_service_tests PRIVATE
 target_link_libraries(flight_configuration_service_tests PRIVATE m)
 add_test(NAME flight_configuration_service
          COMMAND flight_configuration_service_tests)
+
+add_executable(flight_runtime_configuration_tests
+    flight_runtime_configuration_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common/flight_behavior_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration/flight_runtime_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/quad_x_mixer.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_curve.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/control_input_shaping.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/flight_control_core.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/roll_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/pitch_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/yaw_attitude_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_pid.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/rate_controller.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/takeoff_leveling.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_command.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators/motor_configuration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/accelerometer_attitude.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/attitude_estimator.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation/imu_processing_pipeline.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/acceleration_filter.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/gyro_filter.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors/level_calibration.c"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver/receiver_failsafe.c"
+)
+target_include_directories(flight_runtime_configuration_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+    "${CMAKE_BINARY_DIR}/generated"
+)
+target_compile_options(flight_runtime_configuration_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+target_link_libraries(flight_runtime_configuration_tests PRIVATE m)
+add_test(NAME flight_runtime_configuration
+         COMMAND flight_runtime_configuration_tests)
+
+add_executable(vehicle_state_tests
+    vehicle_state_tests.c
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control/vehicle_state.c"
+)
+target_include_directories(vehicle_state_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
+    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
+)
+target_compile_options(vehicle_state_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME vehicle_state COMMAND vehicle_state_tests)
 
 add_executable(quad_x_mixer_tests
     quad_x_mixer_tests.c

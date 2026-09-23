@@ -4,5 +4,6 @@
 /* Keep the programmed range and every raw-count conversion coupled. */
 #define BMI270_ACCELERATION_RANGE_G 8U
 #define BMI270_ACCELERATION_COUNTS_PER_G 4096.0F
+#define BMI270_GYROSCOPE_COUNTS_PER_DPS 16.384F
 
 #endif
