@@ -298,7 +298,7 @@ target_include_directories(flight_firmware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/sd_card"
     "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/usb"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
-    "${CMAKE_BINARY_DIR}/generated"
+    "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}"
     "${BMI270_SENSOR_API_ROOT}"
 )
 

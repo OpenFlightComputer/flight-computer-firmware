@@ -33,6 +33,13 @@ the receiver, mixer, authority gate, and DShot output path.
   tasks before registration; the native runtime leaves that hook empty. This
   is the initial composition seam for later optional modules without adding a
   general module manager.
+- The host-runtime CMake target is relocatable when imported directly by a
+  parent project. Sources and public headers are anchored to the host CMake
+  file, `firmware_common` is created only when it does not already exist, and
+  generated configuration headers use an overridable firmware-specific build
+  directory. A nested-project regression test configures and links the public
+  `OpenFlightComputer::host_runtime` target without loading the firmware root
+  CMake project first.
 - The receiver source now optionally owns its maintenance and diagnostic
   callbacks, removing the receiver task's direct V1-board dependency. Startup,
   IMU, receiver-inspection, and flight-control timestamps all come from their

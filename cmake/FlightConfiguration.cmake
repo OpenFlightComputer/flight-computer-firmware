@@ -1,5 +1,9 @@
 get_filename_component(OFC_FIRMWARE_ROOT
     "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+if(NOT DEFINED OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR)
+    set(OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/generated")
+endif()
 if(NOT DEFINED OFC_DEFAULT_CONFIGURATION_FILE)
     set(OFC_DEFAULT_CONFIGURATION_FILE
         "${OFC_FIRMWARE_ROOT}/config/default-flight-configuration.json")
@@ -302,8 +306,9 @@ if(OFC_CONFIG_LEVEL_SAMPLE_DURATION LESS_EQUAL 0 OR
     message(FATAL_ERROR "Default level calibration configuration is invalid")
 endif()
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}")
 configure_file(
     "${OFC_FIRMWARE_ROOT}/cmake/flight_configuration_defaults.h.in"
-    "${CMAKE_BINARY_DIR}/generated/flight_configuration_defaults.h"
+    "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}/flight_configuration_defaults.h"
     @ONLY)
+set(OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_CONFIGURED TRUE)

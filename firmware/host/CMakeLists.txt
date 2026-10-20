@@ -1,88 +1,110 @@
+get_filename_component(OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR
+    "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+get_filename_component(OPENFLIGHTCOMPUTER_REPOSITORY_SOURCE_DIR
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/.." ABSOLUTE)
+
+if(NOT TARGET firmware_common)
+    add_subdirectory(
+        "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/common"
+        "${CMAKE_CURRENT_BINARY_DIR}/common"
+    )
+endif()
+
+if(NOT DEFINED OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR)
+    set(OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/generated")
+endif()
+if(NOT OPENFLIGHTCOMPUTER_FLIGHT_CONFIGURATION_CONFIGURED)
+    include(
+        "${OPENFLIGHTCOMPUTER_REPOSITORY_SOURCE_DIR}/cmake/FlightConfiguration.cmake"
+    )
+endif()
+
 add_library(openflightcomputer_host_runtime STATIC
-    ../app/application_runtime_services.c
-    ../app/application_state.c
-    ../app/application_tasks.c
-    ../app/blackbox.c
-    ../app/control_trace.c
-    ../app/diagnostic_fast_task.c
-    ../app/diagnostic_medium_task.c
-    ../app/diagnostic_slow_task.c
-    ../app/fault.c
-    ../app/fault_catalog.c
-    ../app/flight_configuration_service.c
-    ../app/flight_control.c
-    ../app/flight_control_task.c
-    ../app/flight_diagnostics.c
-    ../app/health.c
-    ../app/imu_service.c
-    ../app/imu_task.c
-    ../app/logging.c
-    ../app/logging_config.c
-    ../app/motor_control.c
-    ../app/motor_control_task.c
-    ../app/motor_safety_policy.c
-    ../app/receiver_arming.c
-    ../app/receiver_service.c
-    ../app/receiver_task.c
-    ../app/scheduler.c
-    ../app/startup_task.c
-    ../app/status_indicator.c
-    ../app/system_state.c
-    ../app/task.c
-    ../flight/actuators/motor_command.c
-    ../flight/actuators/motor_configuration.c
-    ../flight/actuators/motor_mapping.c
-    ../flight/actuators/motor_output.c
-    ../flight/behavior/common/flight_behavior_configuration.c
-    ../flight/behavior/manual_easy/manual_easy_behavior.c
-    ../flight/configuration/flight_configuration.c
-    ../flight/configuration/flight_runtime_configuration.c
-    ../flight/control/control_curve.c
-    ../flight/control/control_input_shaping.c
-    ../flight/control/flight_control_core.c
-    ../flight/control/pitch_attitude_controller.c
-    ../flight/control/quad_x_mixer.c
-    ../flight/control/rate_controller.c
-    ../flight/control/rate_pid.c
-    ../flight/control/roll_attitude_controller.c
-    ../flight/control/takeoff_leveling.c
-    ../flight/control/vehicle_state.c
-    ../flight/control/yaw_attitude_controller.c
-    ../flight/estimation/accelerometer_attitude.c
-    ../flight/estimation/attitude_estimator.c
-    ../flight/estimation/imu_processing_pipeline.c
-    ../flight/receiver/receiver_failsafe.c
-    ../flight/receiver/receiver_freshness.c
-    ../flight/receiver/receiver_normalization.c
-    ../flight/sensors/acceleration_filter.c
-    ../flight/sensors/gyro_calibration.c
-    ../flight/sensors/gyro_filter.c
-    ../flight/sensors/imu_sample.c
-    ../flight/sensors/level_calibration.c
-    ../peripherals/sd_card/sd_card.c
-    ../peripherals/sd_card/sd_card_csd.c
-    ../hardware/spi_device.c
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/application_runtime_services.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/application_state.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/application_tasks.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/blackbox.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/control_trace.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/diagnostic_fast_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/diagnostic_medium_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/diagnostic_slow_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/fault.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/fault_catalog.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/flight_configuration_service.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/flight_control.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/flight_control_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/flight_diagnostics.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/health.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/imu_service.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/imu_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/logging.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/logging_config.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/motor_control.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/motor_control_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/motor_safety_policy.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/receiver_arming.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/receiver_service.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/receiver_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/scheduler.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/startup_task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/status_indicator.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/system_state.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app/task.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/actuators/motor_command.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/actuators/motor_configuration.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/actuators/motor_mapping.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/actuators/motor_output.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/behavior/common/flight_behavior_configuration.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/behavior/manual_easy/manual_easy_behavior.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/configuration/flight_configuration.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/configuration/flight_runtime_configuration.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/control_curve.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/control_input_shaping.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/flight_control_core.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/pitch_attitude_controller.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/quad_x_mixer.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/rate_controller.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/rate_pid.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/roll_attitude_controller.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/takeoff_leveling.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/vehicle_state.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control/yaw_attitude_controller.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/estimation/accelerometer_attitude.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/estimation/attitude_estimator.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/estimation/imu_processing_pipeline.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/receiver/receiver_failsafe.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/receiver/receiver_freshness.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/receiver/receiver_normalization.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/sensors/acceleration_filter.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/sensors/gyro_calibration.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/sensors/gyro_filter.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/sensors/imu_sample.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/sensors/level_calibration.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/peripherals/sd_card/sd_card.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/peripherals/sd_card/sd_card_csd.c"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/hardware/spi_device.c"
 )
 add_library(OpenFlightComputer::host_runtime ALIAS
     openflightcomputer_host_runtime
 )
 
 target_include_directories(openflightcomputer_host_runtime PUBLIC
-    "${PROJECT_SOURCE_DIR}/firmware/app"
-    "${PROJECT_SOURCE_DIR}/firmware/common"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/actuators"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/common"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/behavior/manual_easy"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/configuration"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/control"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
-    "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
-    "${PROJECT_SOURCE_DIR}/firmware/hardware"
-    "${PROJECT_SOURCE_DIR}/firmware/peripherals/bmi270"
-    "${PROJECT_SOURCE_DIR}/firmware/peripherals/sd_card"
-    "${PROJECT_SOURCE_DIR}/firmware/peripherals/usb"
-    "${CMAKE_BINARY_DIR}/generated"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/app"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/common"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/actuators"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/behavior/common"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/behavior/manual_easy"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/configuration"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/control"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/estimation"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/receiver"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/flight/sensors"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/hardware"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/peripherals/bmi270"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/peripherals/sd_card"
+    "${OPENFLIGHTCOMPUTER_FIRMWARE_SOURCE_DIR}/peripherals/usb"
+    "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}"
 )
 
 target_link_libraries(openflightcomputer_host_runtime PUBLIC

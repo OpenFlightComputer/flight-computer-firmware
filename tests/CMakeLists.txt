@@ -556,7 +556,7 @@ target_include_directories(board_flight_configuration_storage_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/hardware/boards/flightcomputer_v1"
     "${PROJECT_SOURCE_DIR}/firmware/hardware"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/sd_card"
-    "${CMAKE_BINARY_DIR}/generated"
+    "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}"
 )
 
 target_compile_options(board_flight_configuration_storage_tests PRIVATE
@@ -596,7 +596,7 @@ target_include_directories(flight_configuration_snapshot_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
-    "${CMAKE_BINARY_DIR}/generated"
+    "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}"
 )
 target_compile_options(flight_configuration_snapshot_tests PRIVATE
     -Wall -Wextra -Wpedantic -Werror
@@ -611,6 +611,14 @@ add_test(
         "-DSOURCE_ROOT=${PROJECT_SOURCE_DIR}"
         "-DIMPORT_BINARY_ROOT=${CMAKE_BINARY_DIR}/cmake-import-test"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/check_flight_configuration_import.cmake"
+)
+
+add_test(
+    NAME host_runtime_cmake_import
+    COMMAND "${CMAKE_COMMAND}"
+        "-DSOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DIMPORT_BINARY_ROOT=${CMAKE_BINARY_DIR}/host-runtime-import-test"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/check_host_runtime_import.cmake"
 )
 
 add_executable(flight_configuration_service_tests
@@ -648,7 +656,7 @@ target_include_directories(flight_configuration_service_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
     "${PROJECT_SOURCE_DIR}/firmware/peripherals/bmi270"
-    "${CMAKE_BINARY_DIR}/generated"
+    "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}"
 )
 target_compile_options(flight_configuration_service_tests PRIVATE
     -Wall -Wextra -Wpedantic -Werror
@@ -690,7 +698,7 @@ target_include_directories(flight_runtime_configuration_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/firmware/flight/receiver"
     "${PROJECT_SOURCE_DIR}/firmware/flight/estimation"
     "${PROJECT_SOURCE_DIR}/firmware/flight/sensors"
-    "${CMAKE_BINARY_DIR}/generated"
+    "${OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR}"
 )
 target_compile_options(flight_runtime_configuration_tests PRIVATE
     -Wall -Wextra -Wpedantic -Werror

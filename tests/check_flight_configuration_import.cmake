@@ -1,7 +1,8 @@
 set(expected_configuration
     "${SOURCE_ROOT}/config/default-flight-configuration.json")
 set(OFC_DEFAULT_CONFIGURATION_FILE "${expected_configuration}")
-set(CMAKE_BINARY_DIR "${IMPORT_BINARY_ROOT}")
+set(OPENFLIGHTCOMPUTER_GENERATED_INCLUDE_DIR
+    "${IMPORT_BINARY_ROOT}/generated")
 
 include("${SOURCE_ROOT}/cmake/FlightConfiguration.cmake")
 
