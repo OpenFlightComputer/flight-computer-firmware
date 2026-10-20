@@ -5,7 +5,6 @@
 #include "imu_service.h"
 #include "logging.h"
 #include "status_indicator.h"
-#include "time.h"
 
 #define STARTUP_TASK_PERIOD_US UINT32_C(1000)
 
@@ -25,7 +24,7 @@ static task_callback_result_t run_startup_task(void *context)
         gyro_calibration_process(&firmware_gyro_calibration,
                                  &imu_state.snapshot,
                                  imu_state.freshness,
-                                 time_us());
+                                 firmware_imu_service.clock());
     }
     if (firmware_gyro_calibration.state != GYRO_CALIBRATION_READY) {
         return TASK_CALLBACK_CONTINUE;

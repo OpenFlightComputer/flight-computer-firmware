@@ -5,7 +5,6 @@
 #include "fault_catalog.h"
 #include "flight_control.h"
 #include "logging.h"
-#include "time.h"
 #include "vehicle_state.h"
 
 #define FLIGHT_CONTROL_TASK_PERIOD_US UINT32_C(1000)
@@ -294,7 +293,7 @@ static task_callback_result_t run_flight_control_task(void *context)
     flight_control_stabilization_t stabilization;
     flight_diagnostic_control_t output = {0};
     flight_control_result_t result;
-    const uint64_t now_us = time_us();
+    const uint64_t now_us = service->clock();
 
     firmware_flight_control_task_executions++;
     control_snapshot = latest_receiver_control(service, &control);

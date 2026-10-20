@@ -167,6 +167,7 @@ target_compile_definitions(stm32cube_f4 PUBLIC
 
 add_executable(flight_firmware
     app/application_runtime.c
+    app/application_runtime_services.c
     app/application_state.c
     app/application_tasks.c
     app/board_flight_configuration_storage.c

@@ -1,6 +1,7 @@
 #include "application_runtime.h"
 
 #include "application_state.h"
+#include "application_task_definitions.h"
 #include "application_tasks.h"
 #include "bmi270_configuration.h"
 #include "bmi270_driver.h"
@@ -29,9 +30,6 @@
 #include <stddef.h>
 
 #define USB_LOGGING_FAULT_CONTEXT_BACKEND_ATTACHMENT UINT32_C(100)
-#define IMU_FRESH_THROUGH_US UINT32_C(2000)
-#define IMU_LOST_AFTER_US UINT32_C(10000)
-
 static dshot_motor_backend_t firmware_dshot_motor_backend;
 static bmi270_driver_t firmware_bmi270_driver;
 static sd_card_t firmware_sd_card;
@@ -115,6 +113,41 @@ static fault_id_t fault_id_for_board_error(board_init_result_t result)
     return FAULT_ID_MCU_INITIALIZATION;
 }
 
+static boot_status_t boot_status_for_runtime_error(
+    application_runtime_init_result_t result)
+{
+    switch (result) {
+    case APPLICATION_RUNTIME_INIT_CLOCK_ERROR:
+        return BOOT_STATUS_FAULT_CLOCK_ATTACHMENT_ERROR;
+    case APPLICATION_RUNTIME_INIT_TASK_ERROR:
+        return BOOT_STATUS_TASK_REGISTRATION_ERROR;
+    case APPLICATION_RUNTIME_INIT_SCHEDULER_ERROR:
+        return BOOT_STATUS_SCHEDULER_INITIALIZATION_ERROR;
+    case APPLICATION_RUNTIME_INIT_CORE_ERROR:
+        return BOOT_STATUS_STATE_MACHINE_TRANSITION_ERROR;
+    case APPLICATION_RUNTIME_INIT_INVALID_ARGUMENT:
+    case APPLICATION_RUNTIME_INIT_CONFIGURATION_ERROR:
+    case APPLICATION_RUNTIME_INIT_MOTOR_ERROR:
+    case APPLICATION_RUNTIME_INIT_IMU_ERROR:
+    case APPLICATION_RUNTIME_INIT_RECEIVER_ERROR:
+    case APPLICATION_RUNTIME_INIT_CALIBRATION_ERROR:
+        return BOOT_STATUS_MOTOR_INITIALIZATION_ERROR;
+    case APPLICATION_RUNTIME_INIT_OK:
+        break;
+    }
+    return BOOT_STATUS_MOTOR_INITIALIZATION_ERROR;
+}
+
+static void halt_after_runtime_error(application_runtime_init_result_t result)
+{
+    firmware_boot_status = boot_status_for_runtime_error(result);
+    LOG_FATAL(LOG_MODULE_FAULT,
+              "runtime initialization failed result=%u boot_status=%u",
+              (unsigned int)result,
+              (unsigned int)firmware_boot_status);
+    board_halt();
+}
+
 static void initialize_core(void)
 {
     const fault_definition_t *fault_definitions;
@@ -156,6 +189,7 @@ static void initialize_board(void)
                         (uint32_t)result);
     }
     firmware_boot_status = BOOT_STATUS_BOARD_INITIALIZED;
+    status_indicator_attach_backend(board_status_indicator_set_rgb);
     if (fault_system_attach_clock(&firmware_fault_system, time_us) !=
         FAULT_CLOCK_ATTACH_OK) {
         stop_with_fault(BOOT_STATUS_FAULT_CLOCK_ATTACHMENT_ERROR,
@@ -175,75 +209,18 @@ static void initialize_board(void)
     (void)status_indicator_show_state(SYSTEM_STATE_INITIALIZING);
 }
 
-static void initialize_motor_control(void)
+static void prepare_motor_services(
+    motor_output_backend_t *motor_output_backend,
+    flight_configuration_storage_t *configuration_storage)
 {
-    motor_output_backend_t motor_output_backend;
-    flight_configuration_storage_t configuration_storage;
-    motor_control_init_result_t result;
-
     if (!dshot_motor_backend_prepare(&firmware_dshot_motor_backend,
-                                     &motor_output_backend)) {
+                                     motor_output_backend)) {
         stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
                         FAULT_ID_MOTOR_INITIALIZATION,
                         false,
                         0U);
     }
-    configuration_storage = board_flight_configuration_storage();
-    if (flight_configuration_service_initialize(
-            &firmware_flight_configuration_service,
-            &configuration_storage,
-            &firmware_system_state_machine,
-            &firmware_receiver_failsafe,
-            &firmware_receiver_service,
-            &firmware_imu_processing_pipeline,
-            &firmware_level_calibration,
-            time_us) != FLIGHT_CONFIGURATION_SERVICE_OK) {
-        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
-                        FAULT_ID_MOTOR_INITIALIZATION,
-                        false,
-                        0U);
-    }
-    result = motor_control_initialize(
-        &firmware_system_state_machine,
-        &firmware_fault_system,
-        time_us,
-        MOTOR_COMMAND_DEFAULT_TIMEOUT_US,
-        &motor_output_backend,
-        &firmware_flight_configuration_service.active.motors,
-        status_indicator_motor_lifecycle_changed,
-        NULL);
-    firmware_motor_control_initialization_result = (uint32_t)result;
-    if (result != MOTOR_CONTROL_INIT_OK) {
-        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
-                        FAULT_ID_MOTOR_INITIALIZATION,
-                        true,
-                        (uint32_t)result);
-    }
-    if (!motor_control_set_external_arm_ready(
-            firmware_flight_configuration_service.active
-                .level_calibration.calibrated)) {
-        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
-                        FAULT_ID_MOTOR_INITIALIZATION,
-                        false,
-                        0U);
-    }
-    if (!manual_easy_behavior_initialize(
-            &firmware_manual_easy_behavior,
-            &firmware_flight_configuration_service.active.easy_mode)) {
-        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
-                        FAULT_ID_MOTOR_INITIALIZATION,
-                        false,
-                        0U);
-    }
-    if (!flight_control_core_initialize(
-            &firmware_flight_control_core,
-            &firmware_flight_configuration_service.rate_controller)) {
-        stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
-                        FAULT_ID_MOTOR_INITIALIZATION,
-                        false,
-                        0U);
-    }
-    LOG_INFO(LOG_MODULE_SYSTEM, "four-channel DShot300 output initialized");
+    *configuration_storage = board_flight_configuration_storage();
 }
 
 static imu_source_result_t read_bmi270(void *context,
@@ -268,29 +245,15 @@ static imu_source_result_t read_bmi270(void *context,
     return IMU_SOURCE_SAMPLE_AVAILABLE;
 }
 
-static bool initialize_imu(void)
+static bool initialize_imu_source(imu_source_t *source)
 {
     bmi270_raw_sample_t sample;
     bmi270_driver_init_result_t initialize_result;
-    const imu_source_t source = {
-        .read = read_bmi270,
-        .context = &firmware_bmi270_driver,
-    };
-    /*
-     * V1 installation convention: USB-C faces aircraft left and the component
-     * side faces up. Standard body axes are forward/right/down, giving body
-     * forward=+sensor X, right=-sensor Y, and down=-sensor Z.
-     * Milestone 4.3 must verify all signs physically before control use.
-     */
-    const imu_axis_mapping_t axis_mapping = {
-        .body_x = IMU_AXIS_POSITIVE_X,
-        .body_y = IMU_AXIS_NEGATIVE_Y,
-        .body_z = IMU_AXIS_NEGATIVE_Z,
-    };
-    const imu_freshness_config_t freshness_config = {
-        .fresh_through_us = IMU_FRESH_THROUGH_US,
-        .lost_after_us = IMU_LOST_AFTER_US,
-    };
+
+    if (source == NULL) {
+        return false;
+    }
+    *source = (imu_source_t){0};
 
     firmware_imu_initial_sample_result =
         (uint32_t)BMI270_DRIVER_SAMPLE_NOT_INITIALIZED;
@@ -346,30 +309,17 @@ static bool initialize_imu(void)
              (int)sample.gyroscope_x,
              (int)sample.gyroscope_y,
              (int)sample.gyroscope_z);
-    if (!imu_service_initialize(&firmware_imu_service,
-                                &source,
-                                time_us,
-                                &axis_mapping,
-                                &freshness_config)) {
-        firmware_fault_last_result =
-            (uint32_t)fault_system_report(&firmware_fault_system,
-                                          FAULT_ID_IMU_INITIALIZATION,
-                                          true,
-                                          UINT32_C(0x020000));
-        LOG_ERROR(LOG_MODULE_IMU, "IMU service initialization failed");
-        return false;
-    }
+    *source = (imu_source_t){
+        .read = read_bmi270,
+        .context = &firmware_bmi270_driver,
+    };
     return true;
 }
 
-static bool initialize_receiver(void)
+static bool initialize_receiver_source(receiver_source_t *receiver_source)
 {
-    receiver_source_t receiver_source;
-    receiver_normalization_config_t normalization_config;
-    receiver_freshness_config_t freshness_config;
-    receiver_arming_config_t arming_config;
     const board_receiver_init_result_t result =
-        board_receiver_initialize(&receiver_source);
+        board_receiver_initialize(receiver_source);
 
     firmware_receiver_initialization_result = (uint32_t)result;
     if (result != BOARD_RECEIVER_INIT_OK) {
@@ -384,37 +334,8 @@ static bool initialize_receiver(void)
         return false;
     }
 
-    receiver_normalization_default_config(&normalization_config);
-    receiver_arming_default_config(&arming_config);
-    freshness_config = (receiver_freshness_config_t){
-        .fresh_through_us = firmware_flight_configuration_service.active
-                                .receiver_failsafe.stale_after_us,
-        .lost_after_us = firmware_flight_configuration_service.active
-                             .receiver_failsafe.loss_detected_after_us,
-    };
-    if (receiver_service_initialize(&firmware_receiver_service,
-                                    &receiver_source,
-                                    time_us,
-                                    &normalization_config,
-                                    &freshness_config) &&
-        receiver_failsafe_initialize(&firmware_receiver_failsafe,
-                                     &firmware_flight_configuration_service
-                                          .active.receiver_failsafe,
-                                     time_us()) &&
-        receiver_arming_initialize(&firmware_receiver_arming,
-                                   &arming_config)) {
-        LOG_INFO(LOG_MODULE_RECEIVER, "UART4 CRSF receiver initialized");
-        return true;
-    }
-
-    firmware_fault_last_result =
-        (uint32_t)fault_system_report(
-            &firmware_fault_system,
-            FAULT_ID_RECEIVER_INITIALIZATION,
-            true,
-            (uint32_t)BOARD_RECEIVER_INIT_SOURCE_ERROR);
-    LOG_ERROR(LOG_MODULE_RECEIVER, "receiver service initialization failed");
-    return false;
+    LOG_INFO(LOG_MODULE_RECEIVER, "UART4 CRSF receiver initialized");
+    return true;
 }
 
 static bool initialize_usb(void)
@@ -514,74 +435,42 @@ static void initialize_blackbox(void)
     }
 }
 
-static void initialize_scheduler(bool usb_available,
-                                 bool receiver_available,
-                                 bool imu_available)
+static void prepare_optional_board_services(
+    void *context,
+    application_runtime_optional_tasks_t *tasks)
 {
-    const task_registration_result_t task_result =
-        application_tasks_register(usb_available,
-                                   receiver_available,
-                                   imu_available);
-    scheduler_init_result_t scheduler_result;
-
-    if (task_result != TASK_REGISTRATION_OK) {
-        stop_with_fault(BOOT_STATUS_TASK_REGISTRATION_ERROR,
-                        FAULT_ID_TASK_REGISTRATION,
-                        true,
-                        (uint32_t)task_result);
+    (void)context;
+    if (tasks == NULL) {
+        return;
     }
-    LOG_INFO(LOG_MODULE_TASK,
-             "task registry initialized count=%u",
-             (unsigned int)task_registry_count(&firmware_task_registry));
-    scheduler_result = scheduler_initialize(&firmware_scheduler,
-                                            &firmware_task_registry,
-                                            time_us);
-    if (scheduler_result != SCHEDULER_INIT_OK) {
-        stop_with_fault(BOOT_STATUS_SCHEDULER_INITIALIZATION_ERROR,
-                        FAULT_ID_SCHEDULER_INITIALIZATION,
-                        true,
-                        (uint32_t)scheduler_result);
-    }
-    LOG_INFO(LOG_MODULE_SCHEDULER, "scheduler initialized");
+    initialize_blackbox();
+    *tasks = (application_runtime_optional_tasks_t){
+        .usb_service = initialize_usb()
+                           ? usb_service_task_definition()
+                           : NULL,
+        .status_indicator = status_indicator_task_definition(),
+        .blackbox_storage = blackbox_storage_task_definition(),
+    };
 }
 
 void application_runtime_initialize(void)
 {
-    bool receiver_available;
-    bool usb_available;
-    bool imu_available;
+    application_runtime_services_t services = {
+        .clock = time_us,
+        .prepare_optional_services = prepare_optional_board_services,
+    };
+    application_runtime_init_result_t result;
 
     initialize_core();
-    control_trace_initialize(&firmware_control_trace);
     initialize_board();
-    imu_available = initialize_imu();
-    initialize_motor_control();
-    initialize_blackbox();
-    {
-        const gyro_calibration_configuration_t *configuration =
-            &firmware_flight_configuration_service.active.gyro_calibration;
-        const gyro_calibration_config_t calibration_config = {
-            .settling_duration_us = configuration->settling_duration_us,
-            .sample_duration_us = configuration->sample_duration_us,
-            .minimum_sample_count = 500U,
-            .maximum_rate_dps = configuration->maximum_rate_dps,
-            .maximum_standard_deviation_dps =
-                configuration->maximum_standard_deviation_dps,
-            .counts_per_dps = BMI270_GYROSCOPE_COUNTS_PER_DPS,
-        };
-
-        if (!gyro_calibration_initialize(&firmware_gyro_calibration,
-                                         &calibration_config,
-                                         time_us())) {
-            stop_with_fault(BOOT_STATUS_MOTOR_INITIALIZATION_ERROR,
-                            FAULT_ID_IMU_INITIALIZATION,
-                            false,
-                            0U);
-        }
+    (void)initialize_imu_source(&services.imu_source);
+    (void)initialize_receiver_source(&services.receiver_source);
+    prepare_motor_services(&services.motor_output_backend,
+                           &services.configuration_storage);
+    result = application_runtime_initialize_with_services(&services);
+    if (result != APPLICATION_RUNTIME_INIT_OK) {
+        halt_after_runtime_error(result);
     }
-    receiver_available = initialize_receiver();
-    usb_available = initialize_usb();
-    initialize_scheduler(usb_available, receiver_available, imu_available);
 
     LOG_INFO(LOG_MODULE_SYSTEM, "waiting for startup calibration");
 }
@@ -599,7 +488,7 @@ void application_runtime_run(void)
                             true,
                             (uint32_t)result);
         }
-        firmware_uptime_us = time_us();
+        firmware_uptime_us = firmware_scheduler.clock();
         firmware_main_loop_iterations++;
     }
 }

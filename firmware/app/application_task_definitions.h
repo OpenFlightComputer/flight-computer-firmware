@@ -2,7 +2,7 @@
 #define OPENFLIGHTCOMPUTER_APPLICATION_TASK_DEFINITIONS_H
 
 #include "task.h"
-#include "usb_command_processor.h"
+#include "receiver_inspection.h"
 
 const task_definition_t *motor_control_task_definition(void);
 const task_definition_t *imu_task_definition(void);

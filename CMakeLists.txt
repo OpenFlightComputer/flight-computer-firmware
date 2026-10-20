@@ -18,6 +18,12 @@ option(
     ${CMAKE_CROSSCOMPILING}
 )
 
+option(
+    OPENFLIGHTCOMPUTER_BUILD_HOST_RUNTIME
+    "Build the provider-driven native firmware runtime library"
+    ON
+)
+
 add_custom_target(check_motor_architecture ALL
     COMMAND "${CMAKE_COMMAND}"
         "-DSOURCE_ROOT=${PROJECT_SOURCE_DIR}"
@@ -27,6 +33,10 @@ add_custom_target(check_motor_architecture ALL
 )
 
 add_subdirectory(firmware/common)
+
+if(OPENFLIGHTCOMPUTER_BUILD_HOST_RUNTIME AND NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(firmware/host)
+endif()
 
 if(OPENFLIGHTCOMPUTER_BUILD_FIRMWARE)
     add_subdirectory(firmware)

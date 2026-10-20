@@ -23,6 +23,27 @@ the receiver, mixer, authority gate, and DShot output path.
 
 ## Current implementation status
 
+- Added a native application-runtime seam for flight simulation. A host can
+  provide the monotonic clock, raw IMU source, receiver-frame source, flight
+  configuration storage, and motor-output backend, then advance simulated time
+  and drain all due production tasks with a bounded call. The embedded entry
+  point constructs the same five services from the STM32 board and passes them
+  through that same initializer before entering its infinite scheduler loop.
+  A single optional-services hook prepares embedded-only USB, status, and SD
+  tasks before registration; the native runtime leaves that hook empty. This
+  is the initial composition seam for later optional modules without adding a
+  general module manager.
+- The receiver source now optionally owns its maintenance and diagnostic
+  callbacks, removing the receiver task's direct V1-board dependency. Startup,
+  IMU, receiver-inspection, and flight-control timestamps all come from their
+  injected service clock instead of the STM32 global clock.
+- The native integration test runs the real task registry through the complete
+  100 ms gyro-settling and 500 ms sample window using 601 stationary BMI270
+  samples. With the configured +/-8 g range, raw sensor `(0, 0, +4096)` maps
+  through the V1 `+X/-Y/-Z` mounting to body `(0, 0, -4096)`. The test reaches
+  `DISARMED`, accepts 601 arm-low receiver frames, and proves that no nonzero
+  motor command reaches the virtual backend. All 62 native tests and both
+  Debug and Release STM32 builds pass.
 - Physical blackbox log 12 isolated the transmitter pitch convention: the
   RadioMaster's raw-high pitch endpoint is right-stick forward, while the
   firmware body convention defines nose-down as negative pitch. The default

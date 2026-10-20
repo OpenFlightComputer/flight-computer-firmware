@@ -139,6 +139,19 @@ static bool receiver_restart_dma(void)
     return true;
 }
 
+static void maintain_source(void *context)
+{
+    (void)context;
+    board_receiver_maintain();
+}
+
+static bool source_statistics(void *context,
+                              receiver_source_statistics_t *statistics)
+{
+    (void)context;
+    return board_receiver_statistics(statistics);
+}
+
 static void receiver_release_hardware(void)
 {
     HAL_NVIC_DisableIRQ(UART4_IRQn);
@@ -261,6 +274,8 @@ board_receiver_init_result_t board_receiver_initialize(
     }
 
     *source = crsf_receiver_source_interface(&receiver_crsf_source);
+    source->maintain = maintain_source;
+    source->statistics = source_statistics;
     return BOARD_RECEIVER_INIT_OK;
 }
 
@@ -290,11 +305,11 @@ bool board_receiver_statistics(board_receiver_statistics_t *statistics)
     }
 
     *statistics = (board_receiver_statistics_t){
-        .uart_received_byte_count = receiver_received_byte_count,
-        .uart_error = receiver_last_error,
-        .uart_error_count = receiver_uart_error_count,
-        .uart_recovery_count = receiver_uart_recovery_count,
-        .uart_recovery_failure_count = receiver_uart_recovery_failure_count,
+        .received_byte_count = receiver_received_byte_count,
+        .source_error = receiver_last_error,
+        .source_error_count = receiver_uart_error_count,
+        .recovery_count = receiver_uart_recovery_count,
+        .recovery_failure_count = receiver_uart_recovery_failure_count,
         .valid_frame_count = receiver_crsf_source.parser.valid_frame_count,
         .channel_frame_count = receiver_crsf_source.channel_frame_count,
         .link_statistics_frame_count =
@@ -302,15 +317,15 @@ bool board_receiver_statistics(board_receiver_statistics_t *statistics)
         .crc_error_count = receiver_crsf_source.parser.crc_error_count,
         .framing_error_count =
             receiver_crsf_source.parser.framing_error_count,
-        .dma_overrun_count = receiver_dma_overrun_count,
-        .dma_dropped_byte_count = receiver_dma_dropped_byte_count,
+        .buffer_overrun_count = receiver_dma_overrun_count,
+        .dropped_byte_count = receiver_dma_dropped_byte_count,
         .uplink_rssi_dbm =
             receiver_crsf_source.link_statistics.uplink_rssi_antenna_1_dbm,
         .uplink_link_quality_percent =
             receiver_crsf_source.link_statistics.uplink_link_quality_percent,
         .uplink_snr_db = receiver_crsf_source.link_statistics.uplink_snr_db,
         .link_statistics_present = receiver_crsf_source.link_statistics_valid,
-        .uart_recovery_pending = receiver_uart_recovery_pending,
+        .recovery_pending = receiver_uart_recovery_pending,
     };
     return true;
 }

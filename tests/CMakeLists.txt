@@ -342,6 +342,17 @@ target_compile_options(scheduler_tests PRIVATE
 
 add_test(NAME scheduler COMMAND scheduler_tests)
 
+add_executable(application_runtime_host_tests
+    application_runtime_host_tests.c
+)
+target_link_libraries(application_runtime_host_tests PRIVATE
+    openflightcomputer_host_runtime
+)
+target_compile_options(application_runtime_host_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+add_test(NAME application_runtime_host COMMAND application_runtime_host_tests)
+
 add_executable(system_state_tests
     system_state_tests.c
     "${PROJECT_SOURCE_DIR}/firmware/app/system_state.c"

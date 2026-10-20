@@ -6,7 +6,6 @@
 #include "level_calibration.h"
 #include "logging.h"
 #include "motor_control.h"
-#include "time.h"
 
 #define IMU_TASK_PERIOD_US UINT32_C(1000)
 
@@ -112,7 +111,7 @@ static task_callback_result_t run_imu_task(void *context)
                                       &state.snapshot,
                                       state.freshness,
                                       calibration_bias,
-                                      time_us());
+                                      service->clock());
             if ((firmware_level_calibration.state !=
                  LEVEL_CALIBRATION_COLLECTING) &&
                 (firmware_level_calibration.state !=

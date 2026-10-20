@@ -1,10 +1,8 @@
 #include "application_task_definitions.h"
 
 #include "application_state.h"
-#include "board_receiver.h"
 #include "fault_catalog.h"
 #include "logging.h"
-#include "time.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -19,22 +17,25 @@ static task_callback_result_t run_receiver_task(void *context)
 {
     receiver_service_t *service = context;
     receiver_control_state_t control = {0};
-    board_receiver_statistics_t statistics = {0};
+    receiver_source_statistics_t statistics = {0};
     receiver_service_result_t result;
 
-    board_receiver_maintain();
+    if (service->source.maintain != NULL) {
+        service->source.maintain(service->source.context);
+    }
     result = receiver_service_process_once(service);
     firmware_receiver_service_last_result = (uint32_t)result;
     firmware_receiver_task_executions++;
 
-    if (board_receiver_statistics(&statistics)) {
-        firmware_receiver_uart_bytes = statistics.uart_received_byte_count;
+    if ((service->source.statistics != NULL) &&
+        service->source.statistics(service->source.context, &statistics)) {
+        firmware_receiver_uart_bytes = statistics.received_byte_count;
         firmware_receiver_valid_frames = statistics.valid_frame_count;
         firmware_receiver_crc_errors = statistics.crc_error_count;
         firmware_receiver_framing_errors = statistics.framing_error_count;
-        firmware_receiver_dma_overruns = statistics.dma_overrun_count;
+        firmware_receiver_dma_overruns = statistics.buffer_overrun_count;
         firmware_receiver_dma_dropped_bytes =
-            statistics.dma_dropped_byte_count;
+            statistics.dropped_byte_count;
     }
 
     if ((result == RECEIVER_SERVICE_SOURCE_ERROR) && !source_fault_reported) {
@@ -42,11 +43,11 @@ static task_callback_result_t run_receiver_task(void *context)
             (uint32_t)fault_system_report(&firmware_fault_system,
                                           FAULT_ID_RECEIVER_SOURCE,
                                           true,
-                                          statistics.uart_error);
+                                          statistics.source_error);
         source_fault_reported = true;
         LOG_ERROR(LOG_MODULE_RECEIVER,
                   "source error context=%lu",
-                  (unsigned long)statistics.uart_error);
+                  (unsigned long)statistics.source_error);
     }
 
     if (receiver_service_control_state(service, &control)) {
@@ -71,8 +72,10 @@ static bool read_receiver_inspection(void *context,
     receiver_service_t *service = context;
     receiver_snapshot_t raw_snapshot;
     receiver_control_state_t control_state;
-    board_receiver_statistics_t statistics;
-    const uint64_t now_us = time_us();
+    receiver_source_statistics_t statistics;
+    const uint64_t now_us = service != NULL && service->clock != NULL
+                                ? service->clock()
+                                : 0U;
 
     if ((service == NULL) || (inspection == NULL)) {
         return false;
@@ -108,7 +111,8 @@ static bool read_receiver_inspection(void *context,
         inspection->available = true;
     }
 
-    if (board_receiver_statistics(&statistics)) {
+    if ((service->source.statistics != NULL) &&
+        service->source.statistics(service->source.context, &statistics)) {
         inspection->link_statistics_present =
             statistics.link_statistics_present;
         inspection->uplink_rssi_dbm = statistics.uplink_rssi_dbm;
@@ -116,20 +120,20 @@ static bool read_receiver_inspection(void *context,
             statistics.uplink_link_quality_percent;
         inspection->uplink_snr_db = statistics.uplink_snr_db;
         inspection->uart_received_byte_count =
-            statistics.uart_received_byte_count;
-        inspection->uart_last_error = statistics.uart_error;
-        inspection->uart_error_count = statistics.uart_error_count;
-        inspection->uart_recovery_count = statistics.uart_recovery_count;
+            statistics.received_byte_count;
+        inspection->uart_last_error = statistics.source_error;
+        inspection->uart_error_count = statistics.source_error_count;
+        inspection->uart_recovery_count = statistics.recovery_count;
         inspection->uart_recovery_failure_count =
-            statistics.uart_recovery_failure_count;
+            statistics.recovery_failure_count;
         inspection->valid_frame_count = statistics.valid_frame_count;
         inspection->crc_error_count = statistics.crc_error_count;
         inspection->framing_error_count = statistics.framing_error_count;
-        inspection->dma_overrun_count = statistics.dma_overrun_count;
+        inspection->dma_overrun_count = statistics.buffer_overrun_count;
         inspection->dma_dropped_byte_count =
-            statistics.dma_dropped_byte_count;
+            statistics.dropped_byte_count;
         inspection->uart_recovery_pending =
-            statistics.uart_recovery_pending;
+            statistics.recovery_pending;
     }
     return true;
 }
